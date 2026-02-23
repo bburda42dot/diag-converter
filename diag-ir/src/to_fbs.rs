@@ -641,6 +641,27 @@ fn build_physical_dimension<'a>(builder: &mut FlatBufferBuilder<'a>, pd: &Physic
     })
 }
 
+fn build_unit_spec<'a>(builder: &mut FlatBufferBuilder<'a>, us: &UnitSpec) -> flatbuffers::WIPOffset<dataformat::UnitSpec<'a>> {
+    let ugs: Vec<_> = us.unit_groups.iter().map(|ug| {
+        let sn = builder.create_string(&ug.short_name);
+        let ln = ug.long_name.as_ref().map(|ln| build_long_name(builder, ln));
+        let urs: Vec<_> = ug.unit_refs.iter().map(|u| build_unit(builder, u)).collect();
+        let urs = builder.create_vector(&urs);
+        dataformat::UnitGroup::create(builder, &dataformat::UnitGroupArgs {
+            short_name: Some(sn), long_name: ln, unitrefs: Some(urs),
+        })
+    }).collect();
+    let ugs = builder.create_vector(&ugs);
+    let units: Vec<_> = us.units.iter().map(|u| build_unit(builder, u)).collect();
+    let units = builder.create_vector(&units);
+    let pds: Vec<_> = us.physical_dimensions.iter().map(|pd| build_physical_dimension(builder, pd)).collect();
+    let pds = builder.create_vector(&pds);
+    let sdgs = us.sdgs.as_ref().map(|s| build_sdgs(builder, s));
+    dataformat::UnitSpec::create(builder, &dataformat::UnitSpecArgs {
+        unit_groups: Some(ugs), units: Some(units), physical_dimensions: Some(pds), sdgs,
+    })
+}
+
 fn build_dtc<'a>(builder: &mut FlatBufferBuilder<'a>, dtc: &Dtc) -> flatbuffers::WIPOffset<dataformat::DTC<'a>> {
     let sn = builder.create_string(&dtc.short_name);
     let dtc_display = builder.create_string(&dtc.display_trouble_code);
@@ -687,8 +708,25 @@ fn build_table_dop<'a>(builder: &mut FlatBufferBuilder<'a>, td: &TableDop) -> fl
     let rows: Vec<_> = td.rows.iter().map(|tr| build_table_row(builder, tr)).collect();
     let rows = builder.create_vector(&rows);
     let sdgs = td.sdgs.as_ref().map(|s| build_sdgs(builder, s));
-    // Skip diag_comm_connector for simplicity (complex nested union)
-    let dcc = builder.create_vector::<flatbuffers::WIPOffset<dataformat::TableDiagCommConnector>>(&[]);
+    let dcc: Vec<_> = td.diag_comm_connectors.iter().map(|conn| {
+        let sem = builder.create_string(&conn.semantic);
+        let (dc_type, dc) = match &conn.diag_comm {
+            DiagServiceOrJob::DiagService(ds) => {
+                let fbs_ds = build_diag_service(builder, ds);
+                (dataformat::DiagServiceOrJob::DiagService,
+                 Some(dataformat::DiagServiceOrJob::tag_as_diag_service(fbs_ds).value_offset()))
+            }
+            DiagServiceOrJob::SingleEcuJob(sej) => {
+                let fbs_sej = build_single_ecu_job(builder, sej);
+                (dataformat::DiagServiceOrJob::SingleEcuJob,
+                 Some(dataformat::DiagServiceOrJob::tag_as_single_ecu_job(fbs_sej).value_offset()))
+            }
+        };
+        dataformat::TableDiagCommConnector::create(builder, &dataformat::TableDiagCommConnectorArgs {
+            diag_comm_type: dc_type, diag_comm: dc, semantic: Some(sem),
+        })
+    }).collect();
+    let dcc = builder.create_vector(&dcc);
     dataformat::TableDop::create(builder, &dataformat::TableDopArgs {
         semantic: Some(sem), short_name: Some(sn), long_name: ln, key_label: Some(kl),
         struct_label: Some(sl), key_dop: kd, rows: Some(rows), diag_comm_connector: Some(dcc), sdgs,
@@ -783,25 +821,121 @@ fn build_prot_stack<'a>(builder: &mut FlatBufferBuilder<'a>, ps: &ProtStack) -> 
     let ln = ps.long_name.as_ref().map(|ln| build_long_name(builder, ln));
     let ppt = builder.create_string(&ps.pdu_protocol_type);
     let plt = builder.create_string(&ps.physical_link_type);
-    let csrs = builder.create_vector::<flatbuffers::WIPOffset<dataformat::ComParamSubSet>>(&[]);
+    let csrs: Vec<_> = ps.comparam_subset_refs.iter().map(|css| {
+        let cps: Vec<_> = css.com_params.iter().map(|cp| build_com_param(builder, cp)).collect();
+        let cps = builder.create_vector(&cps);
+        let ccps: Vec<_> = css.complex_com_params.iter().map(|cp| build_com_param(builder, cp)).collect();
+        let ccps = builder.create_vector(&ccps);
+        let dops: Vec<_> = css.data_object_props.iter().map(|d| build_dop(builder, d)).collect();
+        let dops = builder.create_vector(&dops);
+        let us = css.unit_spec.as_ref().map(|us| build_unit_spec(builder, us));
+        dataformat::ComParamSubSet::create(builder, &dataformat::ComParamSubSetArgs {
+            com_params: Some(cps), complex_com_params: Some(ccps),
+            data_object_props: Some(dops), unit_spec: us,
+        })
+    }).collect();
+    let csrs = builder.create_vector(&csrs);
     dataformat::ProtStack::create(builder, &dataformat::ProtStackArgs {
         short_name: Some(sn), long_name: ln, pdu_protocol_type: Some(ppt),
         physical_link_type: Some(plt), comparam_subset_refs: Some(csrs),
     })
 }
 
-fn build_com_param_ref<'a>(builder: &mut FlatBufferBuilder<'a>, _cpr: &ComParamRef) -> flatbuffers::WIPOffset<dataformat::ComParamRef<'a>> {
-    // Minimal implementation for ComParamRef
-    let sv = _cpr.simple_value.as_ref().map(|sv| {
+/// Build a ComplexValue with its union vector of SimpleOrComplexValueEntry.
+///
+/// Uses `create_vector_of_unions` instead of the VectorBuilder to avoid
+/// "pending tags not empty" panics (the VectorBuilder's `end_union_vector`
+/// does not clear `pending_tags`, breaking subsequent union vector builds).
+fn build_complex_value<'a>(builder: &mut FlatBufferBuilder<'a>, cv: &ComplexValue) -> flatbuffers::WIPOffset<dataformat::ComplexValue<'a>> {
+    // Pre-build all entry offsets, then create the union vector in one shot
+    let items: Vec<flatbuffers::UnionWIPOffset<dataformat::SimpleOrComplexValueEntryUnionValue>> = cv.entries.iter().map(|entry| {
+        match entry {
+            SimpleOrComplexValue::Simple(sv) => {
+                let v = builder.create_string(&sv.value);
+                let fbs_sv = dataformat::SimpleValue::create(builder, &dataformat::SimpleValueArgs { value: Some(v) });
+                dataformat::SimpleOrComplexValueEntry::tag_as_simple_value(fbs_sv)
+            }
+            SimpleOrComplexValue::Complex(nested) => {
+                let fbs_cv = build_complex_value(builder, nested);
+                dataformat::SimpleOrComplexValueEntry::tag_as_complex_value(fbs_cv)
+            }
+        }
+    }).collect();
+
+    let uv = builder.create_vector_of_unions(&items);
+
+    dataformat::ComplexValue::create(builder, &dataformat::ComplexValueArgs {
+        entries_type: Some(uv.tags()),
+        entries: Some(uv.values_offset()),
+    })
+}
+
+fn build_com_param<'a>(builder: &mut FlatBufferBuilder<'a>, cp: &ComParam) -> flatbuffers::WIPOffset<dataformat::ComParam<'a>> {
+    let sn = builder.create_string(&cp.short_name);
+    let ln = cp.long_name.as_ref().map(|ln| build_long_name(builder, ln));
+    let pc = builder.create_string(&cp.param_class);
+    let com_param_type = match cp.com_param_type {
+        ComParamType::Regular => dataformat::ComParamType::REGULAR,
+        ComParamType::Complex => dataformat::ComParamType::COMPLEX,
+    };
+    let cp_type = match cp.cp_type {
+        ComParamStandardisationLevel::Standard => dataformat::ComParamStandardisationLevel::STANDARD,
+        ComParamStandardisationLevel::OemSpecific => dataformat::ComParamStandardisationLevel::OEM_SPECIFIC,
+        ComParamStandardisationLevel::Optional => dataformat::ComParamStandardisationLevel::OPTIONAL,
+        ComParamStandardisationLevel::OemOptional => dataformat::ComParamStandardisationLevel::OEM_OPTIONAL,
+    };
+    let cp_usage = match cp.cp_usage {
+        ComParamUsage::EcuSoftware => dataformat::ComParamUsage::ECU_SOFTWARE,
+        ComParamUsage::EcuComm => dataformat::ComParamUsage::ECU_COMM,
+        ComParamUsage::Application => dataformat::ComParamUsage::APPLICATION,
+        ComParamUsage::Tester => dataformat::ComParamUsage::TESTER,
+    };
+    let (sd_type, sd) = match &cp.specific_data {
+        Some(ComParamSpecificData::Regular { physical_default_value, dop }) => {
+            let pdv = builder.create_string(physical_default_value);
+            let d = dop.as_ref().map(|d| build_dop(builder, d));
+            let rcp = dataformat::RegularComParam::create(builder, &dataformat::RegularComParamArgs {
+                physical_default_value: Some(pdv), dop: d,
+            });
+            (dataformat::ComParamSpecificData::RegularComParam,
+             Some(dataformat::ComParamSpecificData::tag_as_regular_com_param(rcp).value_offset()))
+        }
+        Some(ComParamSpecificData::Complex { com_params, complex_physical_default_values, allow_multiple_values }) => {
+            let cps: Vec<_> = com_params.iter().map(|cp| build_com_param(builder, cp)).collect();
+            let cps = builder.create_vector(&cps);
+            let cvs: Vec<_> = complex_physical_default_values.iter().map(|cv| build_complex_value(builder, cv)).collect();
+            let cvs = builder.create_vector(&cvs);
+            let ccp = dataformat::ComplexComParam::create(builder, &dataformat::ComplexComParamArgs {
+                com_params: Some(cps), complex_physical_default_values: Some(cvs),
+                allow_multiple_values: *allow_multiple_values,
+            });
+            (dataformat::ComParamSpecificData::ComplexComParam,
+             Some(dataformat::ComParamSpecificData::tag_as_complex_com_param(ccp).value_offset()))
+        }
+        None => (dataformat::ComParamSpecificData::NONE, None),
+    };
+    dataformat::ComParam::create(builder, &dataformat::ComParamArgs {
+        com_param_type, short_name: Some(sn), long_name: ln, param_class: Some(pc),
+        cp_type, display_level: cp.display_level, cp_usage,
+        specific_data_type: sd_type, specific_data: sd,
+    })
+}
+
+fn build_com_param_ref<'a>(builder: &mut FlatBufferBuilder<'a>, cpr: &ComParamRef) -> flatbuffers::WIPOffset<dataformat::ComParamRef<'a>> {
+    let sv = cpr.simple_value.as_ref().map(|sv| {
         let v = builder.create_string(&sv.value);
         dataformat::SimpleValue::create(builder, &dataformat::SimpleValueArgs { value: Some(v) })
     });
+    let cv = cpr.complex_value.as_ref().map(|cv| build_complex_value(builder, cv));
+    let cp = cpr.com_param.as_ref().map(|cp| build_com_param(builder, cp));
+    let proto = cpr.protocol.as_ref().map(|p| build_protocol(builder, p));
+    let ps = cpr.prot_stack.as_ref().map(|ps| build_prot_stack(builder, ps));
     dataformat::ComParamRef::create(builder, &dataformat::ComParamRefArgs {
         simple_value: sv,
-        complex_value: None,
-        com_param: None,
-        protocol: None,
-        prot_stack: None,
+        complex_value: cv,
+        com_param: cp,
+        protocol: proto,
+        prot_stack: ps,
     })
 }
 

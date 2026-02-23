@@ -495,6 +495,62 @@ fn roundtrip_parent_ref_variants() {
 }
 
 #[test]
+fn roundtrip_com_param_ref_with_complex_value() {
+    let db = DiagDatabase {
+        variants: vec![Variant {
+            diag_layer: DiagLayer {
+                short_name: "V1".into(),
+                com_param_refs: vec![
+                    ComParamRef {
+                        simple_value: Some(SimpleValue { value: "115200".into() }),
+                        complex_value: None,
+                        com_param: Some(Box::new(ComParam {
+                            com_param_type: ComParamType::Regular,
+                            short_name: "CP_Baudrate".into(),
+                            long_name: None,
+                            param_class: "BUSTYPE".into(),
+                            cp_type: ComParamStandardisationLevel::Standard,
+                            display_level: Some(1),
+                            cp_usage: ComParamUsage::EcuComm,
+                            specific_data: Some(ComParamSpecificData::Regular {
+                                physical_default_value: "115200".into(),
+                                dop: None,
+                            }),
+                        })),
+                        protocol: None,
+                        prot_stack: None,
+                    },
+                    ComParamRef {
+                        simple_value: None,
+                        complex_value: Some(ComplexValue {
+                            entries: vec![
+                                SimpleOrComplexValue::Simple(SimpleValue { value: "val1".into() }),
+                                SimpleOrComplexValue::Complex(Box::new(ComplexValue {
+                                    entries: vec![
+                                        SimpleOrComplexValue::Simple(SimpleValue { value: "nested".into() }),
+                                    ],
+                                })),
+                            ],
+                        }),
+                        com_param: None,
+                        protocol: None,
+                        prot_stack: None,
+                    },
+                ],
+                ..Default::default()
+            },
+            is_base_variant: false,
+            variant_patterns: vec![],
+            parent_refs: vec![],
+        }],
+        ..Default::default()
+    };
+    let fbs_bytes = ir_to_flatbuffers(&db);
+    let db2 = flatbuffers_to_ir(&fbs_bytes).expect("roundtrip failed");
+    pretty_assertions::assert_eq!(db, db2);
+}
+
+#[test]
 fn fbs_output_is_not_empty() {
     let db = make_test_database();
     let bytes = ir_to_flatbuffers(&db);
