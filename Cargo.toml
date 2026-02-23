@@ -1,0 +1,54 @@
+[workspace]
+resolver = "2"
+members = [
+    "mdd-format",
+    "diag-ir",
+    "diag-yaml",
+    "diag-odx",
+    "diag-cli",
+]
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+# Internal
+mdd-format = { path = "mdd-format" }
+diag-ir = { path = "diag-ir" }
+diag-yaml = { path = "diag-yaml" }
+diag-odx = { path = "diag-odx" }
+
+# Binary formats - MUST match CDA versions for compatibility
+flatbuffers = "25.9.23"
+prost = "0.13"
+prost-types = "0.13"
+
+# Compression - xz2 for CDA-compatible LZMA (NOT lzma-rs!)
+xz2 = { version = "0.1", features = ["static"] }
+flate2 = "1"
+zstd = "0.13"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+quick-xml = { version = "0.37", features = ["serialize"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Testing
+pretty_assertions = "1"
+tempfile = "3"
+
+[patch.crates-io]
+# Use same flatbuffers fork as CDA for binary compatibility
+flatbuffers = { git = "https://github.com/alexmohr/flatbuffers.git", rev = "0ba3307d" }
