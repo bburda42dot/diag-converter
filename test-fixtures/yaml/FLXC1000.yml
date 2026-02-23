@@ -1,0 +1,374 @@
+# FLXC1000 - Test ECU for CDA Integration Tests
+# ==============================================
+# Source: classic-diagnostic-adapter/testcontainer/odx/generate.py
+#
+# This ECU has two variants:
+# - Boot_Variant (0xFF0000): Bootloader with security level 7
+# - App_0101 (0x000101): Application variant v01.01
+#
+# Shared logical address 0x1000 with FLXCNG1000 (variant detection differentiates them)
+
+schema: "opensovd.cda.diagdesc/v1"
+
+# -----------------------------------------------------------------------------
+# METADATA
+# -----------------------------------------------------------------------------
+meta:
+  author: "OpenSOVD CDA Test Team"
+  domain: "Test"
+  created: "2026-01-27"
+  revision: "1.0.0"
+  description: "Test ECU FLXC1000 with Boot and Application variants for CDA integration testing"
+  tags: [test, integration, flxc1000]
+
+# -----------------------------------------------------------------------------
+# ECU DEFINITION
+# -----------------------------------------------------------------------------
+ecu:
+  id: "FLXC1000"
+  name: "FLXC1000"
+  protocols:
+    doip:
+      protocol_short_name: "UDSonDoIP"
+      is_default: true
+  default_addressing_mode: physical
+  addressing:
+    doip:
+      ip: "192.168.0.1" # Default placeholder
+      port: 13400
+      logical_address: 0x1000
+      functional_address: 0xFFFF
+
+# -----------------------------------------------------------------------------
+# SESSIONS
+# Based on: sessions.py - add_state_chart_session() and add_default_session_services()
+# -----------------------------------------------------------------------------
+sessions:
+  default:
+    id: 0x01
+    alias: "Default"
+
+  programming:
+    id: 0x02
+    alias: "Programming"
+
+  extended:
+    id: 0x03
+    alias: "Extended"
+
+  custom:
+    id: 0x44
+    alias: "Custom"
+
+# -----------------------------------------------------------------------------
+# STATE MODEL
+# Based on: sessions.py - state_transitions array
+# -----------------------------------------------------------------------------
+state_model:
+  initial_state:
+    session: default
+    security: "none"
+    authentication_role: "none"
+
+  session_transitions:
+    # From Default: can go to all sessions
+    default: [default, programming, extended, custom]
+    # From Programming: can go to Default, Programming, Extended (not Custom)
+    programming: [default, programming, extended]
+    # From Extended: can go to Default, Programming, Extended (not Custom)
+    extended: [default, programming, extended]
+    # From Custom: can only go to Default or stay in Custom
+    custom: [default, custom]
+
+  session_change_resets_security: true
+  session_change_resets_authentication: true
+  s3_timeout_resets_to_default: true
+
+# -----------------------------------------------------------------------------
+# SECURITY
+# Based on: security_access.py - add_security_access_services()
+# Levels: 3 (standard), 5 (extended), 7 (boot-only)
+# Note: Security services are only added to Boot_Variant in generate.py
+# -----------------------------------------------------------------------------
+security:
+  level_03:
+    level: 3
+    seed_request: 0x03
+    key_send: 0x04
+    seed_size: 8 # END_OF_PDU variable length (1-255)
+    key_size: 8 # END_OF_PDU variable length (1-255)
+    algorithm: "simple_xor"
+    max_attempts: 3
+    delay_on_fail_ms: 10000
+    allowed_sessions: [extended, programming]
+
+  level_05:
+    level: 5
+    seed_request: 0x05
+    key_send: 0x06
+    seed_size: 8
+    key_size: 8
+    algorithm: "simple_xor"
+    max_attempts: 3
+    delay_on_fail_ms: 10000
+    allowed_sessions: [extended, programming]
+
+  level_07:
+    level: 7
+    seed_request: 0x07
+    key_send: 0x08
+    seed_size: 8
+    key_size: 8
+    algorithm: "simple_xor"
+    max_attempts: 3
+    delay_on_fail_ms: 10000
+    allowed_sessions: [programming]
+
+# -----------------------------------------------------------------------------
+# ACCESS PATTERNS
+# -----------------------------------------------------------------------------
+access_patterns:
+  public_read:
+    sessions: any
+    security: none
+    authentication: none
+
+  ident_write:
+    sessions: [extended, programming]
+    security: [level_03]
+    authentication: none
+
+  programming_access:
+    sessions: [programming]
+    security: [level_07]
+    authentication: none
+
+  extended_access:
+    sessions: [extended, programming]
+    security: none
+    authentication: none
+
+# -----------------------------------------------------------------------------
+# TYPES
+# Based on: shared.py - add_common_datatypes()
+# -----------------------------------------------------------------------------
+types:
+  # Identical types (no conversion)
+  uint8_identical:
+    base: u8
+
+  uint16_identical:
+    base: u16
+    endian: big
+
+  uint24_identical:
+    base: u32
+    bit_length: 24
+    endian: big
+
+  uint32_identical:
+    base: u32
+    endian: big
+
+  # VIN type: 17-byte ASCII string
+  vin_17byte:
+    base: ascii
+    length: 17
+    encoding: "ISO-8859-1"
+
+  # Session enum type
+  session_type:
+    base: u8
+    entries:
+      - value: 0x01
+        text: "Default"
+      - value: 0x02
+        text: "Programming"
+      - value: 0x03
+        text: "Extended"
+      - value: 0x44
+        text: "Custom"
+
+  # Security access byte array (END_OF_PDU)
+  security_byte_array:
+    base: bytes
+    min_length: 1
+    max_length: 255
+    termination: end_of_pdu
+
+# -----------------------------------------------------------------------------
+# DIDs
+# Based on: shared.py - add_vin_service(), add_ident_service(), add_session_type_service()
+# -----------------------------------------------------------------------------
+dids:
+  # F190 - VIN (Vehicle Identification Number)
+  # Source: shared.py - add_vin_service()
+  0xF190:
+    name: "VINDataIdentifier"
+    description: "Vehicle Identification Number"
+    type: vin_17byte
+    access: public_read
+    readable: true
+    writable: true # Has WriteDataByIdentifier service
+
+  # F186 - Active Diagnostic Session
+  # Source: shared.py - add_session_type_service()
+  0xF186:
+    name: "ActiveDiagnosticSessionDataIdentifier"
+    description: "Currently active diagnostic session"
+    type: session_type
+    access: public_read
+    readable: true
+    writable: false
+
+  # F100 - Identification (Variant Detection)
+  # Source: shared.py - add_ident_service()
+  0xF100:
+    name: "Identification"
+    description: "ECU variant identification for variant detection"
+    type: uint24_identical
+    access: public_read
+    readable: true
+    writable: false
+
+# -----------------------------------------------------------------------------
+# VARIANT DEFINITIONS
+# Based on: generate.py - add_variant() and variant detection patterns
+# -----------------------------------------------------------------------------
+variants:
+  detection_order: [Boot_Variant, App_0101]
+  fallback: App_0101
+
+  definitions:
+    Boot_Variant:
+      description: "Bootloader variant for FLXC1000"
+      detect:
+        response_param_match:
+          service: "Identification_Read"
+          param_path: "Identification"
+          expected_value: 0xFF0000
+      overrides:
+        # Boot variant has security level 7 services
+        services: {}
+
+    App_0101:
+      description: "Application variant v01.01 for FLXC1000"
+      detect:
+        response_param_match:
+          service: "Identification_Read"
+          param_path: "Identification"
+          expected_value: 0x000101
+
+# -----------------------------------------------------------------------------
+# IDENTIFICATION
+# For variant detection matching parameters
+# -----------------------------------------------------------------------------
+identification:
+  expected_idents:
+    boot_variant_check:
+      description: "Check if ECU is in bootloader mode"
+      conditions:
+        - response_param_match:
+            service: "Identification_Read"
+            param_path: "Identification"
+            expected_value: 0xFF0000
+
+    app_0101_check:
+      description: "Check if ECU is running App v01.01"
+      conditions:
+        - response_param_match:
+            service: "Identification_Read"
+            param_path: "Identification"
+            expected_value: 0x000101
+
+# -----------------------------------------------------------------------------
+# SERVICES
+# Based on: generate.py - add_base_variant() calls
+# Services from: sessions.py, reset.py, transferdata.py, authentication.py, shared.py
+# -----------------------------------------------------------------------------
+services:
+  # 0x10 - DiagnosticSessionControl
+  # Source: sessions.py - add_default_session_services()
+  diagnosticSessionControl:
+    enabled: true
+    subfunctions:
+      default: 0x01
+      programming: 0x02
+      extended: 0x03
+      custom: 0x44
+    state_effects:
+      on_success:
+        session: from_request
+
+  # 0x11 - ECUReset
+  # Source: reset.py - add_reset_services()
+  ecuReset:
+    enabled: true
+    subfunctions:
+      hardReset: 0x01
+      softReset: 0x03
+    state_effects:
+      hardReset:
+        session: default
+        security: none
+      softReset:
+        session: default
+        security: none
+
+  # 0x22 - ReadDataByIdentifier
+  # Source: shared.py - add_service_did() for VIN, Identification, ActiveSession
+  readDataByIdentifier:
+    enabled: true
+    addressing_mode: physical
+
+  # 0x27 - SecurityAccess
+  # Source: security_access.py - add_security_access_services()
+  # Note: Only added to Boot_Variant, but schema defines it ECU-wide
+  securityAccess:
+    enabled: true
+    state_effects:
+      on_unlock:
+        security: from_request
+
+  # 0x29 - Authentication
+  # Source: authentication.py - add_authentication_services()
+  authentication:
+    enabled: true
+    subfunctions:
+      deauthenticate: 0x00
+      configuration: 0x08
+    state_effects:
+      on_deauthenticate:
+        authentication_role: none
+
+  # 0x2E - WriteDataByIdentifier
+  # Source: shared.py - add_service_did() with add_write=True for VIN
+  writeDataByIdentifier:
+    enabled: true
+    addressing_mode: physical
+
+  # 0x34 - RequestDownload
+  # Source: transferdata.py - add_requestdownload_service()
+  requestDownload:
+    enabled: true
+    max_number_of_block_length: 4294967295 # UINT32 max
+
+  # 0x36 - TransferData
+  # Source: transferdata.py - add_transferdata_service()
+  transferData:
+    enabled: true
+    max_block_sequence_counter: 255
+
+  # 0x37 - RequestTransferExit
+  # Source: transferdata.py - add_transferexit()
+  requestTransferExit:
+    enabled: true
+
+  # 0x3E - TesterPresent (implicit in UDS base layer)
+  # 0x28 - CommunicationControl
+  # Source: communication_control.py - add_communication_control_services()
+  communicationControl:
+    enabled: true
+
+  testerPresent:
+    enabled: true

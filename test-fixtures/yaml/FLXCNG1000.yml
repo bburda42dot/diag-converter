@@ -1,0 +1,301 @@
+# FLXCNG1000 - Next-Gen Test ECU for CDA Integration Tests
+# =========================================================
+# Source: classic-diagnostic-adapter/testcontainer/odx/generate.py
+#
+# This ECU represents a use-case where different hardware revisions for different
+# markets share the same logical address (0x1000) with FLXC1000.
+# The CDA differentiates them via variant detection using DID 0xF100.
+#
+# Single variant: App_1010 (0x001010)
+
+schema: "opensovd.cda.diagdesc/v1"
+
+# -----------------------------------------------------------------------------
+# METADATA
+# -----------------------------------------------------------------------------
+meta:
+  author: "OpenSOVD CDA Test Team"
+  domain: "Test"
+  created: "2026-01-27"
+  revision: "1.0.0"
+  description: "Next-gen test ECU FLXCNG1000 for CDA integration testing - different market hardware revision"
+  tags: [test, integration, flxcng1000, next-gen]
+
+# -----------------------------------------------------------------------------
+# ECU DEFINITION
+# Same logical address as FLXC1000 - variant detection differentiates them
+# -----------------------------------------------------------------------------
+ecu:
+  id: "FLXCNG1000"
+  name: "FLXCNG1000"
+  protocols:
+    doip:
+      protocol_short_name: "UDSonDoIP"
+      is_default: true
+  default_addressing_mode: physical
+  addressing:
+    doip:
+      ip: "192.168.0.1" # Default placeholder
+      port: 13400
+      logical_address: 0x1000 # Same as FLXC1000!
+      functional_address: 0xFFFF
+
+# -----------------------------------------------------------------------------
+# SESSIONS
+# Same sessions as FLXC1000
+# -----------------------------------------------------------------------------
+sessions:
+  default:
+    id: 0x01
+    alias: "Default"
+
+  programming:
+    id: 0x02
+    alias: "Programming"
+
+  extended:
+    id: 0x03
+    alias: "Extended"
+
+  custom:
+    id: 0x44
+    alias: "Custom"
+
+# -----------------------------------------------------------------------------
+# STATE MODEL
+# Same state model as FLXC1000
+# -----------------------------------------------------------------------------
+state_model:
+  initial_state:
+    session: default
+    security: "none"
+    authentication_role: "none"
+
+  session_transitions:
+    default: [default, programming, extended, custom]
+    programming: [default, programming, extended]
+    extended: [default, programming, extended]
+    custom: [default, custom]
+
+  session_change_resets_security: true
+  session_change_resets_authentication: true
+  s3_timeout_resets_to_default: true
+
+# -----------------------------------------------------------------------------
+# SECURITY
+# FLXCNG1000 has no Boot_Variant, so no level 7 (boot security) needed
+# Only levels 3 and 5 are used for the App variant
+# -----------------------------------------------------------------------------
+security:
+  level_03:
+    level: 3
+    seed_request: 0x03
+    key_send: 0x04
+    seed_size: 8
+    key_size: 8
+    algorithm: "simple_xor"
+    max_attempts: 3
+    delay_on_fail_ms: 10000
+    allowed_sessions: [extended, programming]
+
+  level_05:
+    level: 5
+    seed_request: 0x05
+    key_send: 0x06
+    seed_size: 8
+    key_size: 8
+    algorithm: "simple_xor"
+    max_attempts: 3
+    delay_on_fail_ms: 10000
+    allowed_sessions: [extended, programming]
+
+# -----------------------------------------------------------------------------
+# ACCESS PATTERNS
+# -----------------------------------------------------------------------------
+access_patterns:
+  public_read:
+    sessions: any
+    security: none
+    authentication: none
+
+  ident_write:
+    sessions: [extended, programming]
+    security: [level_03]
+    authentication: none
+
+  extended_access:
+    sessions: [extended, programming]
+    security: none
+    authentication: none
+
+# -----------------------------------------------------------------------------
+# TYPES
+# Same types as FLXC1000
+# -----------------------------------------------------------------------------
+types:
+  uint8_identical:
+    base: u8
+
+  uint16_identical:
+    base: u16
+    endian: big
+
+  uint24_identical:
+    base: u32
+    bit_length: 24
+    endian: big
+
+  uint32_identical:
+    base: u32
+    endian: big
+
+  vin_17byte:
+    base: ascii
+    length: 17
+    encoding: "ISO-8859-1"
+
+  session_type:
+    base: u8
+    entries:
+      - value: 0x01
+        text: "Default"
+      - value: 0x02
+        text: "Programming"
+      - value: 0x03
+        text: "Extended"
+      - value: 0x44
+        text: "Custom"
+
+  security_byte_array:
+    base: bytes
+    min_length: 1
+    max_length: 255
+    termination: end_of_pdu
+
+# -----------------------------------------------------------------------------
+# DIDs
+# Same DIDs as FLXC1000
+# -----------------------------------------------------------------------------
+dids:
+  0xF190:
+    name: "VINDataIdentifier"
+    description: "Vehicle Identification Number"
+    type: vin_17byte
+    access: public_read
+    readable: true
+    writable: true
+
+  0xF186:
+    name: "ActiveDiagnosticSessionDataIdentifier"
+    description: "Currently active diagnostic session"
+    type: session_type
+    access: public_read
+    readable: true
+    writable: false
+
+  0xF100:
+    name: "Identification"
+    description: "ECU variant identification for variant detection"
+    type: uint24_identical
+    access: public_read
+    readable: true
+    writable: false
+
+# -----------------------------------------------------------------------------
+# VARIANT DEFINITIONS
+# FLXCNG1000 has only one variant: App_1010
+# -----------------------------------------------------------------------------
+variants:
+  detection_order: [App_1010]
+  fallback: App_1010
+
+  definitions:
+    App_1010:
+      description: "Application variant v10.10 for FLXCNG1000"
+      detect:
+        response_param_match:
+          service: "Identification_Read"
+          param_path: "Identification"
+          expected_value: 0x001010
+
+# -----------------------------------------------------------------------------
+# IDENTIFICATION
+# -----------------------------------------------------------------------------
+identification:
+  expected_idents:
+    app_1010_check:
+      description: "Check if ECU is running App v10.10"
+      conditions:
+        - response_param_match:
+            service: "Identification_Read"
+            param_path: "Identification"
+            expected_value: 0x001010
+
+# -----------------------------------------------------------------------------
+# SERVICES
+# Same services as FLXC1000, but no boot-specific security services
+# -----------------------------------------------------------------------------
+services:
+  diagnosticSessionControl:
+    enabled: true
+    subfunctions:
+      default: 0x01
+      programming: 0x02
+      extended: 0x03
+      custom: 0x44
+    state_effects:
+      on_success:
+        session: from_request
+
+  ecuReset:
+    enabled: true
+    subfunctions:
+      hardReset: 0x01
+      softReset: 0x03
+    state_effects:
+      hardReset:
+        session: default
+        security: none
+      softReset:
+        session: default
+        security: none
+
+  readDataByIdentifier:
+    enabled: true
+    addressing_mode: physical
+
+  securityAccess:
+    enabled: false
+    state_effects:
+      on_unlock:
+        security: from_request
+
+  authentication:
+    enabled: true
+    subfunctions:
+      deauthenticate: 0x00
+      configuration: 0x08
+    state_effects:
+      on_deauthenticate:
+        authentication_role: none
+
+  writeDataByIdentifier:
+    enabled: true
+    addressing_mode: physical
+
+  requestDownload:
+    enabled: true
+    max_number_of_block_length: 4294967295
+
+  transferData:
+    enabled: true
+    max_block_sequence_counter: 255
+
+  requestTransferExit:
+    enabled: true
+
+  communicationControl:
+    enabled: true
+
+  testerPresent:
+    enabled: true

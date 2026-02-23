@@ -1,0 +1,3570 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://eclipse-opensovd.org/schemas/opensovd.cda.diagdesc/v1/schema.json",
+    "title": "OpenSOVD CDA Diagnostic Description (v1)",
+    "type": "object",
+    "required": [
+        "schema",
+        "meta",
+        "ecu",
+        "sessions",
+        "services",
+        "access_patterns"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "schema": {
+            "type": "string",
+            "const": "opensovd.cda.diagdesc/v1"
+        },
+        "meta": {
+            "$ref": "#/$defs/meta"
+        },
+        "ecu": {
+            "$ref": "#/$defs/ecu"
+        },
+        "sessions": {
+            "$ref": "#/$defs/sessions"
+        },
+        "security": {
+            "$ref": "#/$defs/security"
+        },
+        "authentication": {
+            "$ref": "#/$defs/authentication"
+        },
+        "state_model": {
+            "$ref": "#/$defs/state_model"
+        },
+        "services": {
+            "$ref": "#/$defs/services"
+        },
+        "access_patterns": {
+            "$ref": "#/$defs/access_patterns"
+        },
+        "variants": {
+            "$ref": "#/$defs/variants"
+        },
+        "identification": {
+            "$ref": "#/$defs/identification"
+        },
+        "types": {
+            "$ref": "#/$defs/types"
+        },
+        "dids": {
+            "$ref": "#/$defs/dids"
+        },
+        "routines": {
+            "$ref": "#/$defs/routines"
+        },
+        "dtc_config": {
+            "$ref": "#/$defs/dtc_config"
+        },
+        "dtcs": {
+            "$ref": "#/$defs/dtcs"
+        },
+        "annotations": {
+            "$ref": "#/$defs/annotations"
+        },
+        "audience": {
+            "$ref": "#/$defs/audience"
+        },
+        "sdgs": {
+            "$ref": "#/$defs/sdgs"
+        },
+        "comparams": {
+            "$ref": "#/$defs/comparams"
+        },
+        "ecu_jobs": {
+            "$ref": "#/$defs/ecu_jobs"
+        },
+        "memory": {
+            "$ref": "#/$defs/memory_config"
+        },
+        "x-oem": {
+            "type": "object"
+        }
+    },
+    "$defs": {
+        "date": {
+            "type": "string",
+            "format": "date"
+        },
+        "semver": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+        },
+        "uint8": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+        },
+        "uint16": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+        },
+        "uint32": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+        },
+        "uint64": {
+            "oneOf": [
+                {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                {
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                }
+            ]
+        },
+        "hexString": {
+            "type": "string",
+            "pattern": "^0x[0-9A-Fa-f]+$"
+        },
+        "hexScalar": {
+            "oneOf": [
+                {
+                    "type": "integer"
+                },
+                {
+                    "$ref": "#/$defs/hexString"
+                }
+            ]
+        },
+        "hex8": {
+            "oneOf": [
+                {
+                    "$ref": "#/$defs/uint8"
+                },
+                {
+                    "type": "string",
+                    "pattern": "^0x[0-9A-Fa-f]{1,2}$"
+                }
+            ]
+        },
+        "hex16": {
+            "oneOf": [
+                {
+                    "$ref": "#/$defs/uint16"
+                },
+                {
+                    "type": "string",
+                    "pattern": "^0x[0-9A-Fa-f]{1,4}$"
+                }
+            ]
+        },
+        "hex24": {
+            "oneOf": [
+                {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 16777215
+                },
+                {
+                    "type": "string",
+                    "pattern": "^0x[0-9A-Fa-f]{1,6}$"
+                }
+            ]
+        },
+        "hex32": {
+            "oneOf": [
+                {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                },
+                {
+                    "type": "string",
+                    "pattern": "^0x[0-9A-Fa-f]{1,8}$"
+                }
+            ]
+        },
+        "hex64": {
+            "oneOf": [
+                {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 18446744073709551615
+                },
+                {
+                    "type": "string",
+                    "pattern": "^0x[0-9A-Fa-f]{1,16}$"
+                }
+            ]
+        },
+        "ipv4": {
+            "type": "string",
+            "format": "ipv4"
+        },
+        "ipv6": {
+            "type": "string",
+            "format": "ipv6"
+        },
+        "ip": {
+            "oneOf": [
+                {
+                    "$ref": "#/$defs/ipv4"
+                },
+                {
+                    "$ref": "#/$defs/ipv6"
+                }
+            ]
+        },
+        "meta": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "author",
+                "domain",
+                "created",
+                "revision",
+                "description"
+            ],
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "domain": {
+                    "type": "string"
+                },
+                "created": {
+                    "$ref": "#/$defs/date"
+                },
+                "revision": {
+                    "$ref": "#/$defs/semver"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "revisions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "version",
+                            "date",
+                            "author",
+                            "changes"
+                        ],
+                        "properties": {
+                            "version": {
+                                "$ref": "#/$defs/semver"
+                            },
+                            "date": {
+                                "$ref": "#/$defs/date"
+                            },
+                            "author": {
+                                "type": "string"
+                            },
+                            "changes": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "ecu": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "id",
+                "name",
+                "addressing"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "protocols": {
+                    "$ref": "#/$defs/protocols"
+                },
+                "default_addressing_mode": {
+                    "type": "string",
+                    "description": "Default addressing mode for services. Can be overridden per service.",
+                    "enum": [
+                        "physical",
+                        "functional",
+                        "both"
+                    ],
+                    "default": "physical"
+                },
+                "addressing": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "doip": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                                "ip",
+                                "logical_address",
+                                "tester_address"
+                            ],
+                            "properties": {
+                                "ip": {
+                                    "$ref": "#/$defs/ip"
+                                },
+                                "port": {
+                                    "$ref": "#/$defs/uint16"
+                                },
+                                "logical_address": {
+                                    "$ref": "#/$defs/hex16"
+                                },
+                                "tester_address": {
+                                    "$ref": "#/$defs/hex16"
+                                },
+                                "functional_address": {
+                                    "$ref": "#/$defs/hex16"
+                                },
+                                "routing_activation": {
+                                    "$ref": "#/$defs/hex16"
+                                }
+                            }
+                        },
+                        "can": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "physical_request": {
+                                    "$ref": "#/$defs/hex32"
+                                },
+                                "physical_response": {
+                                    "$ref": "#/$defs/hex32"
+                                },
+                                "functional_request": {
+                                    "$ref": "#/$defs/hex32"
+                                }
+                            }
+                        },
+                        "timing": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "p2_ms": {
+                                    "$ref": "#/$defs/uint16"
+                                },
+                                "p2_star_ms": {
+                                    "$ref": "#/$defs/uint16"
+                                },
+                                "s3_ms": {
+                                    "$ref": "#/$defs/uint16"
+                                }
+                            }
+                        }
+                    }
+                },
+                "annotations": {
+                    "$ref": "#/$defs/annotations"
+                }
+            }
+        },
+        "sessions": {
+            "type": "object",
+            "description": "Map: session_name -> session definition",
+            "additionalProperties": {
+                "$ref": "#/$defs/session"
+            }
+        },
+        "session": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/hex8"
+                },
+                "alias": {
+                    "type": "string"
+                },
+                "requires_unlock": {
+                    "type": "boolean"
+                },
+                "timing": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "p2_ms": {
+                            "$ref": "#/$defs/uint16"
+                        },
+                        "p2_star_ms": {
+                            "$ref": "#/$defs/uint16"
+                        }
+                    }
+                }
+            }
+        },
+        "security": {
+            "type": "object",
+            "description": "Map: level_name -> security level definition",
+            "additionalProperties": {
+                "$ref": "#/$defs/security_level"
+            }
+        },
+        "security_level": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "level",
+                "seed_request",
+                "key_send",
+                "seed_size",
+                "key_size",
+                "algorithm",
+                "max_attempts",
+                "delay_on_fail_ms",
+                "allowed_sessions"
+            ],
+            "properties": {
+                "level": {
+                    "$ref": "#/$defs/uint8"
+                },
+                "seed_request": {
+                    "$ref": "#/$defs/hex8"
+                },
+                "key_send": {
+                    "$ref": "#/$defs/hex8"
+                },
+                "seed_size": {
+                    "$ref": "#/$defs/uint8"
+                },
+                "key_size": {
+                    "$ref": "#/$defs/uint8"
+                },
+                "algorithm": {
+                    "type": "string"
+                },
+                "max_attempts": {
+                    "$ref": "#/$defs/uint8"
+                },
+                "delay_on_fail_ms": {
+                    "$ref": "#/$defs/uint32"
+                },
+                "allowed_sessions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "authentication": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "anti_brute_force": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "max_attempts": {
+                            "$ref": "#/$defs/uint8"
+                        },
+                        "delay_initial_s": {
+                            "$ref": "#/$defs/uint16"
+                        },
+                        "delay_max_s": {
+                            "$ref": "#/$defs/uint16"
+                        },
+                        "delay_multiplier": {
+                            "type": "number"
+                        }
+                    }
+                },
+                "roles": {
+                    "type": "object",
+                    "description": "Map: role_name -> role definition",
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "id",
+                            "timeout_s",
+                            "certificate_ref",
+                            "allowed_sessions",
+                            "proof_of_ownership"
+                        ],
+                        "properties": {
+                            "id": {
+                                "$ref": "#/$defs/hex8"
+                            },
+                            "timeout_s": {
+                                "$ref": "#/$defs/uint16"
+                            },
+                            "certificate_ref": {
+                                "type": "string"
+                            },
+                            "allowed_sessions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "proof_of_ownership": {
+                                "type": "boolean"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "state_model": {
+            "type": "object",
+            "description": "Defines the ECU state machine: initial state, state transitions, and how services affect state",
+            "additionalProperties": false,
+            "properties": {
+                "initial_state": {
+                    "type": "object",
+                    "description": "ECU state after power-on or hard reset",
+                    "additionalProperties": false,
+                    "required": [
+                        "session"
+                    ],
+                    "properties": {
+                        "session": {
+                            "type": "string",
+                            "description": "Session name (reference to sessions section)"
+                        },
+                        "security": {
+                            "type": "string",
+                            "description": "Security state: 'none' or security level name (reference to security section)",
+                            "default": "none"
+                        },
+                        "authentication_role": {
+                            "type": "string",
+                            "description": "Role name or 'none' (reference to authentication.roles)",
+                            "default": "none"
+                        }
+                    }
+                },
+                "session_transitions": {
+                    "type": "object",
+                    "description": "Map: from_session -> list of allowed target sessions",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "session_change_resets_security": {
+                    "type": "boolean",
+                    "description": "If true, changing session resets security to 'none'",
+                    "default": true
+                },
+                "session_change_resets_authentication": {
+                    "type": "boolean",
+                    "description": "If true, changing session resets authentication_role to none",
+                    "default": true
+                },
+                "s3_timeout_resets_to_default": {
+                    "type": "boolean",
+                    "description": "If true, S3 timeout (no testerPresent) returns ECU to initial_state",
+                    "default": true
+                }
+            }
+        },
+        "state_effect": {
+            "type": "object",
+            "description": "Describes how a service call modifies ECU state",
+            "additionalProperties": false,
+            "properties": {
+                "session": {
+                    "type": "string",
+                    "description": "Session transition: 'unchanged', 'from_request', or explicit session name"
+                },
+                "security": {
+                    "type": "string",
+                    "description": "Security transition: 'unchanged', 'from_request', 'none', or explicit security level name"
+                },
+                "authentication_role": {
+                    "type": "string",
+                    "description": "Auth role transition: 'unchanged', 'from_request', 'none', or explicit role name"
+                }
+            }
+        },
+        "variants": {
+            "type": "object",
+            "description": "Variant detection rules and per-variant overrides (boot vs app, SW versions)",
+            "additionalProperties": false,
+            "properties": {
+                "detection_order": {
+                    "type": "array",
+                    "description": "Order in which to attempt variant detection; first match wins",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "fallback": {
+                    "type": "string",
+                    "description": "Variant name to use if no detection rule matches"
+                },
+                "definitions": {
+                    "type": "object",
+                    "description": "Map: variant_name -> variant definition",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/variant_definition"
+                    }
+                }
+            }
+        },
+        "identification": {
+            "type": "object",
+            "description": "Expected identification checks (inspired by ODX ExpectedIdent)",
+            "additionalProperties": false,
+            "properties": {
+                "expected_idents": {
+                    "type": "object",
+                    "description": "Named identification checks that can be referenced from variant detection",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/expected_ident"
+                    }
+                }
+            }
+        },
+        "expected_ident": {
+            "type": "object",
+            "description": "A single identification check with one or more conditions",
+            "additionalProperties": false,
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "conditions": {
+                    "type": "array",
+                    "description": "All conditions must match (implicit AND)",
+                    "items": {
+                        "$ref": "#/$defs/ident_condition"
+                    },
+                    "minItems": 1
+                },
+                "probe_context": {
+                    "$ref": "#/$defs/probe_context"
+                }
+            },
+            "required": [
+                "conditions"
+            ]
+        },
+        "ident_condition": {
+            "type": "object",
+            "description": "A single identification condition (DID match, service response, response_param_match, etc.)",
+            "additionalProperties": false,
+            "properties": {
+                "did_match": {
+                    "$ref": "#/$defs/did_match_rule"
+                },
+                "service_responds": {
+                    "$ref": "#/$defs/service_responds_rule"
+                },
+                "response_param_match": {
+                    "$ref": "#/$defs/response_param_match_rule"
+                },
+                "session_available": {
+                    "type": "array",
+                    "description": "Condition matches if these sessions can be entered",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "probe_context": {
+            "type": "object",
+            "description": "State context in which to perform identification probes",
+            "additionalProperties": false,
+            "properties": {
+                "session": {
+                    "type": "string",
+                    "description": "Session to enter before probing (default: current session)"
+                },
+                "security": {
+                    "type": "string",
+                    "description": "Security level required for probing (default: none)"
+                },
+                "authentication": {
+                    "type": "string",
+                    "description": "Authentication role required for probing (default: none)"
+                }
+            }
+        },
+        "did_match_rule": {
+            "type": "object",
+            "description": "Match based on reading a DID value",
+            "additionalProperties": false,
+            "properties": {
+                "did": {
+                    "$ref": "#/$defs/hex16"
+                },
+                "value_equals": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/hexScalar"
+                        }
+                    ]
+                },
+                "value_starts_with": {
+                    "type": "string"
+                },
+                "value_contains": {
+                    "type": "string"
+                },
+                "value_regex": {
+                    "type": "string",
+                    "description": "Regex pattern to match against DID value (as string)"
+                },
+                "bitmask": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "mask": {
+                            "$ref": "#/$defs/hexScalar"
+                        },
+                        "expected": {
+                            "$ref": "#/$defs/hexScalar"
+                        }
+                    }
+                }
+            }
+        },
+        "service_responds_rule": {
+            "type": "object",
+            "description": "Probe a service; condition matches if positive response",
+            "additionalProperties": false,
+            "properties": {
+                "service": {
+                    "type": "string"
+                },
+                "subfunction": {
+                    "$ref": "#/$defs/hex8"
+                }
+            }
+        },
+        "response_param_match_rule": {
+            "type": "object",
+            "description": "Match based on response parameter value (ODX MatchingParameter equivalent). Use param_path (dotted path) OR param_id (stable identifier) to locate the parameter.",
+            "additionalProperties": false,
+            "required": [
+                "service"
+            ],
+            "oneOf": [
+                {
+                    "required": [
+                        "param_path"
+                    ]
+                },
+                {
+                    "required": [
+                        "param_id"
+                    ]
+                }
+            ],
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Service name (reference to services section)"
+                },
+                "subfunction": {
+                    "$ref": "#/$defs/hex8",
+                    "description": "Subfunction to invoke (optional)"
+                },
+                "request_params": {
+                    "type": "object",
+                    "description": "Request parameters to send (e.g., DID for readDataByIdentifier)",
+                    "additionalProperties": true
+                },
+                "response_type": {
+                    "type": "string",
+                    "description": "Which response to match: 'positive', 'negative', 'any'. Default: 'positive'",
+                    "enum": [
+                        "positive",
+                        "negative",
+                        "any"
+                    ],
+                    "default": "positive"
+                },
+                "param_path": {
+                    "type": "string",
+                    "description": "Dotted path to response parameter (e.g., 'IdentData.VariantId', 'ecuInfo.swVersion'). For arrays, any element matching is considered a match (mirrors odxtools behavior). Mutually exclusive with param_id."
+                },
+                "param_id": {
+                    "type": "string",
+                    "description": "Stable identifier of the response parameter (references param_id in response_outputs). Mutually exclusive with param_path. Preferred for deterministic matching."
+                },
+                "expected_value": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "$ref": "#/$defs/hexScalar"
+                        },
+                        {
+                            "type": "array",
+                            "description": "Hex bytes for binary comparison",
+                            "items": {
+                                "$ref": "#/$defs/hex8"
+                            }
+                        }
+                    ],
+                    "description": "Expected value at param_path"
+                },
+                "value_starts_with": {
+                    "type": "string",
+                    "description": "String prefix match"
+                },
+                "value_contains": {
+                    "type": "string",
+                    "description": "Substring match"
+                },
+                "value_regex": {
+                    "type": "string",
+                    "description": "Regex pattern to match against parameter value (as string)"
+                },
+                "bitmask": {
+                    "type": "object",
+                    "description": "Bitmask comparison for numeric values",
+                    "additionalProperties": false,
+                    "properties": {
+                        "mask": {
+                            "$ref": "#/$defs/hexScalar"
+                        },
+                        "expected": {
+                            "$ref": "#/$defs/hexScalar"
+                        }
+                    }
+                }
+            }
+        },
+        "variant_definition": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "inheritance": {
+                    "$ref": "#/$defs/variant_inheritance",
+                    "description": "Inheritance rules for this variant"
+                },
+                "detect": {
+                    "type": "object",
+                    "description": "Detection rules for this variant",
+                    "additionalProperties": false,
+                    "properties": {
+                        "ident_ref": {
+                            "type": "string",
+                            "description": "Reference to an expected_ident by name from identification.expected_idents"
+                        },
+                        "match_all": {
+                            "type": "array",
+                            "description": "All conditions must match (AND logic)",
+                            "items": {
+                                "$ref": "#/$defs/ident_condition"
+                            },
+                            "minItems": 1
+                        },
+                        "match_any": {
+                            "type": "array",
+                            "description": "At least one condition must match (OR logic)",
+                            "items": {
+                                "$ref": "#/$defs/ident_condition"
+                            },
+                            "minItems": 1
+                        },
+                        "did_match": {
+                            "$ref": "#/$defs/did_match_rule",
+                            "description": "Simple single DID match (shorthand for match_all with one condition)"
+                        },
+                        "session_available": {
+                            "type": "array",
+                            "description": "Variant matches if these sessions can be entered",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "service_responds": {
+                            "$ref": "#/$defs/service_responds_rule",
+                            "description": "Probe a service; variant matches if positive response"
+                        },
+                        "response_param_match": {
+                            "$ref": "#/$defs/response_param_match_rule",
+                            "description": "Match based on response parameter value (ODX MatchingParameter equivalent)"
+                        },
+                        "probe_context": {
+                            "$ref": "#/$defs/probe_context"
+                        }
+                    }
+                },
+                "overrides": {
+                    "type": "object",
+                    "description": "Overrides for this variant (merged on top of base config)",
+                    "additionalProperties": false,
+                    "properties": {
+                        "services": {
+                            "type": "object",
+                            "description": "Service overrides: service_name -> partial service config",
+                            "additionalProperties": {
+                                "type": "object"
+                            }
+                        },
+                        "dids": {
+                            "type": "object",
+                            "description": "DID overrides: did_id -> partial DID config",
+                            "additionalProperties": {
+                                "type": "object"
+                            }
+                        },
+                        "routines": {
+                            "type": "object",
+                            "description": "Routine overrides: routine_id -> partial routine config",
+                            "additionalProperties": {
+                                "type": "object"
+                            }
+                        },
+                        "access_patterns": {
+                            "type": "object",
+                            "description": "Access pattern overrides",
+                            "additionalProperties": {
+                                "$ref": "#/$defs/access_pattern"
+                            }
+                        },
+                        "state_model": {
+                            "type": "object",
+                            "description": "State model overrides for this variant"
+                        }
+                    }
+                },
+                "annotations": {
+                    "$ref": "#/$defs/annotations"
+                }
+            }
+        },
+        "annotations": {
+            "type": "object",
+            "description": "Key-value metadata for client-specific behavior, quirks, feature flags",
+            "additionalProperties": {
+                "oneOf": [
+                    {
+                        "type": "string"
+                    },
+                    {
+                        "type": "number"
+                    },
+                    {
+                        "type": "boolean"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                ]
+            }
+        },
+        "services": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "diagnosticSessionControl": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        },
+                        "request_layout": {
+                            "$ref": "#/$defs/service_request_layout",
+                            "description": "Request parameter layout. If omitted, UDS-default layout is assumed."
+                        },
+                        "subfunctions": {
+                            "$ref": "#/$defs/hex8_list_or_map"
+                        },
+                        "state_effects": {
+                            "type": "object",
+                            "description": "State effects when session changes",
+                            "additionalProperties": false,
+                            "properties": {
+                                "on_success": {
+                                    "$ref": "#/$defs/state_effect"
+                                }
+                            }
+                        }
+                    }
+                },
+                "ecuReset": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        },
+                        "request_layout": {
+                            "$ref": "#/$defs/service_request_layout",
+                            "description": "Request parameter layout. If omitted, UDS-default layout is assumed."
+                        },
+                        "subfunctions": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/$defs/hex8"
+                            }
+                        },
+                        "state_effects": {
+                            "type": "object",
+                            "description": "State effects per reset subfunction",
+                            "additionalProperties": false,
+                            "properties": {
+                                "hardReset": {
+                                    "$ref": "#/$defs/state_effect"
+                                },
+                                "keyOffOnReset": {
+                                    "$ref": "#/$defs/state_effect"
+                                },
+                                "softReset": {
+                                    "$ref": "#/$defs/state_effect"
+                                }
+                            }
+                        }
+                    }
+                },
+                "securityAccess": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        },
+                        "request_layout": {
+                            "$ref": "#/$defs/service_request_layout",
+                            "description": "Request parameter layout. If omitted, UDS-default layout is assumed."
+                        },
+                        "state_effects": {
+                            "type": "object",
+                            "description": "State effects when security is unlocked",
+                            "additionalProperties": false,
+                            "properties": {
+                                "on_unlock": {
+                                    "$ref": "#/$defs/state_effect"
+                                }
+                            }
+                        }
+                    }
+                },
+                "communicationControl": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        },
+                        "request_layout": {
+                            "$ref": "#/$defs/service_request_layout",
+                            "description": "Request parameter layout. If omitted, UDS-default layout is assumed."
+                        },
+                        "subfunctions": {
+                            "$ref": "#/$defs/hex8_list_or_map"
+                        },
+                        "communication_types": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/hex8"
+                            }
+                        },
+                        "nrc_on_fail": {
+                            "$ref": "#/$defs/hex8"
+                        }
+                    }
+                },
+                "authentication": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        },
+                        "request_layout": {
+                            "$ref": "#/$defs/service_request_layout",
+                            "description": "Request parameter layout. If omitted, UDS-default layout is assumed."
+                        },
+                        "subfunctions": {
+                            "$ref": "#/$defs/hex8_list_or_map"
+                        },
+                        "state_effects": {
+                            "type": "object",
+                            "description": "State effects for authentication operations",
+                            "additionalProperties": false,
+                            "properties": {
+                                "on_authenticate": {
+                                    "$ref": "#/$defs/state_effect"
+                                },
+                                "on_deauthenticate": {
+                                    "$ref": "#/$defs/state_effect"
+                                }
+                            }
+                        }
+                    }
+                },
+                "testerPresent": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        }
+                    }
+                },
+                "controlDTCSetting": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        }
+                    }
+                },
+                "responseOnEvent": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "subfunctions": {
+                            "$ref": "#/$defs/hex8_list_or_map"
+                        },
+                        "max_active_events": {
+                            "$ref": "#/$defs/uint8"
+                        }
+                    }
+                },
+                "linkControl": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "subfunctions": {
+                            "$ref": "#/$defs/hex8_list_or_map"
+                        }
+                    }
+                },
+                "readDataByIdentifier": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "request_layout": {
+                            "$ref": "#/$defs/service_request_layout",
+                            "description": "Request parameter layout. If omitted, UDS-default layout is assumed."
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        },
+                        "audience": {
+                            "$ref": "#/$defs/audience"
+                        },
+                        "response_outputs": {
+                            "type": "object",
+                            "description": "Response output parameter structure for response_param_match (map: output_name -> definition)",
+                            "additionalProperties": {
+                                "$ref": "#/$defs/response_output"
+                            }
+                        }
+                    }
+                },
+                "readMemoryByAddress": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "alfid": {
+                            "$ref": "#/$defs/hex8"
+                        },
+                        "max_length": {
+                            "$ref": "#/$defs/uint16"
+                        },
+                        "regions": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/memory_region"
+                            }
+                        }
+                    }
+                },
+                "readScalingDataByIdentifier": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "dids": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/hex16"
+                            }
+                        }
+                    }
+                },
+                "readDataByPeriodicIdentifier": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "subfunctions": {
+                            "$ref": "#/$defs/hex8_list_or_map"
+                        },
+                        "supported_periods_ms": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/uint16"
+                            }
+                        },
+                        "identifiers": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/hex8"
+                            }
+                        }
+                    }
+                },
+                "dynamicallyDefineDataIdentifier": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "subfunctions": {
+                            "$ref": "#/$defs/hex8_list_or_map"
+                        },
+                        "max_dynamic_dids": {
+                            "$ref": "#/$defs/uint16"
+                        },
+                        "allow_by_identifier": {
+                            "type": "boolean"
+                        },
+                        "allow_by_memory_address": {
+                            "type": "boolean"
+                        }
+                    }
+                },
+                "writeDataByIdentifier": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        },
+                        "request_layout": {
+                            "$ref": "#/$defs/service_request_layout",
+                            "description": "Request parameter layout. If omitted, UDS-default layout is assumed."
+                        }
+                    }
+                },
+                "writeMemoryByAddress": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "alfid": {
+                            "$ref": "#/$defs/hex8"
+                        },
+                        "max_length": {
+                            "$ref": "#/$defs/uint16"
+                        },
+                        "regions": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/memory_region"
+                            }
+                        }
+                    }
+                },
+                "clearDiagnosticInformation": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        }
+                    }
+                },
+                "readDTCInformation": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        },
+                        "request_layout": {
+                            "$ref": "#/$defs/service_request_layout",
+                            "description": "Request parameter layout. If omitted, UDS-default layout is assumed."
+                        },
+                        "subfunctions": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/hex8"
+                            }
+                        },
+                        "audience": {
+                            "$ref": "#/$defs/audience"
+                        },
+                        "response_outputs": {
+                            "type": "object",
+                            "description": "Response output parameter structure for response_param_match",
+                            "additionalProperties": {
+                                "$ref": "#/$defs/response_output"
+                            }
+                        }
+                    }
+                },
+                "inputOutputControlByIdentifier": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        },
+                        "control_types": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "returnControlToECU",
+                                    "resetToDefault",
+                                    "freezeCurrentState",
+                                    "shortTermAdjustment"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "routineControl": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addressing_mode": {
+                            "type": "string",
+                            "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                            "enum": [
+                                "physical",
+                                "functional",
+                                "both"
+                            ],
+                            "default": "physical"
+                        },
+                        "request_layout": {
+                            "$ref": "#/$defs/service_request_layout",
+                            "description": "Request parameter layout. If omitted, UDS-default layout is assumed."
+                        },
+                        "subfunctions": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "startRoutine",
+                                    "stopRoutine",
+                                    "requestResults"
+                                ]
+                            }
+                        },
+                        "audience": {
+                            "$ref": "#/$defs/audience"
+                        },
+                        "response_outputs": {
+                            "type": "object",
+                            "description": "Response output parameter structure for response_param_match",
+                            "additionalProperties": {
+                                "$ref": "#/$defs/response_output"
+                            }
+                        }
+                    }
+                },
+                "requestDownload": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "max_number_of_block_length": {
+                            "$ref": "#/$defs/uint32"
+                        },
+                        "regions": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/memory_region"
+                            }
+                        }
+                    }
+                },
+                "requestUpload": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "max_number_of_block_length": {
+                            "$ref": "#/$defs/uint32"
+                        },
+                        "regions": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/memory_region"
+                            }
+                        }
+                    }
+                },
+                "transferData": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "max_block_sequence_counter": {
+                            "$ref": "#/$defs/uint8"
+                        }
+                    }
+                },
+                "requestTransferExit": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        }
+                    }
+                },
+                "requestFileTransfer": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "subfunctions": {
+                            "$ref": "#/$defs/hex8_list_or_map"
+                        },
+                        "max_file_size": {
+                            "$ref": "#/$defs/uint64"
+                        }
+                    }
+                },
+                "securedDataTransmission": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "enabled"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "subfunctions": {
+                            "$ref": "#/$defs/hex8_list_or_map"
+                        }
+                    }
+                },
+                "custom": {
+                    "type": "object",
+                    "description": "Custom/OEM-specific services not covered by standard UDS services. Map: service_short_name -> custom service definition",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/custom_service"
+                    }
+                }
+            }
+        },
+        "custom_service": {
+            "type": "object",
+            "description": "Definition of a custom/OEM-specific UDS service",
+            "additionalProperties": false,
+            "required": [
+                "sid"
+            ],
+            "properties": {
+                "sid": {
+                    "$ref": "#/$defs/hex8",
+                    "description": "Service Identifier (SID) for this custom service"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable description of the custom service"
+                },
+                "addressing_mode": {
+                    "type": "string",
+                    "description": "Addressing mode for this service. Overrides ecu.default_addressing_mode.",
+                    "enum": [
+                        "physical",
+                        "functional",
+                        "both"
+                    ],
+                    "default": "physical"
+                },
+                "request_layout": {
+                    "$ref": "#/$defs/service_request_layout",
+                    "description": "Request parameter layout for this custom service"
+                },
+                "positive_response": {
+                    "$ref": "#/$defs/positive_response",
+                    "description": "Positive response definition with full parameter layout"
+                },
+                "negative_responses": {
+                    "type": "array",
+                    "description": "Supported negative response codes with optional parameters",
+                    "items": {
+                        "$ref": "#/$defs/negative_response"
+                    }
+                },
+                "response_outputs": {
+                    "type": "object",
+                    "description": "Response output parameter structure (legacy, prefer positive_response)",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/response_output"
+                    }
+                },
+                "access": {
+                    "type": "string",
+                    "description": "Access pattern reference"
+                },
+                "audience": {
+                    "$ref": "#/$defs/audience"
+                },
+                "annotations": {
+                    "$ref": "#/$defs/annotations"
+                }
+            }
+        },
+        "hex8_list_or_map": {
+            "oneOf": [
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/hex8"
+                    }
+                },
+                {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/hex8"
+                    }
+                }
+            ]
+        },
+        "access_patterns": {
+            "type": "object",
+            "description": "Map: pattern_name -> access pattern",
+            "additionalProperties": {
+                "$ref": "#/$defs/access_pattern"
+            }
+        },
+        "access_pattern": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "sessions",
+                "security",
+                "authentication"
+            ],
+            "properties": {
+                "sessions": {
+                    "oneOf": [
+                        {
+                            "type": "string",
+                            "const": "any"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    ]
+                },
+                "security": {
+                    "oneOf": [
+                        {
+                            "type": "string",
+                            "const": "none"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    ]
+                },
+                "authentication": {
+                    "oneOf": [
+                        {
+                            "type": "string",
+                            "const": "none"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    ]
+                },
+                "nrc_on_fail": {
+                    "$ref": "#/$defs/hex8"
+                }
+            }
+        },
+        "types": {
+            "type": "object",
+            "description": "Map: type_name -> type definition",
+            "additionalProperties": {
+                "$ref": "#/$defs/type_definition"
+            }
+        },
+        "type_definition": {
+            "oneOf": [
+                {
+                    "$ref": "#/$defs/atomic_type"
+                },
+                {
+                    "$ref": "#/$defs/enum_type"
+                },
+                {
+                    "$ref": "#/$defs/struct_type"
+                },
+                {
+                    "$ref": "#/$defs/text_table"
+                }
+            ]
+        },
+        "atomic_type": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "base"
+            ],
+            "properties": {
+                "base": {
+                    "type": "string",
+                    "description": "Base type. Core deterministic types: u8, u16, u32, s8, s16, s32, ascii (with fixed length), bytes (with fixed length). Extended types (may require heuristics): u64, s64, f32, f64.",
+                    "enum": [
+                        "u8",
+                        "u16",
+                        "u32",
+                        "u64",
+                        "s8",
+                        "s16",
+                        "s32",
+                        "s64",
+                        "f32",
+                        "f64",
+                        "ascii",
+                        "bytes"
+                    ]
+                },
+                "endian": {
+                    "type": "string",
+                    "description": "Byte order for multi-byte numeric types (u16/u32/u64/s16/s32/s64/f32/f64). REQUIRED for types larger than 8 bits to ensure deterministic conversion.",
+                    "enum": [
+                        "big",
+                        "little"
+                    ]
+                },
+                "bit_length": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 64,
+                    "description": "Explicit bit length. If omitted, derived from base type (u8=8, u16=16, etc.)"
+                },
+                "byte_position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Byte position in message. Usually auto-calculated."
+                },
+                "bit_position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 7,
+                    "description": "Bit position within byte for sub-byte fields (0 = LSB, 7 = MSB). Default: 0"
+                },
+                "length": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Fixed length in bytes for ascii/bytes types. REQUIRED for ascii/bytes to ensure deterministic conversion."
+                },
+                "min_length": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "ADVANCED: Minimum length for variable-length ascii/bytes. Requires termination method. Use fixed length when possible for deterministic downstream conversion."
+                },
+                "max_length": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "ADVANCED: Maximum length for variable-length ascii/bytes. Requires termination method. Use fixed length when possible for deterministic downstream conversion."
+                },
+                "termination": {
+                    "type": "string",
+                    "description": "ADVANCED: Termination method for variable-length fields. 'zero' = null-terminated, 'end_of_pdu' = consumes remaining PDU, 'length_field' = requires separate length field (not yet fully supported). Use fixed length when possible.",
+                    "enum": [
+                        "zero",
+                        "length_field",
+                        "end_of_pdu",
+                        "none"
+                    ],
+                    "default": "none"
+                },
+                "encoding": {
+                    "type": "string",
+                    "description": "Character encoding for ascii/string types",
+                    "enum": [
+                        "US-ASCII",
+                        "UTF-8",
+                        "ISO-8859-1",
+                        "UCS-2"
+                    ],
+                    "default": "US-ASCII"
+                },
+                "scale": {
+                    "type": "number",
+                    "description": "Linear scale factor: physical = internal * scale + offset"
+                },
+                "offset": {
+                    "type": "number",
+                    "description": "Linear offset: physical = internal * scale + offset"
+                },
+                "divisor": {
+                    "type": "number",
+                    "description": "Divisor for rational scaling: physical = (internal - offset) * scale / divisor"
+                },
+                "conversion": {
+                    "$ref": "#/$defs/linear_conversion",
+                    "description": "Full linear conversion specification (alternative to scale/offset/divisor)"
+                },
+                "unit": {
+                    "type": "string",
+                    "description": "Physical unit (e.g., 'degC', 'rpm', 'kPa')"
+                },
+                "bitmask": {
+                    "$ref": "#/$defs/hexScalar",
+                    "description": "Bitmask to apply before interpretation (value & bitmask)"
+                },
+                "pattern": {
+                    "type": "string",
+                    "description": "Regex pattern for validation (ascii/string types)"
+                },
+                "constraints": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "internal": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "description": "[min, max] range for internal (raw) values"
+                        },
+                        "physical": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "description": "[min, max] range for physical (scaled) values"
+                        }
+                    }
+                },
+                "validation": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "forbidden_characters": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "forbidden_values": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/hexScalar"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "enum_type": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "base",
+                "enum"
+            ],
+            "properties": {
+                "base": {
+                    "type": "string",
+                    "enum": [
+                        "u8",
+                        "u16"
+                    ]
+                },
+                "enum": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "struct_type": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "base",
+                "size",
+                "fields"
+            ],
+            "properties": {
+                "base": {
+                    "type": "string",
+                    "const": "struct"
+                },
+                "size": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "required": [
+                            "name"
+                        ],
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "dids": {
+            "type": "object",
+            "description": "Map: DID -> DID definition. YAML tools may treat unquoted 0xFFFF keys as integers; key pattern validation is intentionally not enforced here.",
+            "additionalProperties": {
+                "$ref": "#/$defs/did_definition"
+            }
+        },
+        "did_definition": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "name",
+                "type",
+                "access"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "type": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/type_inline"
+                        }
+                    ]
+                },
+                "access": {
+                    "type": "string"
+                },
+                "readable": {
+                    "type": "boolean"
+                },
+                "writable": {
+                    "type": "boolean"
+                },
+                "snapshot": {
+                    "type": "boolean"
+                },
+                "io_control": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "return_control_to_ecu": {
+                            "type": "boolean"
+                        },
+                        "reset_to_default": {
+                            "type": "boolean"
+                        },
+                        "freeze_current_state": {
+                            "type": "boolean"
+                        },
+                        "short_term_adjustment": {
+                            "type": "boolean"
+                        }
+                    }
+                },
+                "audience": {
+                    "$ref": "#/$defs/audience"
+                },
+                "annotations": {
+                    "$ref": "#/$defs/annotations"
+                }
+            }
+        },
+        "type_inline": {
+            "$ref": "#/$defs/type_definition"
+        },
+        "routines": {
+            "type": "object",
+            "description": "Map: routine_id -> routine definition. Key pattern validation is intentionally not enforced to support unquoted hex keys in YAML.",
+            "additionalProperties": {
+                "$ref": "#/$defs/routine_definition"
+            }
+        },
+        "routine_definition": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+                "name",
+                "access",
+                "operations"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "access": {
+                    "type": "string"
+                },
+                "operations": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "start",
+                            "stop",
+                            "result"
+                        ]
+                    }
+                },
+                "parameters": {
+                    "type": "object"
+                },
+                "audience": {
+                    "$ref": "#/$defs/audience"
+                },
+                "annotations": {
+                    "$ref": "#/$defs/annotations"
+                }
+            }
+        },
+        "dtc_config": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "status_availability_mask": {
+                    "$ref": "#/$defs/hex8"
+                },
+                "snapshots": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/dtc_snapshot_definition"
+                    }
+                },
+                "extended_data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/dtc_extended_data_definition"
+                    }
+                }
+            }
+        },
+        "dtc_snapshot_definition": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "record_number",
+                "dids"
+            ],
+            "properties": {
+                "record_number": {
+                    "$ref": "#/$defs/hex8"
+                },
+                "dids": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/hex16"
+                    }
+                },
+                "trigger": {
+                    "type": "string"
+                },
+                "update": {
+                    "type": "boolean"
+                },
+                "x-oem": {
+                    "type": "object"
+                }
+            }
+        },
+        "dtc_extended_data_definition": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "record_number"
+            ],
+            "properties": {
+                "record_number": {
+                    "$ref": "#/$defs/hex8"
+                },
+                "type": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/type_inline"
+                        }
+                    ]
+                },
+                "trigger": {
+                    "type": "string"
+                },
+                "x-oem": {
+                    "type": "object"
+                }
+            }
+        },
+        "dtcs": {
+            "type": "object",
+            "description": "Map: DTC -> DTC definition. Key pattern validation is intentionally not enforced to support unquoted hex keys in YAML.",
+            "additionalProperties": {
+                "$ref": "#/$defs/dtc_definition"
+            }
+        },
+        "dtc_definition": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "name",
+                "sae"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "sae": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "severity": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4
+                },
+                "snapshots": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "extended_data": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "x-oem": {
+                    "type": "object"
+                }
+            }
+        },
+        "memory_region": {
+            "type": "object",
+            "description": "Definition of a memory region in the ECU.",
+            "additionalProperties": false,
+            "required": [
+                "name",
+                "start",
+                "end",
+                "access"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "start": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/hex32"
+                        },
+                        {
+                            "$ref": "#/$defs/hex64"
+                        }
+                    ]
+                },
+                "end": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/hex32"
+                        },
+                        {
+                            "$ref": "#/$defs/hex64"
+                        }
+                    ]
+                },
+                "access": {
+                    "type": "string"
+                }
+            }
+        },
+        "address_format": {
+            "type": "object",
+            "description": "Address and length format for memory operations (ISO 14229 addressAndLengthFormatIdentifier).",
+            "additionalProperties": false,
+            "properties": {
+                "address_bytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                    "default": 4,
+                    "description": "Number of bytes for memory address (1-5)"
+                },
+                "length_bytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                    "default": 4,
+                    "description": "Number of bytes for memory length (1-5)"
+                }
+            }
+        },
+        "data_block": {
+            "type": "object",
+            "description": "Definition of a data block for transfer operations (RequestDownload 0x34 / RequestUpload 0x35).",
+            "additionalProperties": false,
+            "required": [
+                "name",
+                "memory_address",
+                "memory_size"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Human-readable name for the data block"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Block purpose description"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "download",
+                        "upload"
+                    ],
+                    "default": "download",
+                    "description": "Transfer direction"
+                },
+                "memory_address": {
+                    "$ref": "#/$defs/hex32",
+                    "description": "Target memory address"
+                },
+                "memory_size": {
+                    "$ref": "#/$defs/hex32",
+                    "description": "Size of the data block in bytes"
+                },
+                "format": {
+                    "type": "string",
+                    "enum": [
+                        "raw",
+                        "encrypted",
+                        "compressed",
+                        "encrypted_compressed"
+                    ],
+                    "default": "raw",
+                    "description": "Data format/compression"
+                },
+                "max_block_length": {
+                    "$ref": "#/$defs/hex32",
+                    "description": "Max bytes per TransferData call"
+                },
+                "security_level": {
+                    "type": "string",
+                    "description": "Required security level"
+                },
+                "session": {
+                    "type": "string",
+                    "description": "Required diagnostic session"
+                },
+                "checksum_type": {
+                    "type": "string",
+                    "description": "Checksum algorithm"
+                }
+            }
+        },
+        "memory_config": {
+            "type": "object",
+            "description": "Memory configuration for the ECU, including regions and data blocks.",
+            "additionalProperties": false,
+            "properties": {
+                "default_address_format": {
+                    "$ref": "#/$defs/address_format"
+                },
+                "regions": {
+                    "type": "object",
+                    "description": "Named memory regions",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/memory_region"
+                    }
+                },
+                "data_blocks": {
+                    "type": "object",
+                    "description": "Named data blocks for transfer operations",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/data_block"
+                    }
+                }
+            }
+        },
+        "audience": {
+            "type": "object",
+            "description": "Audience gating for content visibility (ODX Audience concept). Flags default to true (enabled) when not specified.",
+            "additionalProperties": false,
+            "properties": {
+                "supplier": {
+                    "type": "boolean",
+                    "description": "Visible to supplier (default: true)",
+                    "default": true
+                },
+                "development": {
+                    "type": "boolean",
+                    "description": "Visible in development context (default: true)",
+                    "default": true
+                },
+                "manufacturing": {
+                    "type": "boolean",
+                    "description": "Visible in manufacturing context (default: true)",
+                    "default": true
+                },
+                "aftersales": {
+                    "type": "boolean",
+                    "description": "Visible in aftersales/service context (default: true)",
+                    "default": true
+                },
+                "aftermarket": {
+                    "type": "boolean",
+                    "description": "Visible to aftermarket tools (default: true)",
+                    "default": true
+                },
+                "groups": {
+                    "type": "array",
+                    "description": "Named audience groups for custom classification",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "sdgs": {
+            "type": "object",
+            "description": "Special Data Groups - hierarchical metadata tree (ODX SDG concept)",
+            "additionalProperties": {
+                "$ref": "#/$defs/sdg_node"
+            }
+        },
+        "sdg_node": {
+            "type": "object",
+            "description": "A single SDG node containing semantic info, optional caption, and values (sub-SDGs or SD entries)",
+            "additionalProperties": false,
+            "properties": {
+                "si": {
+                    "type": "string",
+                    "description": "Semantic Info - identifier/key for this SDG"
+                },
+                "caption": {
+                    "type": "string",
+                    "description": "Human-readable caption/title"
+                },
+                "values": {
+                    "type": "array",
+                    "description": "Child nodes: either nested SDGs or SD (leaf) entries",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/$defs/sdg_node"
+                            },
+                            {
+                                "$ref": "#/$defs/sd_entry"
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        "sd_entry": {
+            "type": "object",
+            "description": "Special Data leaf entry with semantic info, text identifier, and value",
+            "additionalProperties": false,
+            "required": [
+                "value"
+            ],
+            "properties": {
+                "si": {
+                    "type": "string",
+                    "description": "Semantic Info - identifier/key"
+                },
+                "ti": {
+                    "type": "string",
+                    "description": "Text Identifier - language/locale code (e.g., 'en', 'de', 'en-US')"
+                },
+                "value": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "boolean"
+                        }
+                    ],
+                    "description": "The actual data value"
+                }
+            }
+        },
+        "comparams": {
+            "type": "object",
+            "description": "Communication parameters - protocol-scoped transport parameters beyond basic timing (ODX COMPARAM concept)",
+            "additionalProperties": false,
+            "properties": {
+                "specs": {
+                    "type": "object",
+                    "description": "Parameter specifications (typed definitions with constraints and defaults). Keys are parameter names.",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/comparam_spec"
+                    }
+                },
+                "doip": {
+                    "$ref": "#/$defs/comparam_set",
+                    "description": "DoIP-specific communication parameters"
+                },
+                "can": {
+                    "$ref": "#/$defs/comparam_set",
+                    "description": "CAN-specific communication parameters"
+                },
+                "uds": {
+                    "$ref": "#/$defs/comparam_set",
+                    "description": "UDS protocol parameters"
+                },
+                "iso15765": {
+                    "$ref": "#/$defs/comparam_set",
+                    "description": "ISO 15765 (CAN transport) parameters"
+                },
+                "global": {
+                    "$ref": "#/$defs/comparam_set",
+                    "description": "Global/default communication parameters (apply to all protocols unless overridden)"
+                }
+            }
+        },
+        "comparam_set": {
+            "type": "object",
+            "description": "A set of communication parameters (key-value with optional typing/units)",
+            "additionalProperties": {
+                "$ref": "#/$defs/comparam_value"
+            }
+        },
+        "comparam_value": {
+            "oneOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "number"
+                },
+                {
+                    "type": "boolean"
+                },
+                {
+                    "type": "object",
+                    "description": "Typed communication parameter with optional unit and default",
+                    "additionalProperties": false,
+                    "required": [
+                        "value"
+                    ],
+                    "properties": {
+                        "value": {
+                            "oneOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "number"
+                                },
+                                {
+                                    "type": "boolean"
+                                }
+                            ]
+                        },
+                        "type": {
+                            "type": "string",
+                            "description": "Data type hint (e.g., 'uint16', 'float')"
+                        },
+                        "unit": {
+                            "type": "string",
+                            "description": "Unit of measurement (e.g., 'ms', 'bytes')"
+                        },
+                        "default": {
+                            "oneOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "number"
+                                },
+                                {
+                                    "type": "boolean"
+                                }
+                            ],
+                            "description": "Default value if not explicitly set"
+                        },
+                        "description": {
+                            "type": "string"
+                        }
+                    }
+                }
+            ]
+        },
+        "protocols": {
+            "type": "object",
+            "description": "Protocol definitions with canonical protocol identifiers for interoperability.",
+            "additionalProperties": {
+                "$ref": "#/$defs/protocol_definition"
+            }
+        },
+        "protocol_definition": {
+            "type": "object",
+            "description": "Protocol definition",
+            "additionalProperties": false,
+            "required": [
+                "protocol_short_name"
+            ],
+            "properties": {
+                "protocol_short_name": {
+                    "type": "string",
+                    "description": "Canonical protocol identifier. Standard values: UDSonDoIP, UDSonCAN, UDSonLIN, UDSonFR, UDSonIP, ISO_14229_3_DoIP, ISO_15765_3_CAN",
+                    "enum": [
+                        "UDSonDoIP",
+                        "UDSonCAN",
+                        "UDSonLIN",
+                        "UDSonFR",
+                        "UDSonIP",
+                        "ISO_14229_3_DoIP",
+                        "ISO_15765_3_CAN",
+                        "ISO_14229_3_CAN"
+                    ]
+                },
+                "description": {
+                    "type": "string"
+                },
+                "is_default": {
+                    "type": "boolean",
+                    "description": "If true, this protocol is used as default when multiple are available",
+                    "default": false
+                }
+            }
+        },
+        "response_output": {
+            "type": "object",
+            "description": "Describes a response output parameter structure for response_param_match",
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Parameter name"
+                },
+                "param_id": {
+                    "type": "string",
+                    "description": "Stable identifier for this parameter. Used by response_param_match to locate this parameter. If omitted, 'name' is used."
+                },
+                "short_name": {
+                    "type": "string",
+                    "description": "Short name override for export formats. If omitted, derived from 'name' or 'param_id'."
+                },
+                "type": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/type_definition"
+                        }
+                    ],
+                    "description": "Type reference or inline type definition"
+                },
+                "children": {
+                    "type": "array",
+                    "description": "Nested parameters (for struct-like responses)",
+                    "items": {
+                        "$ref": "#/$defs/response_output"
+                    }
+                }
+            }
+        },
+        "service_request_layout": {
+            "type": "object",
+            "description": "Defines request parameter layout. Allows explicit control over parameter positions when UDS defaults don't apply.",
+            "additionalProperties": false,
+            "properties": {
+                "use_uds_defaults": {
+                    "type": "boolean",
+                    "description": "If true, use standard UDS parameter layout (SID + subfunction/DID/RID). Default: true",
+                    "default": true
+                },
+                "subfunction_position": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Byte position of subfunction (1-indexed, after SID). UDS default: 1"
+                },
+                "subfunction_bit_length": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8,
+                    "description": "Bit length of subfunction field. UDS default: 7 (bit 7 is suppressPosRspMsgIndicationBit)"
+                },
+                "suppress_positive_response_bit": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 7,
+                    "description": "Bit position of suppressPosRspMsgIndicationBit. UDS default: 7. Set to -1 to disable."
+                },
+                "did_position": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Byte position of DID (1-indexed). UDS default for 0x22/0x2E: 1"
+                },
+                "did_byte_length": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4,
+                    "description": "Byte length of DID field. UDS default: 2"
+                },
+                "rid_position": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Byte position of RID (1-indexed). UDS default for 0x31: 2 (after subfunction)"
+                },
+                "rid_byte_length": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4,
+                    "description": "Byte length of RID field. UDS default: 2"
+                },
+                "parameters": {
+                    "type": "array",
+                    "description": "Explicit parameter definitions for non-standard request layouts",
+                    "items": {
+                        "$ref": "#/$defs/request_param"
+                    }
+                }
+            }
+        },
+        "request_param": {
+            "type": "object",
+            "description": "A single request parameter definition. All byte positions are 1-indexed (position 1 = first byte after SID).",
+            "additionalProperties": false,
+            "required": [
+                "name",
+                "byte_position"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Parameter name"
+                },
+                "semantic": {
+                    "type": "string",
+                    "description": "Semantic role of parameter",
+                    "enum": [
+                        "subfunction",
+                        "did",
+                        "rid",
+                        "data",
+                        "other"
+                    ]
+                },
+                "byte_position": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Byte position in request (1-indexed, position 1 = first byte after SID)"
+                },
+                "bit_position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 7,
+                    "description": "Bit position within byte for sub-byte params (0 = LSB, 7 = MSB)"
+                },
+                "bit_length": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Bit length of parameter"
+                },
+                "type": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/type_definition"
+                        }
+                    ]
+                }
+            }
+        },
+        "ecu_jobs": {
+            "type": "object",
+            "description": "ECU Jobs / SingleEcuJob definitions (OEM-specific programmed sequences)",
+            "additionalProperties": {
+                "$ref": "#/$defs/ecu_job_definition"
+            }
+        },
+        "ecu_job_definition": {
+            "type": "object",
+            "description": "Single ECU Job definition",
+            "additionalProperties": false,
+            "required": [
+                "name",
+                "prog_code"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Job name / identifier"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "prog_code": {
+                    "type": "string",
+                    "description": "Programming code / script reference for job execution"
+                },
+                "input_params": {
+                    "type": "array",
+                    "description": "Input parameters for the job",
+                    "items": {
+                        "$ref": "#/$defs/job_param"
+                    }
+                },
+                "output_params": {
+                    "type": "array",
+                    "description": "Output parameters from the job",
+                    "items": {
+                        "$ref": "#/$defs/job_param"
+                    }
+                },
+                "neg_output_params": {
+                    "type": "array",
+                    "description": "Negative response output parameters",
+                    "items": {
+                        "$ref": "#/$defs/job_param"
+                    }
+                },
+                "access": {
+                    "type": "string",
+                    "description": "Access pattern reference"
+                },
+                "audience": {
+                    "$ref": "#/$defs/audience"
+                },
+                "annotations": {
+                    "$ref": "#/$defs/annotations"
+                }
+            }
+        },
+        "job_param": {
+            "type": "object",
+            "description": "Job parameter definition",
+            "additionalProperties": false,
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "semantic": {
+                    "type": "string",
+                    "description": "Semantic meaning (e.g., 'session', 'variant', 'data')"
+                },
+                "type": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/type_definition"
+                        }
+                    ]
+                },
+                "default_value": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "boolean"
+                        }
+                    ]
+                }
+            }
+        },
+        "positive_response": {
+            "type": "object",
+            "description": "Positive response definition for a service",
+            "additionalProperties": false,
+            "properties": {
+                "sid": {
+                    "$ref": "#/$defs/hex8",
+                    "description": "Response SID (usually request SID + 0x40)"
+                },
+                "parameters": {
+                    "type": "array",
+                    "description": "Response parameter list in transmission order",
+                    "items": {
+                        "$ref": "#/$defs/response_param"
+                    }
+                },
+                "structure": {
+                    "$ref": "#/$defs/message_structure",
+                    "description": "Structured response definition for complex layouts"
+                }
+            }
+        },
+        "negative_response": {
+            "type": "object",
+            "description": "Negative response definition",
+            "additionalProperties": false,
+            "required": [
+                "nrc"
+            ],
+            "properties": {
+                "nrc": {
+                    "$ref": "#/$defs/hex8",
+                    "description": "Negative Response Code"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Human-readable name (e.g., 'serviceNotSupported')"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "parameters": {
+                    "type": "array",
+                    "description": "Additional NRC parameters (rare)",
+                    "items": {
+                        "$ref": "#/$defs/response_param"
+                    }
+                }
+            }
+        },
+        "response_param": {
+            "type": "object",
+            "description": "A response parameter definition with full layout control",
+            "additionalProperties": false,
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "param_id": {
+                    "type": "string",
+                    "description": "Stable identifier for matching/export. If omitted, 'name' is used."
+                },
+                "short_name": {
+                    "type": "string",
+                    "description": "Short name for export formats"
+                },
+                "semantic": {
+                    "type": "string",
+                    "description": "Semantic role",
+                    "enum": [
+                        "sid",
+                        "subfunction",
+                        "did",
+                        "rid",
+                        "dtc",
+                        "data",
+                        "status",
+                        "length",
+                        "count",
+                        "other"
+                    ]
+                },
+                "byte_position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Byte position in response (0-indexed from start of message including SID)"
+                },
+                "bit_position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 7,
+                    "description": "Bit position within byte for sub-byte params (0 = LSB)"
+                },
+                "bit_length": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Bit length of parameter"
+                },
+                "type": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#/$defs/type_definition"
+                        }
+                    ]
+                },
+                "length_of": {
+                    "type": "string",
+                    "description": "This parameter specifies the length (in bytes) of another parameter. Value is the param name/id."
+                },
+                "count_of": {
+                    "type": "string",
+                    "description": "This parameter specifies the repeat count of another parameter/group."
+                },
+                "condition": {
+                    "$ref": "#/$defs/param_condition",
+                    "description": "Conditional presence based on other parameter values"
+                },
+                "optional": {
+                    "type": "boolean",
+                    "description": "If true, parameter may be absent in some responses",
+                    "default": false
+                }
+            }
+        },
+        "param_condition": {
+            "type": "object",
+            "description": "Condition for conditional/union parameter presence",
+            "additionalProperties": false,
+            "properties": {
+                "if_present": {
+                    "type": "string",
+                    "description": "Present if the named parameter is present"
+                },
+                "if_equals": {
+                    "type": "object",
+                    "description": "Present if another parameter equals a specific value",
+                    "additionalProperties": false,
+                    "required": [
+                        "param",
+                        "value"
+                    ],
+                    "properties": {
+                        "param": {
+                            "type": "string",
+                            "description": "Name/id of the controlling parameter"
+                        },
+                        "value": {
+                            "$ref": "#/$defs/hexScalar",
+                            "description": "Value that must match"
+                        }
+                    }
+                },
+                "if_in_range": {
+                    "type": "object",
+                    "description": "Present if another parameter is in a range",
+                    "additionalProperties": false,
+                    "required": [
+                        "param"
+                    ],
+                    "properties": {
+                        "param": {
+                            "type": "string"
+                        },
+                        "min": {
+                            "$ref": "#/$defs/hexScalar"
+                        },
+                        "max": {
+                            "$ref": "#/$defs/hexScalar"
+                        }
+                    }
+                },
+                "if_mask": {
+                    "type": "object",
+                    "description": "Present if (param & mask) == expected",
+                    "additionalProperties": false,
+                    "required": [
+                        "param",
+                        "mask"
+                    ],
+                    "properties": {
+                        "param": {
+                            "type": "string"
+                        },
+                        "mask": {
+                            "$ref": "#/$defs/hexScalar"
+                        },
+                        "expected": {
+                            "$ref": "#/$defs/hexScalar",
+                            "description": "Expected result after masking. Default: non-zero"
+                        }
+                    }
+                }
+            }
+        },
+        "message_structure": {
+            "type": "object",
+            "description": "Structured message definition with groups and repeats",
+            "additionalProperties": false,
+            "properties": {
+                "endian": {
+                    "type": "string",
+                    "description": "Default byte order for all numeric parameters in this structure",
+                    "enum": [
+                        "big",
+                        "little"
+                    ],
+                    "default": "big"
+                },
+                "elements": {
+                    "type": "array",
+                    "description": "Message elements in transmission order",
+                    "items": {
+                        "$ref": "#/$defs/structure_element"
+                    }
+                }
+            }
+        },
+        "structure_element": {
+            "oneOf": [
+                {
+                    "$ref": "#/$defs/response_param"
+                },
+                {
+                    "$ref": "#/$defs/param_group"
+                },
+                {
+                    "$ref": "#/$defs/param_choice"
+                }
+            ]
+        },
+        "param_group": {
+            "type": "object",
+            "description": "A group of parameters that may repeat",
+            "additionalProperties": false,
+            "required": [
+                "group_name",
+                "elements"
+            ],
+            "properties": {
+                "group_name": {
+                    "type": "string"
+                },
+                "group_id": {
+                    "type": "string",
+                    "description": "Stable identifier for the group"
+                },
+                "repeat": {
+                    "$ref": "#/$defs/repeat_spec",
+                    "description": "Repeat specification. If omitted, group appears once."
+                },
+                "elements": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/structure_element"
+                    }
+                }
+            }
+        },
+        "param_choice": {
+            "type": "object",
+            "description": "Union/choice - exactly one of the options is present based on discriminator",
+            "additionalProperties": false,
+            "required": [
+                "choice_name",
+                "discriminator",
+                "options"
+            ],
+            "properties": {
+                "choice_name": {
+                    "type": "string"
+                },
+                "discriminator": {
+                    "type": "string",
+                    "description": "Parameter name/id that determines which option is selected"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "when",
+                            "then"
+                        ],
+                        "properties": {
+                            "when": {
+                                "$ref": "#/$defs/hexScalar",
+                                "description": "Value of discriminator for this option"
+                            },
+                            "when_range": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/$defs/hexScalar"
+                                },
+                                "minItems": 2,
+                                "maxItems": 2,
+                                "description": "[min, max] range for discriminator"
+                            },
+                            "then": {
+                                "type": "array",
+                                "description": "Elements present when this option matches",
+                                "items": {
+                                    "$ref": "#/$defs/structure_element"
+                                }
+                            }
+                        }
+                    }
+                },
+                "default_option": {
+                    "type": "array",
+                    "description": "Elements if no option matches",
+                    "items": {
+                        "$ref": "#/$defs/structure_element"
+                    }
+                }
+            }
+        },
+        "repeat_spec": {
+            "type": "object",
+            "description": "Specification for how a group/parameter repeats",
+            "additionalProperties": false,
+            "properties": {
+                "count_param": {
+                    "type": "string",
+                    "description": "Parameter name/id that contains the repeat count"
+                },
+                "fixed_count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Fixed number of repetitions"
+                },
+                "min_count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Minimum number of repetitions"
+                },
+                "max_count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Maximum number of repetitions"
+                },
+                "until_end": {
+                    "type": "boolean",
+                    "description": "Repeat until end of PDU",
+                    "default": false
+                }
+            }
+        },
+        "text_table": {
+            "type": "object",
+            "description": "Text table for coded-to-text conversion (ODX TEXT-TABLE equivalent)",
+            "additionalProperties": false,
+            "required": [
+                "base",
+                "entries"
+            ],
+            "properties": {
+                "base": {
+                    "type": "string",
+                    "description": "Underlying numeric type",
+                    "enum": [
+                        "u8",
+                        "u16",
+                        "u32",
+                        "s8",
+                        "s16",
+                        "s32"
+                    ]
+                },
+                "endian": {
+                    "type": "string",
+                    "enum": [
+                        "big",
+                        "little"
+                    ]
+                },
+                "entries": {
+                    "type": "array",
+                    "description": "Table entries mapping values/ranges to text",
+                    "items": {
+                        "$ref": "#/$defs/text_table_entry"
+                    }
+                },
+                "default_text": {
+                    "type": "string",
+                    "description": "Text to use if no entry matches"
+                }
+            }
+        },
+        "text_table_entry": {
+            "type": "object",
+            "description": "Single text table entry",
+            "additionalProperties": false,
+            "required": [
+                "text"
+            ],
+            "properties": {
+                "value": {
+                    "$ref": "#/$defs/hexScalar",
+                    "description": "Exact value (mutually exclusive with range)"
+                },
+                "range": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/hexScalar"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "description": "[min, max] inclusive range"
+                },
+                "text": {
+                    "type": "string",
+                    "description": "Display text for this value/range"
+                },
+                "description": {
+                    "type": "string"
+                }
+            }
+        },
+        "linear_conversion": {
+            "type": "object",
+            "description": "Linear conversion with full specification (physical = (internal - offset) * scale / divisor + shift)",
+            "additionalProperties": false,
+            "properties": {
+                "scale": {
+                    "type": "number",
+                    "description": "Multiplier (numerator)",
+                    "default": 1
+                },
+                "offset": {
+                    "type": "number",
+                    "description": "Value subtracted from internal before scaling",
+                    "default": 0
+                },
+                "divisor": {
+                    "type": "number",
+                    "description": "Divisor (denominator)",
+                    "default": 1
+                },
+                "shift": {
+                    "type": "number",
+                    "description": "Value added after scaling",
+                    "default": 0
+                },
+                "unit": {
+                    "type": "string",
+                    "description": "Physical unit (e.g., 'degC', 'rpm', 'km/h')"
+                },
+                "internal_constraints": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "description": "[min, max] valid range for internal (raw) values"
+                },
+                "physical_constraints": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "description": "[min, max] valid range for physical values"
+                }
+            }
+        },
+        "comparam_spec": {
+            "type": "object",
+            "description": "Communication parameter specification with type, constraints and default",
+            "additionalProperties": false,
+            "required": [
+                "cptype"
+            ],
+            "properties": {
+                "cptype": {
+                    "type": "string",
+                    "description": "Parameter data type",
+                    "enum": [
+                        "uint8",
+                        "uint16",
+                        "uint32",
+                        "int8",
+                        "int16",
+                        "int32",
+                        "float",
+                        "string",
+                        "boolean",
+                        "bytes"
+                    ]
+                },
+                "unit": {
+                    "type": "string",
+                    "description": "Unit of measurement (e.g., 'ms', 'bytes', 'bps')"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "default_value": {
+                    "oneOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "boolean"
+                        }
+                    ]
+                },
+                "min": {
+                    "type": "number",
+                    "description": "Minimum allowed value"
+                },
+                "max": {
+                    "type": "number",
+                    "description": "Maximum allowed value"
+                },
+                "allowed_values": {
+                    "type": "array",
+                    "description": "Enumeration of allowed values",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "number"
+                            }
+                        ]
+                    }
+                },
+                "override_levels": {
+                    "type": "array",
+                    "description": "Where this param can be overridden. Order = resolution priority (first wins).",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "service",
+                            "did",
+                            "routine",
+                            "variant",
+                            "ecu",
+                            "protocol",
+                            "global"
+                        ]
+                    }
+                }
+            }
+        },
+        "variant_inheritance": {
+            "type": "object",
+            "description": "Variant inheritance and merge rules",
+            "additionalProperties": false,
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "description": "Inheritance mode: 'override' = variant completely replaces base, 'merge' = deep merge with variant taking precedence, 'none' = no inheritance (full duplication required)",
+                    "enum": [
+                        "override",
+                        "merge",
+                        "none"
+                    ],
+                    "default": "merge"
+                },
+                "extends": {
+                    "type": "string",
+                    "description": "Base variant to inherit from"
+                },
+                "merge_arrays": {
+                    "type": "string",
+                    "description": "How to merge arrays: 'replace' = use variant's array, 'append' = add variant items after base, 'prepend' = add variant items before base",
+                    "enum": [
+                        "replace",
+                        "append",
+                        "prepend"
+                    ],
+                    "default": "replace"
+                },
+                "allow_delete": {
+                    "type": "boolean",
+                    "description": "If true, variant can delete base items using null/~ values",
+                    "default": false
+                }
+            }
+        }
+    }
+}

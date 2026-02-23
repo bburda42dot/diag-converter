@@ -5,7 +5,7 @@ use std::path::Path;
 
 fn read_reference_mdd(name: &str) -> (diag_ir::DiagDatabase, Vec<u8>) {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../classic-diagnostic-adapter/testcontainer/odx")
+        .join("../test-fixtures/mdd")
         .join(name);
     let (_meta, fbs_data) = read_mdd_file(&path).expect(&format!("Failed to read {name}"));
     let db = flatbuffers_to_ir(&fbs_data).expect(&format!("Failed to parse FBS from {name}"));
