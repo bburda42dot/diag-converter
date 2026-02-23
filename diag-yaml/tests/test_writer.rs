@@ -310,3 +310,42 @@ authentication:
     let factory2 = auth_sc2.states.iter().find(|s| s.short_name == "factory").unwrap();
     assert_eq!(factory2.long_name.as_ref().unwrap().value, "1");
 }
+
+#[test]
+fn test_variants_roundtrip() {
+    let content = include_str!("../../test-fixtures/yaml/FLXC1000.yml");
+    let db = parse_yaml(content).unwrap();
+
+    // FLXC1000.yml defines 2 variant definitions: Boot_Variant and App_0101
+    // Plus the base variant = 3 total
+    assert!(db.variants.len() >= 3, "should have base + 2 variant definitions, got {}", db.variants.len());
+
+    let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
+    assert!(!base.diag_layer.short_name.is_empty());
+
+    let non_base: Vec<_> = db.variants.iter().filter(|v| !v.is_base_variant).collect();
+    assert_eq!(non_base.len(), 2);
+
+    // Verify Boot_Variant has matching parameter
+    let boot = non_base.iter().find(|v| v.diag_layer.short_name == "Boot_Variant").unwrap();
+    assert!(!boot.variant_patterns.is_empty(), "Boot_Variant should have variant patterns");
+    let mp = &boot.variant_patterns[0].matching_parameters[0];
+    assert_eq!(mp.diag_service.diag_comm.short_name, "Identification_Read");
+    assert_eq!(mp.out_param.short_name, "Identification");
+    assert_eq!(mp.expected_value, "0xFF0000");
+
+    // Verify parent ref points to base
+    assert!(!boot.parent_refs.is_empty());
+
+    // Roundtrip
+    let yaml_out = write_yaml(&db).unwrap();
+    let db2 = parse_yaml(&yaml_out).unwrap();
+
+    let non_base2: Vec<_> = db2.variants.iter().filter(|v| !v.is_base_variant).collect();
+    assert_eq!(non_base.len(), non_base2.len(), "variant definition count must be preserved");
+
+    let boot2 = non_base2.iter().find(|v| v.diag_layer.short_name == "Boot_Variant").unwrap();
+    let mp2 = &boot2.variant_patterns[0].matching_parameters[0];
+    assert_eq!(mp.expected_value, mp2.expected_value);
+    assert_eq!(mp.diag_service.diag_comm.short_name, mp2.diag_service.diag_comm.short_name);
+}

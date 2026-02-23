@@ -156,12 +156,27 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
 
     let memory = doc.memory.as_ref().map(parse_memory_config);
 
+    // Build additional variants from variants.definitions
+    let mut variants = vec![variant];
+    if let Some(yaml_variants) = &doc.variants {
+        if let Some(definitions) = &yaml_variants.definitions {
+            for (vname, vdef) in definitions {
+                let ecu_variant = parse_variant_definition(
+                    vname,
+                    vdef,
+                    &ecu_name,
+                );
+                variants.push(ecu_variant);
+            }
+        }
+    }
+
     Ok(DiagDatabase {
         version,
         ecu_name,
         revision,
         metadata,
-        variants: vec![variant],
+        variants,
         functional_groups: vec![],
         dtcs,
         memory,
@@ -1075,5 +1090,86 @@ fn parse_authentication_to_state_chart(
         state_transitions: vec![],
         start_state_short_name_ref: String::new(),
         states,
+    })
+}
+
+fn parse_variant_definition(
+    name: &str,
+    vdef: &VariantDef,
+    base_variant_name: &str,
+) -> Variant {
+    // Build matching parameters from detect section
+    let variant_patterns = if let Some(detect) = &vdef.detect {
+        let mp = parse_detect_to_matching_parameter(detect);
+        if let Some(mp) = mp {
+            vec![VariantPattern { matching_parameters: vec![mp] }]
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    };
+
+    Variant {
+        diag_layer: DiagLayer {
+            short_name: name.to_string(),
+            long_name: vdef.description.as_ref().map(|d| LongName {
+                value: d.clone(),
+                ti: String::new(),
+            }),
+            funct_classes: vec![],
+            com_param_refs: vec![],
+            diag_services: vec![],
+            single_ecu_jobs: vec![],
+            state_charts: vec![],
+            additional_audiences: vec![],
+            sdgs: None,
+        },
+        is_base_variant: false,
+        variant_patterns,
+        parent_refs: vec![ParentRef {
+            ref_type: ParentRefType::Variant(Box::new(Variant {
+                diag_layer: DiagLayer {
+                    short_name: base_variant_name.to_string(),
+                    ..Default::default()
+                },
+                is_base_variant: true,
+                variant_patterns: vec![],
+                parent_refs: vec![],
+            })),
+            not_inherited_diag_comm_short_names: vec![],
+            not_inherited_variables_short_names: vec![],
+            not_inherited_dops_short_names: vec![],
+            not_inherited_tables_short_names: vec![],
+            not_inherited_global_neg_responses_short_names: vec![],
+        }],
+    }
+}
+
+fn parse_detect_to_matching_parameter(detect: &serde_yaml::Value) -> Option<MatchingParameter> {
+    let rpm = detect.get("response_param_match")?;
+    let service_name = rpm.get("service")?.as_str()?;
+    let param_path = rpm.get("param_path")?.as_str()?;
+    let expected = rpm.get("expected_value")?;
+    let expected_str = match expected {
+        serde_yaml::Value::Number(n) => format!("0x{:X}", n.as_u64().unwrap_or(0)),
+        serde_yaml::Value::String(s) => s.clone(),
+        _ => format!("{expected:?}"),
+    };
+
+    Some(MatchingParameter {
+        expected_value: expected_str,
+        diag_service: Box::new(DiagService {
+            diag_comm: DiagComm {
+                short_name: service_name.to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        }),
+        out_param: Box::new(Param {
+            short_name: param_path.to_string(),
+            ..Default::default()
+        }),
+        use_physical_addressing: None,
     })
 }

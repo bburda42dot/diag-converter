@@ -152,7 +152,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         security: layer.and_then(|l| extract_security_from_state_charts(&l.state_charts)),
         authentication: layer.and_then(|l| extract_authentication_from_state_charts(&l.state_charts)),
         identification: None,
-        variants: None,
+        variants: extract_variants(db),
         services: None,
         access_patterns: None,
         types: if types_map.is_empty() { None } else { Some(types_map) },
@@ -566,6 +566,74 @@ fn extract_authentication_from_state_charts(
         anti_brute_force: None,
         roles: Some(roles),
     })
+}
+
+/// Extract variant definitions from non-base IR variants.
+fn extract_variants(db: &DiagDatabase) -> Option<Variants> {
+    let non_base: Vec<_> = db.variants.iter()
+        .filter(|v| !v.is_base_variant)
+        .collect();
+    if non_base.is_empty() {
+        return None;
+    }
+
+    let mut detection_order = Vec::new();
+    let mut definitions = BTreeMap::new();
+
+    for variant in &non_base {
+        let name = variant.diag_layer.short_name.clone();
+        detection_order.push(name.clone());
+
+        let detect = variant.variant_patterns.first()
+            .and_then(|vp| vp.matching_parameters.first())
+            .map(|mp| {
+                let mut rpm = serde_yaml::Mapping::new();
+                rpm.insert(
+                    serde_yaml::Value::String("service".into()),
+                    serde_yaml::Value::String(mp.diag_service.diag_comm.short_name.clone()),
+                );
+                rpm.insert(
+                    serde_yaml::Value::String("param_path".into()),
+                    serde_yaml::Value::String(mp.out_param.short_name.clone()),
+                );
+                rpm.insert(
+                    serde_yaml::Value::String("expected_value".into()),
+                    parse_expected_value(&mp.expected_value),
+                );
+                let mut detect_map = serde_yaml::Mapping::new();
+                detect_map.insert(
+                    serde_yaml::Value::String("response_param_match".into()),
+                    serde_yaml::Value::Mapping(rpm),
+                );
+                serde_yaml::Value::Mapping(detect_map)
+            });
+
+        definitions.insert(name, VariantDef {
+            description: variant.diag_layer.long_name.as_ref().map(|ln| ln.value.clone()),
+            detect,
+            inheritance: None,
+            overrides: None,
+            annotations: None,
+        });
+    }
+
+    Some(Variants {
+        detection_order,
+        fallback: non_base.last().map(|v| v.diag_layer.short_name.clone()),
+        definitions: if definitions.is_empty() { None } else { Some(definitions) },
+    })
+}
+
+fn parse_expected_value(s: &str) -> serde_yaml::Value {
+    if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+        if let Ok(n) = u64::from_str_radix(hex, 16) {
+            return serde_yaml::Value::Number(serde_yaml::Number::from(n));
+        }
+    }
+    if let Ok(n) = s.parse::<u64>() {
+        return serde_yaml::Value::Number(serde_yaml::Number::from(n));
+    }
+    serde_yaml::Value::String(s.to_string())
 }
 
 fn ir_memory_to_yaml(mc: &MemoryConfig) -> YamlMemoryConfig {
