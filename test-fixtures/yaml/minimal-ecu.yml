@@ -1,0 +1,61 @@
+# Minimal ECU diagnostic description
+# Goal: smallest human-friendly file that validates against schema.json
+
+schema: "opensovd.cda.diagdesc/v1"
+
+meta:
+  author: "Example"
+  domain: "Minimal"
+  created: "2026-01-19"
+  revision: "0.1.0"
+  description: "Minimal diagnostic description (example)"
+
+ecu:
+  id: "MIN_ECU"
+  name: "Minimal ECU"
+  protocols:
+    doip:
+      protocol_short_name: "UDSonDoIP"
+      is_default: true
+  default_addressing_mode: physical
+  addressing:
+    doip:
+      ip: "192.168.0.10"
+      port: 13400
+      logical_address: 0x0E00
+      tester_address: 0x0E80
+
+sessions:
+  default:
+    id: 0x01
+
+# Types using deterministic (fixed-length) definitions
+types:
+  did_id_type:
+    base: u16
+    endian: big
+
+  ascii_short:
+    base: ascii
+    length: 16
+    encoding: "US-ASCII"
+
+  raw_bytes_fixed:
+    base: bytes
+    length: 32
+
+services:
+  diagnosticSessionControl:
+    enabled: true
+    addressing_mode: both
+  testerPresent:
+    enabled: true
+  readDataByIdentifier:
+    enabled: true
+    addressing_mode: physical
+
+access_patterns:
+  public:
+    sessions: any
+    security: none
+    authentication: none
