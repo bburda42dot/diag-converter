@@ -36,6 +36,8 @@ impl<'a> ServiceGenerator<'a> {
         result.extend(self.generate_ecu_reset());
         result.extend(self.generate_authentication());
         result.extend(self.generate_communication_control());
+        result.extend(self.generate_request_download());
+        result.extend(self.generate_request_upload());
         result.extend(self.generate_tester_present());
         result.extend(self.generate_control_dtc_setting());
         result.extend(self.generate_clear_diagnostic_information());
@@ -287,6 +289,108 @@ impl<'a> ServiceGenerator<'a> {
                 }).collect()
             }
         }
+    }
+
+    // --- Transfer data services (Task 12d) ---
+
+    /// RequestDownload (0x34) + TransferData (0x36) + RequestTransferExit (0x37) as a group.
+    pub fn generate_request_download(&self) -> Vec<DiagService> {
+        match &self.services.request_download {
+            Some(e) if e.enabled => {}
+            _ => return vec![],
+        }
+        vec![
+            build_service(
+                "RequestDownload",
+                "DOWNLOAD",
+                vec![
+                    coded_const_param("SID", 0, 8, "0x34"),
+                    value_param("DataFormatIdentifier", 1, 8),
+                    value_param("AddressAndLengthFormatIdentifier", 2, 8),
+                    value_param("MemoryAddress", 3, 32),
+                    value_param("MemorySize", 7, 32),
+                ],
+                vec![
+                    coded_const_param("SID", 0, 8, "0x74"),
+                    value_param("LengthFormatIdentifier", 1, 8),
+                    value_param("MaxNumberOfBlockLength", 2, 32),
+                ],
+            ),
+            build_service(
+                "TransferData",
+                "DOWNLOAD",
+                vec![
+                    coded_const_param("SID", 0, 8, "0x36"),
+                    value_param("BlockSequenceCounter", 1, 8),
+                    value_param("TransferRequestParameterRecord", 2, 0),
+                ],
+                vec![
+                    coded_const_param("SID", 0, 8, "0x76"),
+                    matching_request_param("BlockSequenceCounter_Echo", 1, 1),
+                    value_param("TransferResponseParameterRecord", 2, 0),
+                ],
+            ),
+            build_service(
+                "RequestTransferExit",
+                "DOWNLOAD",
+                vec![
+                    coded_const_param("SID", 0, 8, "0x37"),
+                    value_param("TransferRequestParameterRecord", 1, 0),
+                ],
+                vec![
+                    coded_const_param("SID", 0, 8, "0x77"),
+                ],
+            ),
+        ]
+    }
+
+    /// RequestUpload (0x35) + TransferData + RequestTransferExit as a group.
+    pub fn generate_request_upload(&self) -> Vec<DiagService> {
+        match &self.services.request_upload {
+            Some(e) if e.enabled => {}
+            _ => return vec![],
+        }
+        vec![
+            build_service(
+                "RequestUpload",
+                "UPLOAD",
+                vec![
+                    coded_const_param("SID", 0, 8, "0x35"),
+                    value_param("DataFormatIdentifier", 1, 8),
+                    value_param("AddressAndLengthFormatIdentifier", 2, 8),
+                    value_param("MemoryAddress", 3, 32),
+                    value_param("MemorySize", 7, 32),
+                ],
+                vec![
+                    coded_const_param("SID", 0, 8, "0x75"),
+                    value_param("LengthFormatIdentifier", 1, 8),
+                    value_param("MaxNumberOfBlockLength", 2, 32),
+                ],
+            ),
+            build_service(
+                "TransferData_Upload",
+                "UPLOAD",
+                vec![
+                    coded_const_param("SID", 0, 8, "0x36"),
+                    value_param("BlockSequenceCounter", 1, 8),
+                ],
+                vec![
+                    coded_const_param("SID", 0, 8, "0x76"),
+                    matching_request_param("BlockSequenceCounter_Echo", 1, 1),
+                    value_param("TransferResponseParameterRecord", 2, 0),
+                ],
+            ),
+            build_service(
+                "RequestTransferExit_Upload",
+                "UPLOAD",
+                vec![
+                    coded_const_param("SID", 0, 8, "0x37"),
+                ],
+                vec![
+                    coded_const_param("SID", 0, 8, "0x77"),
+                ],
+            ),
+        ]
     }
 
     // --- Simple enable/disable services (Task 12a) ---
@@ -768,5 +872,45 @@ mod tests {
         assert_eq!(services.len(), 2);
         assert!(services.iter().any(|s| s.diag_comm.short_name == "CommunicationControl_enableRxAndTx"));
         assert!(services.iter().any(|s| s.diag_comm.short_name == "CommunicationControl_disableRxAndTx"));
+    }
+
+    #[test]
+    fn test_request_download_group() {
+        let svc = services_with(|s| s.request_download = Some(enabled_entry()));
+        let gen = ServiceGenerator::new(&svc);
+        let services = gen.generate_request_download();
+        assert_eq!(services.len(), 3);
+        assert_eq!(services[0].diag_comm.short_name, "RequestDownload");
+        assert_eq!(services[1].diag_comm.short_name, "TransferData");
+        assert_eq!(services[2].diag_comm.short_name, "RequestTransferExit");
+        // Verify SIDs
+        let check_sid = |svc: &DiagService, expected: &str| {
+            let req = svc.request.as_ref().unwrap();
+            if let Some(ParamData::CodedConst { coded_value, .. }) = &req.params[0].specific_data {
+                assert_eq!(coded_value, expected, "SID mismatch for {}", svc.diag_comm.short_name);
+            }
+        };
+        check_sid(&services[0], "0x34");
+        check_sid(&services[1], "0x36");
+        check_sid(&services[2], "0x37");
+    }
+
+    #[test]
+    fn test_request_upload_group() {
+        let svc = services_with(|s| s.request_upload = Some(enabled_entry()));
+        let gen = ServiceGenerator::new(&svc);
+        let services = gen.generate_request_upload();
+        assert_eq!(services.len(), 3);
+        assert_eq!(services[0].diag_comm.short_name, "RequestUpload");
+        assert_eq!(services[1].diag_comm.short_name, "TransferData_Upload");
+        assert_eq!(services[2].diag_comm.short_name, "RequestTransferExit_Upload");
+    }
+
+    #[test]
+    fn test_request_download_disabled() {
+        let svc = services_with(|_| {});
+        let gen = ServiceGenerator::new(&svc);
+        assert!(gen.generate_request_download().is_empty());
+        assert!(gen.generate_request_upload().is_empty());
     }
 }
