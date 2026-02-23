@@ -2,6 +2,7 @@
 //! equivalent to reference MDD files (produced by yaml-to-mdd / CDA toolchain).
 
 use diag_ir::{flatbuffers_to_ir, ir_to_flatbuffers};
+use diag_odx::parse_odx;
 use diag_yaml::parse_yaml;
 use mdd_format::reader::read_mdd_bytes;
 use mdd_format::writer::{write_mdd_bytes, WriteOptions};
@@ -125,6 +126,74 @@ fn test_flxc1000_vs_reference_mdd() {
 #[test]
 fn test_flxcng1000_vs_reference_mdd() {
     compare_yaml_vs_reference_mdd(flxcng1000_yaml(), flxcng1000_ref_mdd(), "FLXCNG1000");
+}
+
+// --- ODX pipeline structural completeness tests ---
+
+fn minimal_odx() -> &'static str {
+    include_str!("../../test-fixtures/odx/minimal.odx")
+}
+
+/// ODX -> IR -> FBS -> MDD -> FBS -> IR roundtrip preserves structural completeness.
+#[test]
+fn test_odx_mdd_structural_completeness() {
+    let original = parse_odx(minimal_odx()).unwrap();
+    let fbs = ir_to_flatbuffers(&original);
+    let mdd = write_mdd_bytes(&fbs, &WriteOptions::default()).unwrap();
+    let (_meta, fbs_back) = read_mdd_bytes(&mdd).unwrap();
+    let roundtripped = flatbuffers_to_ir(&fbs_back).unwrap();
+
+    // ECU name
+    assert_eq!(original.ecu_name, roundtripped.ecu_name);
+
+    // Variant count and names
+    assert_eq!(original.variants.len(), roundtripped.variants.len());
+    let mut orig_names: Vec<_> = original.variants.iter()
+        .map(|v| v.diag_layer.short_name.as_str()).collect();
+    let mut rt_names: Vec<_> = roundtripped.variants.iter()
+        .map(|v| v.diag_layer.short_name.as_str()).collect();
+    orig_names.sort();
+    rt_names.sort();
+    assert_eq!(orig_names, rt_names, "variant names should survive ODX->MDD roundtrip");
+
+    // DTC count
+    assert_eq!(original.dtcs.len(), roundtripped.dtcs.len());
+
+    // Base variant services
+    let orig_base = original.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let rt_base = roundtripped.variants.iter().find(|v| v.is_base_variant).unwrap();
+
+    let mut orig_svcs: Vec<_> = orig_base.diag_layer.diag_services.iter()
+        .map(|s| s.diag_comm.short_name.as_str()).collect();
+    let mut rt_svcs: Vec<_> = rt_base.diag_layer.diag_services.iter()
+        .map(|s| s.diag_comm.short_name.as_str()).collect();
+    orig_svcs.sort();
+    rt_svcs.sort();
+    assert_eq!(orig_svcs, rt_svcs, "service names should survive ODX->MDD roundtrip");
+
+    // State charts
+    assert_eq!(
+        orig_base.diag_layer.state_charts.len(),
+        rt_base.diag_layer.state_charts.len(),
+        "state chart count should survive ODX->MDD roundtrip"
+    );
+
+    // SingleEcuJobs
+    assert_eq!(
+        orig_base.diag_layer.single_ecu_jobs.len(),
+        rt_base.diag_layer.single_ecu_jobs.len(),
+        "single_ecu_job count should survive ODX->MDD roundtrip"
+    );
+
+    // Parent refs on ECU variant
+    let orig_ecu_var = original.variants.iter().find(|v| !v.is_base_variant);
+    let rt_ecu_var = roundtripped.variants.iter().find(|v| !v.is_base_variant);
+    if let (Some(ov), Some(rv)) = (orig_ecu_var, rt_ecu_var) {
+        assert_eq!(
+            ov.parent_refs.len(), rv.parent_refs.len(),
+            "parent ref count should survive ODX->MDD roundtrip"
+        );
+    }
 }
 
 /// Verify that reference MDD files are well-formed and readable.
