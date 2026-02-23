@@ -223,7 +223,7 @@ fn build_diag_layer(
                 ti: String::new(),
             }),
         funct_classes,
-        com_param_refs: Vec::new(),
+        com_param_refs: map_comparam_refs(layer),
         diag_services,
         single_ecu_jobs,
         state_charts,
@@ -963,6 +963,58 @@ fn map_job_param(jp: &odx_model::OdxJobParam, index: &OdxIndex) -> JobParam {
         physical_default_value: jp.physical_default_value.clone().unwrap_or_default(),
         dop_base,
         semantic: jp.semantic.clone().unwrap_or_default(),
+    }
+}
+
+fn map_comparam_refs(layer: &odx_model::DiagLayerVariant) -> Vec<ComParamRef> {
+    layer
+        .comparam_refs
+        .as_ref()
+        .map(|w| w.items.iter().map(map_comparam_ref).collect())
+        .unwrap_or_default()
+}
+
+fn map_comparam_ref(cr: &odx_model::OdxComparamRef) -> ComParamRef {
+    let simple_value = cr.simple_value.as_ref().map(|v| SimpleValue {
+        value: v.clone(),
+    });
+    let complex_value = cr.complex_value.as_ref().map(|cv| ComplexValue {
+        entries: cv
+            .simple_values
+            .iter()
+            .map(|sv| SimpleOrComplexValue::Simple(SimpleValue { value: sv.clone() }))
+            .collect(),
+    });
+    let protocol = cr.protocol_snref.as_ref().and_then(|snref| {
+        snref.short_name.as_ref().map(|sn| {
+            Box::new(Protocol {
+                diag_layer: DiagLayer {
+                    short_name: sn.clone(),
+                    ..Default::default()
+                },
+                com_param_spec: None,
+                prot_stack: None,
+                parent_refs: Vec::new(),
+            })
+        })
+    });
+    let prot_stack = cr.prot_stack_snref.as_ref().and_then(|snref| {
+        snref.short_name.as_ref().map(|sn| {
+            Box::new(ProtStack {
+                short_name: sn.clone(),
+                long_name: None,
+                pdu_protocol_type: String::new(),
+                physical_link_type: String::new(),
+                comparam_subset_refs: Vec::new(),
+            })
+        })
+    });
+    ComParamRef {
+        simple_value,
+        complex_value,
+        com_param: None,
+        protocol,
+        prot_stack,
     }
 }
 

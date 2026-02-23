@@ -120,6 +120,46 @@ fn test_odx_roundtrip_preserves_state_chart() {
 }
 
 #[test]
+fn test_odx_roundtrip_preserves_comparam_refs() {
+    let xml = include_str!("../../test-fixtures/odx/minimal.odx");
+    let original = parse_odx(xml).unwrap();
+    let odx_output = write_odx(&original).unwrap();
+    let reparsed = parse_odx(&odx_output).unwrap();
+
+    let orig_base = original.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let repr_base = reparsed.variants.iter().find(|v| v.is_base_variant).unwrap();
+
+    assert_eq!(
+        orig_base.diag_layer.com_param_refs.len(),
+        repr_base.diag_layer.com_param_refs.len(),
+        "comparam ref count should be preserved"
+    );
+
+    // Verify the simple_value is preserved
+    let orig_ref = &orig_base.diag_layer.com_param_refs[0];
+    let repr_ref = &repr_base.diag_layer.com_param_refs[0];
+    assert_eq!(
+        orig_ref.simple_value.as_ref().map(|sv| &sv.value),
+        repr_ref.simple_value.as_ref().map(|sv| &sv.value),
+        "simple_value should be preserved"
+    );
+
+    // Verify protocol SNREF is preserved
+    assert_eq!(
+        orig_ref.protocol.as_ref().map(|p| &p.diag_layer.short_name),
+        repr_ref.protocol.as_ref().map(|p| &p.diag_layer.short_name),
+        "protocol SNREF should be preserved"
+    );
+
+    // Verify prot_stack SNREF is preserved
+    assert_eq!(
+        orig_ref.prot_stack.as_ref().map(|ps| &ps.short_name),
+        repr_ref.prot_stack.as_ref().map(|ps| &ps.short_name),
+        "prot_stack SNREF should be preserved"
+    );
+}
+
+#[test]
 fn test_odx_writer_handles_all_param_types() {
     // Roundtrip preserves param xsi_type for all supported variants
     let xml = include_str!("../../test-fixtures/odx/minimal.odx");

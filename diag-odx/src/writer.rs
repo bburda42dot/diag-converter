@@ -368,8 +368,37 @@ fn ir_diag_layer_to_odx_no_dtcs(diag_layer: &DiagLayer) -> DiagLayerVariant {
             })
         },
         parent_refs: None,
-        comparam_refs: None,
+        comparam_refs: if diag_layer.com_param_refs.is_empty() {
+            None
+        } else {
+            Some(ComparamRefsWrapper {
+                items: diag_layer.com_param_refs.iter().map(ir_comparam_ref_to_odx).collect(),
+            })
+        },
         ecu_variant_patterns: None,
+    }
+}
+
+fn ir_comparam_ref_to_odx(cr: &ComParamRef) -> OdxComparamRef {
+    OdxComparamRef {
+        id_ref: None,
+        simple_value: cr.simple_value.as_ref().map(|sv| sv.value.clone()),
+        complex_value: cr.complex_value.as_ref().map(|cv| OdxComplexValue {
+            simple_values: cv
+                .entries
+                .iter()
+                .filter_map(|e| match e {
+                    SimpleOrComplexValue::Simple(sv) => Some(sv.value.clone()),
+                    _ => None,
+                })
+                .collect(),
+        }),
+        protocol_snref: cr.protocol.as_ref().map(|p| OdxSnRef {
+            short_name: Some(p.diag_layer.short_name.clone()),
+        }),
+        prot_stack_snref: cr.prot_stack.as_ref().map(|ps| OdxSnRef {
+            short_name: Some(ps.short_name.clone()),
+        }),
     }
 }
 

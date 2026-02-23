@@ -255,6 +255,13 @@
             </STATE-TRANSITIONS>
           </STATE-CHART>
         </STATE-CHARTS>
+        <COMPARAM-REFS>
+          <COMPARAM-REF ID-REF="CP_Baudrate">
+            <SIMPLE-VALUE>500000</SIMPLE-VALUE>
+            <PROTOCOL-SNREF SHORT-NAME="ISO_15765_3"/>
+            <PROT-STACK-SNREF SHORT-NAME="ISO_11898_2_DWCAN"/>
+          </COMPARAM-REF>
+        </COMPARAM-REFS>
         <SDGS>
           <SDG GID="TestGroup">
             <SD SI="Key1">Value1</SD>
