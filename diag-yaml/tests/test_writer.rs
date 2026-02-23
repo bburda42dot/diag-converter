@@ -349,3 +349,51 @@ fn test_variants_roundtrip() {
     assert_eq!(mp.expected_value, mp2.expected_value);
     assert_eq!(mp.diag_service.diag_comm.short_name, mp2.diag_service.diag_comm.short_name);
 }
+
+#[test]
+fn test_access_patterns_roundtrip() {
+    let content = include_str!("../../test-fixtures/yaml/example-ecm.yml");
+    let db = parse_yaml(content).unwrap();
+
+    // Verify access patterns are parsed into PreConditionStateRefs
+    let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
+
+    // Find a service with "extended_write" access (DID with access: extended_write)
+    let write_svc = base.diag_layer.diag_services.iter()
+        .find(|s| s.diag_comm.short_name.starts_with("Write_"))
+        .expect("should have at least one Write DID service");
+
+    assert!(
+        !write_svc.diag_comm.pre_condition_state_refs.is_empty(),
+        "Write service should have PreConditionStateRefs from access pattern"
+    );
+
+    // Verify the session/security refs match the access pattern
+    let session_refs: Vec<_> = write_svc.diag_comm.pre_condition_state_refs.iter()
+        .filter(|r| r.value == "SessionStates")
+        .collect();
+    let security_refs: Vec<_> = write_svc.diag_comm.pre_condition_state_refs.iter()
+        .filter(|r| r.value == "SecurityAccessStates")
+        .collect();
+    // extended_write pattern: sessions: [extended], security: [level_01]
+    assert_eq!(session_refs.len(), 1);
+    assert_eq!(session_refs[0].in_param_path_short_name, "extended");
+    assert_eq!(security_refs.len(), 1);
+    assert_eq!(security_refs[0].in_param_path_short_name, "level_01");
+
+    // Roundtrip
+    let yaml_out = write_yaml(&db).unwrap();
+    let db2 = parse_yaml(&yaml_out).unwrap();
+
+    // Verify access patterns are preserved
+    let base2 = db2.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let write_svc2 = base2.diag_layer.diag_services.iter()
+        .find(|s| s.diag_comm.short_name.starts_with("Write_"))
+        .expect("should still have Write service after roundtrip");
+
+    assert_eq!(
+        write_svc.diag_comm.pre_condition_state_refs.len(),
+        write_svc2.diag_comm.pre_condition_state_refs.len(),
+        "PreConditionStateRefs count should be preserved"
+    );
+}

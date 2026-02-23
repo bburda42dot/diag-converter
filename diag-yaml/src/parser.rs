@@ -5,7 +5,7 @@
 
 use crate::yaml_model::*;
 use diag_ir::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, thiserror::Error)]
 pub enum YamlParseError {
@@ -65,6 +65,14 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
     // Build named type registry for resolving type references in DIDs
     let type_registry = build_type_registry(doc.types.as_ref());
 
+    // Build access pattern lookup for resolving DID/routine access references
+    let access_patterns = build_access_pattern_lookup(
+        doc.access_patterns.as_ref(),
+        doc.sessions.as_ref(),
+        doc.security.as_ref(),
+        doc.authentication.as_ref(),
+    );
+
     // Build services from DID definitions + enabled standard services
     let mut diag_services = Vec::new();
 
@@ -74,10 +82,14 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
             let did_id = parse_hex_key(key);
             if let Ok(did) = serde_yaml::from_value::<Did>(val.clone()) {
                 if did.readable.unwrap_or(true) {
-                    diag_services.push(did_to_read_service(did_id, &did, &type_registry));
+                    let mut svc = did_to_read_service(did_id, &did, &type_registry);
+                    apply_access_pattern(&mut svc.diag_comm, &did.access, &access_patterns);
+                    diag_services.push(svc);
                 }
                 if did.writable.unwrap_or(false) {
-                    diag_services.push(did_to_write_service(did_id, &did, &type_registry));
+                    let mut svc = did_to_write_service(did_id, &did, &type_registry);
+                    apply_access_pattern(&mut svc.diag_comm, &did.access, &access_patterns);
+                    diag_services.push(svc);
                 }
             }
         }
@@ -88,7 +100,9 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         for (key, val) in routines {
             let rid = parse_hex_key(key);
             if let Ok(routine) = serde_yaml::from_value::<Routine>(val.clone()) {
-                diag_services.push(routine_to_service(rid, &routine, &type_registry));
+                let mut svc = routine_to_service(rid, &routine, &type_registry);
+                apply_access_pattern(&mut svc.diag_comm, &routine.access, &access_patterns);
+                diag_services.push(svc);
             }
         }
     }
@@ -1151,6 +1165,149 @@ fn parse_variant_definition(
             not_inherited_tables_short_names: vec![],
             not_inherited_global_neg_responses_short_names: vec![],
         }],
+    }
+}
+
+/// Build a lookup from access pattern name -> Vec<PreConditionStateRef>.
+fn build_access_pattern_lookup(
+    patterns: Option<&BTreeMap<String, AccessPattern>>,
+    sessions: Option<&BTreeMap<String, Session>>,
+    security: Option<&BTreeMap<String, SecurityLevel>>,
+    auth: Option<&Authentication>,
+) -> HashMap<String, Vec<PreConditionStateRef>> {
+    let patterns = match patterns {
+        Some(p) => p,
+        None => return HashMap::new(),
+    };
+
+    let session_states: HashMap<&str, State> = sessions
+        .into_iter()
+        .flat_map(|s| s.iter())
+        .map(|(name, session)| {
+            let id = yaml_value_to_u64(&session.id);
+            (name.as_str(), State {
+                short_name: name.clone(),
+                long_name: Some(LongName { value: id.to_string(), ti: session.alias.clone().unwrap_or_default() }),
+            })
+        })
+        .collect();
+
+    let security_states: HashMap<&str, State> = security
+        .into_iter()
+        .flat_map(|s| s.iter())
+        .map(|(name, level)| {
+            (name.as_str(), State {
+                short_name: name.clone(),
+                long_name: Some(LongName { value: level.level.to_string(), ti: String::new() }),
+            })
+        })
+        .collect();
+
+    let auth_states: HashMap<&str, State> = auth
+        .and_then(|a| a.roles.as_ref())
+        .into_iter()
+        .flat_map(|roles| roles.iter())
+        .map(|(name, role_val)| {
+            let id = role_val.get("id").map(|v| yaml_value_to_u64(v)).unwrap_or(0);
+            (name.as_str(), State {
+                short_name: name.clone(),
+                long_name: Some(LongName { value: id.to_string(), ti: String::new() }),
+            })
+        })
+        .collect();
+
+    patterns.iter().map(|(pattern_name, pattern)| {
+        let mut refs = Vec::new();
+
+        // Session refs
+        match &pattern.sessions {
+            serde_yaml::Value::String(s) if s == "any" || s == "none" => {}
+            serde_yaml::Value::Sequence(seq) => {
+                for item in seq {
+                    if let Some(name) = item.as_str() {
+                        if let Some(state) = session_states.get(name) {
+                            refs.push(PreConditionStateRef {
+                                value: "SessionStates".into(),
+                                in_param_if_short_name: String::new(),
+                                in_param_path_short_name: name.to_string(),
+                                state: Some(state.clone()),
+                            });
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        // Security refs
+        match &pattern.security {
+            serde_yaml::Value::String(s) if s == "none" => {}
+            serde_yaml::Value::Sequence(seq) => {
+                for item in seq {
+                    if let Some(name) = item.as_str() {
+                        if let Some(state) = security_states.get(name) {
+                            refs.push(PreConditionStateRef {
+                                value: "SecurityAccessStates".into(),
+                                in_param_if_short_name: String::new(),
+                                in_param_path_short_name: name.to_string(),
+                                state: Some(state.clone()),
+                            });
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        // Authentication refs
+        match &pattern.authentication {
+            serde_yaml::Value::String(s) if s == "none" => {}
+            serde_yaml::Value::Sequence(seq) => {
+                for item in seq {
+                    if let Some(name) = item.as_str() {
+                        if let Some(state) = auth_states.get(name) {
+                            refs.push(PreConditionStateRef {
+                                value: "AuthenticationStates".into(),
+                                in_param_if_short_name: String::new(),
+                                in_param_path_short_name: name.to_string(),
+                                state: Some(state.clone()),
+                            });
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        (pattern_name.clone(), refs)
+    }).collect()
+}
+
+/// Look up access pattern for a service and attach pre-condition state refs + SDG metadata.
+fn apply_access_pattern(
+    diag_comm: &mut DiagComm,
+    pattern_name: &str,
+    patterns: &HashMap<String, Vec<PreConditionStateRef>>,
+) {
+    if pattern_name.is_empty() {
+        return;
+    }
+    if let Some(refs) = patterns.get(pattern_name) {
+        diag_comm.pre_condition_state_refs = refs.clone();
+        // Store the pattern name in SDGs so the writer can reconstruct it
+        let sdg = Sdg {
+            caption_sn: "access_pattern".into(),
+            sds: vec![SdOrSdg::Sd(Sd {
+                value: pattern_name.to_string(),
+                si: String::new(),
+                ti: String::new(),
+            })],
+            si: String::new(),
+        };
+        match &mut diag_comm.sdgs {
+            Some(sdgs) => sdgs.sdgs.push(sdg),
+            None => diag_comm.sdgs = Some(Sdgs { sdgs: vec![sdg] }),
+        }
     }
 }
 

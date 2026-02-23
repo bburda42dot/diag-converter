@@ -22,10 +22,8 @@ pub fn write_yaml(db: &DiagDatabase) -> Result<String, YamlWriteError> {
 
 /// Transform the canonical IR into a YAML document model.
 fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
-    let layer = db
-        .variants
-        .first()
-        .map(|v| &v.diag_layer);
+    let base_variant = db.variants.iter().find(|v| v.is_base_variant).or(db.variants.first());
+    let layer = base_variant.map(|v| &v.diag_layer);
 
     // Build meta from metadata map
     let meta = Some(Meta {
@@ -71,11 +69,12 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
                     types_map.insert(name, yaml_type);
                 }
 
+                let access_name = extract_access_pattern_name(&svc.diag_comm);
                 let did = Did {
                     name: did_name.to_string(),
                     description: svc.diag_comm.long_name.as_ref().map(|ln| ln.value.clone()),
                     did_type: did_type_val,
-                    access: "public".into(),
+                    access: if access_name.is_empty() { "public".into() } else { access_name },
                     readable: Some(true),
                     writable: None, // Check if there's a matching write service
                     snapshot: Some(false),
@@ -154,7 +153,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         identification: None,
         variants: extract_variants(db),
         services: None,
-        access_patterns: None,
+        access_patterns: base_variant.and_then(|v| extract_access_patterns(v)),
         types: if types_map.is_empty() { None } else { Some(types_map) },
         dids: if dids_map.is_empty() { None } else { Some(serde_yaml::Value::Mapping(dids_map)) },
         routines: if routines_map.is_empty() { None } else { Some(serde_yaml::Value::Mapping(routines_map)) },
@@ -350,6 +349,75 @@ fn bit_length_to_base(bit_length: u32, current: &str) -> String {
 }
 
 /// Convert a DiagService back to a Routine YAML model.
+/// Extract the access pattern name stored in SDG metadata by the parser.
+fn extract_access_pattern_name(diag_comm: &DiagComm) -> String {
+    if let Some(sdgs) = &diag_comm.sdgs {
+        for sdg in &sdgs.sdgs {
+            if sdg.caption_sn == "access_pattern" {
+                if let Some(SdOrSdg::Sd(sd)) = sdg.sds.first() {
+                    return sd.value.clone();
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+/// Reconstruct access_patterns from PreConditionStateRef data on services.
+fn extract_access_patterns(variant: &Variant) -> Option<BTreeMap<String, AccessPattern>> {
+    let mut patterns: BTreeMap<String, AccessPattern> = BTreeMap::new();
+
+    for svc in &variant.diag_layer.diag_services {
+        let name = extract_access_pattern_name(&svc.diag_comm);
+        if name.is_empty() || patterns.contains_key(&name) {
+            continue;
+        }
+
+        let refs = &svc.diag_comm.pre_condition_state_refs;
+        if refs.is_empty() {
+            continue;
+        }
+
+        let mut session_names: Vec<String> = Vec::new();
+        let mut security_names: Vec<String> = Vec::new();
+        let mut auth_names: Vec<String> = Vec::new();
+
+        for pcsr in refs {
+            match pcsr.value.as_str() {
+                "SessionStates" => session_names.push(pcsr.in_param_path_short_name.clone()),
+                "SecurityAccessStates" => security_names.push(pcsr.in_param_path_short_name.clone()),
+                "AuthenticationStates" => auth_names.push(pcsr.in_param_path_short_name.clone()),
+                _ => {}
+            }
+        }
+
+        let sessions = if session_names.is_empty() {
+            serde_yaml::Value::String("any".into())
+        } else {
+            serde_yaml::to_value(&session_names).unwrap_or_default()
+        };
+        let security = if security_names.is_empty() {
+            serde_yaml::Value::String("none".into())
+        } else {
+            serde_yaml::to_value(&security_names).unwrap_or_default()
+        };
+        let authentication = if auth_names.is_empty() {
+            serde_yaml::Value::String("none".into())
+        } else {
+            serde_yaml::to_value(&auth_names).unwrap_or_default()
+        };
+
+        patterns.insert(name, AccessPattern {
+            sessions,
+            security,
+            authentication,
+            nrc_on_fail: None,
+        });
+    }
+
+    if patterns.is_empty() { None } else { Some(patterns) }
+}
+
 fn service_to_routine(svc: &DiagService) -> Routine {
     let mut operations = vec![];
     if svc.request.is_some() {
@@ -359,10 +427,11 @@ fn service_to_routine(svc: &DiagService) -> Routine {
         operations.push("result".into());
     }
 
+    let access_name = extract_access_pattern_name(&svc.diag_comm);
     Routine {
         name: svc.diag_comm.short_name.clone(),
         description: svc.diag_comm.long_name.as_ref().map(|ln| ln.value.clone()),
-        access: "public".into(),
+        access: if access_name.is_empty() { "public".into() } else { access_name },
         operations,
         parameters: None, // Simplified - could reconstruct from params
         audience: None,
