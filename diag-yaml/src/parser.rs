@@ -95,7 +95,9 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
 
     // Generate services from the `services` section (TesterPresent, ControlDTCSetting, etc.)
     if let Some(yaml_services) = &doc.services {
-        let gen = crate::service_generator::ServiceGenerator::new(yaml_services);
+        let gen = crate::service_generator::ServiceGenerator::new(yaml_services)
+            .with_sessions(doc.sessions.as_ref())
+            .with_security(doc.security.as_ref());
         diag_services.extend(gen.generate_all());
     }
 
