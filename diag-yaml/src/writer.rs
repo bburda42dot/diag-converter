@@ -94,12 +94,11 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
             if svc.diag_comm.short_name.starts_with("Write_") {
                 let did_id = extract_did_id(svc);
                 let key = serde_yaml::Value::Number(serde_yaml::Number::from(did_id as u64));
-                if let Some(serde_yaml::Value::Mapping(ref mut did_mapping)) = dids_map.get_mut(&key).cloned() {
+                if let Some(serde_yaml::Value::Mapping(did_mapping)) = dids_map.get_mut(&key) {
                     did_mapping.insert(
                         serde_yaml::Value::String("writable".into()),
                         serde_yaml::Value::Bool(true),
                     );
-                    dids_map.insert(key, serde_yaml::Value::Mapping(did_mapping.clone()));
                 }
             }
         }

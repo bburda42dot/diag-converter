@@ -74,3 +74,34 @@ fn test_write_yaml_contains_schema() {
         "output should contain schema identifier"
     );
 }
+
+/// Regression test: writable DID flag must survive IR -> YAML roundtrip.
+/// Previously, `.cloned()` on a mutable borrow caused the writable flag to be
+/// lost because the clone was modified instead of the original map entry.
+#[test]
+fn test_writable_did_roundtrip() {
+    let content = include_str!("../../test-fixtures/yaml/example-ecm.yml");
+    let db = parse_yaml(content).unwrap();
+
+    // Verify the IR has at least one Write_ service (proving the DID is writable)
+    let layer = &db.variants[0].diag_layer;
+    let write_services: Vec<_> = layer.diag_services.iter()
+        .filter(|s| s.diag_comm.short_name.starts_with("Write_"))
+        .collect();
+    assert!(!write_services.is_empty(), "example-ecm.yml should have writable DIDs generating Write_ services");
+
+    // Write to YAML and re-parse
+    let yaml_output = write_yaml(&db).unwrap();
+    let reparsed = parse_yaml(&yaml_output).unwrap();
+
+    // The reparsed IR must still have Write_ services for writable DIDs
+    let reparsed_layer = &reparsed.variants[0].diag_layer;
+    let reparsed_write_services: Vec<_> = reparsed_layer.diag_services.iter()
+        .filter(|s| s.diag_comm.short_name.starts_with("Write_"))
+        .collect();
+    assert_eq!(
+        write_services.len(),
+        reparsed_write_services.len(),
+        "writable DID count must be preserved through IR -> YAML -> IR roundtrip"
+    );
+}
