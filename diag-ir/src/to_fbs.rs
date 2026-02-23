@@ -709,22 +709,52 @@ fn build_variant_pattern<'a>(builder: &mut FlatBufferBuilder<'a>, vp: &VariantPa
     dataformat::VariantPattern::create(builder, &dataformat::VariantPatternArgs { matching_parameter: Some(mps) })
 }
 
-fn build_parent_ref<'a>(builder: &mut FlatBufferBuilder<'a>, _pr: &ParentRef) -> flatbuffers::WIPOffset<dataformat::ParentRef<'a>> {
-    // ParentRef is complex (contains recursive types). Build minimal version.
-    let nidc: Vec<_> = _pr.not_inherited_diag_comm_short_names.iter().map(|s| builder.create_string(s)).collect();
+fn build_parent_ref<'a>(builder: &mut FlatBufferBuilder<'a>, pr: &ParentRef) -> flatbuffers::WIPOffset<dataformat::ParentRef<'a>> {
+    // Build the ref union target first (recursive - inner objects must be built before outer)
+    let (ref_type, ref_) = match &pr.ref_type {
+        ParentRefType::Variant(v) => {
+            let fbs_variant = build_variant(builder, v);
+            (dataformat::ParentRefType::Variant,
+             Some(dataformat::ParentRefType::tag_as_variant(fbs_variant).value_offset()))
+        }
+        ParentRefType::Protocol(p) => {
+            let fbs_proto = build_protocol(builder, p);
+            (dataformat::ParentRefType::Protocol,
+             Some(dataformat::ParentRefType::tag_as_protocol(fbs_proto).value_offset()))
+        }
+        ParentRefType::FunctionalGroup(fg) => {
+            let fbs_fg = build_functional_group(builder, fg);
+            (dataformat::ParentRefType::FunctionalGroup,
+             Some(dataformat::ParentRefType::tag_as_functional_group(fbs_fg).value_offset()))
+        }
+        ParentRefType::TableDop(td) => {
+            let fbs_td = build_table_dop(builder, td);
+            (dataformat::ParentRefType::TableDop,
+             Some(dataformat::ParentRefType::tag_as_table_dop(fbs_td).value_offset()))
+        }
+        ParentRefType::EcuSharedData(esd) => {
+            let dl = build_diag_layer(builder, &esd.diag_layer);
+            let fbs_esd = dataformat::EcuSharedData::create(builder, &dataformat::EcuSharedDataArgs {
+                diag_layer: Some(dl),
+            });
+            (dataformat::ParentRefType::EcuSharedData,
+             Some(dataformat::ParentRefType::tag_as_ecu_shared_data(fbs_esd).value_offset()))
+        }
+    };
+
+    let nidc: Vec<_> = pr.not_inherited_diag_comm_short_names.iter().map(|s| builder.create_string(s)).collect();
     let nidc = builder.create_vector(&nidc);
-    let nivs: Vec<_> = _pr.not_inherited_variables_short_names.iter().map(|s| builder.create_string(s)).collect();
+    let nivs: Vec<_> = pr.not_inherited_variables_short_names.iter().map(|s| builder.create_string(s)).collect();
     let nivs = builder.create_vector(&nivs);
-    let nids: Vec<_> = _pr.not_inherited_dops_short_names.iter().map(|s| builder.create_string(s)).collect();
+    let nids: Vec<_> = pr.not_inherited_dops_short_names.iter().map(|s| builder.create_string(s)).collect();
     let nids = builder.create_vector(&nids);
-    let nits: Vec<_> = _pr.not_inherited_tables_short_names.iter().map(|s| builder.create_string(s)).collect();
+    let nits: Vec<_> = pr.not_inherited_tables_short_names.iter().map(|s| builder.create_string(s)).collect();
     let nits = builder.create_vector(&nits);
-    let nignr: Vec<_> = _pr.not_inherited_global_neg_responses_short_names.iter().map(|s| builder.create_string(s)).collect();
+    let nignr: Vec<_> = pr.not_inherited_global_neg_responses_short_names.iter().map(|s| builder.create_string(s)).collect();
     let nignr = builder.create_vector(&nignr);
-    // NOTE: The ref union is skipped for now (recursive types)
     dataformat::ParentRef::create(builder, &dataformat::ParentRefArgs {
-        ref_type: dataformat::ParentRefType::NONE,
-        ref_: None,
+        ref_type,
+        ref_,
         not_inherited_diag_comm_short_names: Some(nidc),
         not_inherited_variables_short_names: Some(nivs),
         not_inherited_dops_short_names: Some(nids),

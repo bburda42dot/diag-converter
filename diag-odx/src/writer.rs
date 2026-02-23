@@ -1041,8 +1041,15 @@ fn ir_job_param_to_odx(jp: &JobParam) -> OdxJobParam {
 // --- ParentRef ---
 
 fn ir_parent_ref_to_odx(pref: &ParentRef) -> OdxParentRef {
+    let id_ref = match &pref.ref_type {
+        ParentRefType::Variant(v) => Some(v.diag_layer.short_name.clone()),
+        ParentRefType::Protocol(p) => Some(p.diag_layer.short_name.clone()),
+        ParentRefType::FunctionalGroup(fg) => Some(fg.diag_layer.short_name.clone()),
+        ParentRefType::EcuSharedData(esd) => Some(esd.diag_layer.short_name.clone()),
+        ParentRefType::TableDop(td) => Some(td.short_name.clone()),
+    };
     OdxParentRef {
-        id_ref: None,
+        id_ref,
         docref: None,
         doctype: Some("LAYER".into()),
         not_inherited_diag_comms: if pref.not_inherited_diag_comm_short_names.is_empty() {
@@ -1075,8 +1082,36 @@ fn ir_parent_ref_to_odx(pref: &ParentRef) -> OdxParentRef {
                     .collect(),
             })
         },
-        not_inherited_tables: None,
-        not_inherited_global_neg_responses: None,
+        not_inherited_tables: if pref.not_inherited_tables_short_names.is_empty() {
+            None
+        } else {
+            Some(NotInheritedTablesWrapper {
+                items: pref
+                    .not_inherited_tables_short_names
+                    .iter()
+                    .map(|sn| NotInheritedSnRef {
+                        snref: Some(OdxSnRef {
+                            short_name: Some(sn.clone()),
+                        }),
+                    })
+                    .collect(),
+            })
+        },
+        not_inherited_global_neg_responses: if pref.not_inherited_global_neg_responses_short_names.is_empty() {
+            None
+        } else {
+            Some(NotInheritedGlobalNegResponsesWrapper {
+                items: pref
+                    .not_inherited_global_neg_responses_short_names
+                    .iter()
+                    .map(|sn| NotInheritedSnRef {
+                        snref: Some(OdxSnRef {
+                            short_name: Some(sn.clone()),
+                        }),
+                    })
+                    .collect(),
+            })
+        },
     }
 }
 

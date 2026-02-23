@@ -445,6 +445,56 @@ fn test_complex_value_from_reference_mdd() {
 }
 
 #[test]
+fn roundtrip_parent_ref_variants() {
+    // Build a variant that has parent_refs covering Protocol and EcuSharedData union arms
+    let db = DiagDatabase {
+        variants: vec![Variant {
+            diag_layer: DiagLayer {
+                short_name: "ChildVariant".into(),
+                ..Default::default()
+            },
+            is_base_variant: false,
+            variant_patterns: vec![],
+            parent_refs: vec![
+                ParentRef {
+                    ref_type: ParentRefType::Protocol(Box::new(Protocol {
+                        diag_layer: DiagLayer {
+                            short_name: "UDS_on_CAN".into(),
+                            ..Default::default()
+                        },
+                        com_param_spec: None,
+                        prot_stack: None,
+                        parent_refs: vec![],
+                    })),
+                    not_inherited_diag_comm_short_names: vec!["SvcA".into()],
+                    not_inherited_variables_short_names: vec![],
+                    not_inherited_dops_short_names: vec!["DopX".into()],
+                    not_inherited_tables_short_names: vec!["TblY".into()],
+                    not_inherited_global_neg_responses_short_names: vec!["NR1".into()],
+                },
+                ParentRef {
+                    ref_type: ParentRefType::EcuSharedData(Box::new(EcuSharedData {
+                        diag_layer: DiagLayer {
+                            short_name: "SharedBase".into(),
+                            ..Default::default()
+                        },
+                    })),
+                    not_inherited_diag_comm_short_names: vec![],
+                    not_inherited_variables_short_names: vec!["VarZ".into()],
+                    not_inherited_dops_short_names: vec![],
+                    not_inherited_tables_short_names: vec![],
+                    not_inherited_global_neg_responses_short_names: vec![],
+                },
+            ],
+        }],
+        ..Default::default()
+    };
+    let fbs_bytes = ir_to_flatbuffers(&db);
+    let db2 = flatbuffers_to_ir(&fbs_bytes).expect("roundtrip failed");
+    pretty_assertions::assert_eq!(db, db2);
+}
+
+#[test]
 fn fbs_output_is_not_empty() {
     let db = make_test_database();
     let bytes = ir_to_flatbuffers(&db);
