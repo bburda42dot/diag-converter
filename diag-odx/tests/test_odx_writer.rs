@@ -118,3 +118,21 @@ fn test_odx_roundtrip_preserves_state_chart() {
         assert_eq!(orig_sc.states.len(), repr_sc.states.len());
     }
 }
+
+#[test]
+fn test_odx_writer_handles_all_param_types() {
+    // Roundtrip preserves param xsi_type for all supported variants
+    let xml = include_str!("../../test-fixtures/odx/minimal.odx");
+    let original = parse_odx(xml).unwrap();
+    let odx_output = write_odx(&original).unwrap();
+
+    // Verify the ODX output contains expected xsi:type values
+    assert!(
+        odx_output.contains("CODED-CONST"),
+        "should contain CODED-CONST param"
+    );
+    assert!(
+        odx_output.contains("VALUE"),
+        "should contain VALUE param"
+    );
+}

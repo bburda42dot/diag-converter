@@ -219,8 +219,7 @@ fn ir_diag_layer_to_odx(diag_layer: &DiagLayer, db: &DiagDatabase) -> DiagLayerV
 }
 
 fn ir_diag_layer_to_odx_no_dtcs(diag_layer: &DiagLayer) -> DiagLayerVariant {
-    // Collect all DOPs from services for the data dictionary
-    let mut dops = Vec::new();
+    let mut col = DopCollection::default();
     let mut requests = Vec::new();
     let mut pos_responses = Vec::new();
     let mut neg_responses = Vec::new();
@@ -229,24 +228,21 @@ fn ir_diag_layer_to_odx_no_dtcs(diag_layer: &DiagLayer) -> DiagLayerVariant {
     for (i, svc) in diag_layer.diag_services.iter().enumerate() {
         let svc_id = format!("DS_{}", i);
 
-        // Extract DOPs from params
         if let Some(req) = &svc.request {
-            collect_dops_from_params(&req.params, &mut dops);
+            collect_dops_from_params(&req.params, &mut col);
             let req_id = format!("RQ_{}", i);
-            requests.push(ir_request_to_odx(req, &req_id, &dops));
+            requests.push(ir_request_to_odx(req, &req_id, &col.data_object_props));
 
-            // Build pos responses
             for (j, resp) in svc.pos_responses.iter().enumerate() {
-                collect_dops_from_params(&resp.params, &mut dops);
+                collect_dops_from_params(&resp.params, &mut col);
                 let resp_id = format!("PR_{}_{}", i, j);
-                pos_responses.push(ir_response_to_odx(resp, &resp_id, &dops));
+                pos_responses.push(ir_response_to_odx(resp, &resp_id, &col.data_object_props));
             }
 
-            // Build neg responses
             for (j, resp) in svc.neg_responses.iter().enumerate() {
-                collect_dops_from_params(&resp.params, &mut dops);
+                collect_dops_from_params(&resp.params, &mut col);
                 let resp_id = format!("NR_{}_{}", i, j);
-                neg_responses.push(ir_response_to_odx(resp, &resp_id, &dops));
+                neg_responses.push(ir_response_to_odx(resp, &resp_id, &col.data_object_props));
             }
 
             diag_comms.push(DiagCommEntry::DiagService(ir_diag_service_to_odx(
@@ -263,19 +259,33 @@ fn ir_diag_layer_to_odx_no_dtcs(diag_layer: &DiagLayer) -> DiagLayerVariant {
         diag_comms.push(DiagCommEntry::SingleEcuJob(ir_ecu_job_to_odx(job, i)));
     }
 
-    let data_dict = if dops.is_empty() {
+    let has_any_dop = !col.data_object_props.is_empty()
+        || !col.structures.is_empty()
+        || !col.dtc_dops.is_empty()
+        || !col.end_of_pdu_fields.is_empty()
+        || !col.static_fields.is_empty()
+        || !col.dynamic_length_fields.is_empty()
+        || !col.muxs.is_empty()
+        || !col.env_datas.is_empty()
+        || !col.env_data_descs.is_empty();
+
+    fn opt_wrap<T, W>(v: Vec<T>, wrap: impl FnOnce(Vec<T>) -> W) -> Option<W> {
+        if v.is_empty() { None } else { Some(wrap(v)) }
+    }
+
+    let data_dict = if !has_any_dop {
         None
     } else {
         Some(DiagDataDictionarySpec {
-            data_object_props: Some(DataObjectPropsWrapper { items: dops }),
-            dtc_dops: None,
-            structures: None,
-            end_of_pdu_fields: None,
-            static_fields: None,
-            dynamic_length_fields: None,
-            muxs: None,
-            env_datas: None,
-            env_data_descs: None,
+            data_object_props: opt_wrap(col.data_object_props, |v| DataObjectPropsWrapper { items: v }),
+            dtc_dops: opt_wrap(col.dtc_dops, |v| DtcDopsWrapper { items: v }),
+            structures: opt_wrap(col.structures, |v| StructuresWrapper { items: v }),
+            end_of_pdu_fields: opt_wrap(col.end_of_pdu_fields, |v| EndOfPduFieldsWrapper { items: v }),
+            static_fields: opt_wrap(col.static_fields, |v| StaticFieldsWrapper { items: v }),
+            dynamic_length_fields: opt_wrap(col.dynamic_length_fields, |v| DynamicLengthFieldsWrapper { items: v }),
+            muxs: opt_wrap(col.muxs, |v| MuxsWrapper { items: v }),
+            env_datas: opt_wrap(col.env_datas, |v| EnvDatasWrapper { items: v }),
+            env_data_descs: opt_wrap(col.env_data_descs, |v| EnvDataDescsWrapper { items: v }),
             tables: None,
             unit_spec: None,
             sdgs: None,
@@ -493,6 +503,22 @@ fn ir_response_to_odx(
 
 // --- Param ---
 
+fn set_dop_ref(odx_param: &mut OdxParam, dop: &Dop, dops: &[OdxDataObjectProp]) {
+    if !dop.short_name.is_empty() {
+        let dop_id = dops
+            .iter()
+            .find(|d| d.short_name.as_deref() == Some(&dop.short_name))
+            .and_then(|d| d.id.clone());
+        if let Some(id) = dop_id {
+            odx_param.dop_ref = Some(OdxRef {
+                id_ref: Some(id),
+                docref: None,
+                doctype: None,
+            });
+        }
+    }
+}
+
 fn ir_param_to_odx(p: &Param, dops: &[OdxDataObjectProp]) -> OdxParam {
     let mut odx_param = OdxParam {
         xsi_type: None,
@@ -550,20 +576,7 @@ fn ir_param_to_odx(p: &Param, dops: &[OdxDataObjectProp]) -> OdxParam {
         }
         Some(ParamData::Value { dop, .. }) => {
             odx_param.xsi_type = Some("VALUE".into());
-            if !dop.short_name.is_empty() {
-                // Find DOP ID in the collected dops
-                let dop_id = dops
-                    .iter()
-                    .find(|d| d.short_name.as_deref() == Some(&dop.short_name))
-                    .and_then(|d| d.id.clone());
-                if let Some(id) = dop_id {
-                    odx_param.dop_ref = Some(OdxRef {
-                        id_ref: Some(id),
-                        docref: None,
-                        doctype: None,
-                    });
-                }
-            }
+            set_dop_ref(&mut odx_param, dop, dops);
         }
         Some(ParamData::PhysConst {
             phys_constant_value,
@@ -571,19 +584,7 @@ fn ir_param_to_odx(p: &Param, dops: &[OdxDataObjectProp]) -> OdxParam {
         }) => {
             odx_param.xsi_type = Some("PHYS-CONST".into());
             odx_param.phys_constant_value = Some(phys_constant_value.clone());
-            if !dop.short_name.is_empty() {
-                let dop_id = dops
-                    .iter()
-                    .find(|d| d.short_name.as_deref() == Some(&dop.short_name))
-                    .and_then(|d| d.id.clone());
-                if let Some(id) = dop_id {
-                    odx_param.dop_ref = Some(OdxRef {
-                        id_ref: Some(id),
-                        docref: None,
-                        doctype: None,
-                    });
-                }
-            }
+            set_dop_ref(&mut odx_param, dop, dops);
         }
         Some(ParamData::MatchingRequestParam {
             request_byte_pos,
@@ -597,7 +598,31 @@ fn ir_param_to_odx(p: &Param, dops: &[OdxDataObjectProp]) -> OdxParam {
             odx_param.xsi_type = Some("RESERVED".into());
             odx_param.bit_length = Some(*bit_length);
         }
-        _ => {}
+        Some(ParamData::Dynamic) => {
+            odx_param.xsi_type = Some("DYNAMIC".into());
+        }
+        Some(ParamData::LengthKeyRef { dop }) => {
+            odx_param.xsi_type = Some("LENGTH-KEY".into());
+            set_dop_ref(&mut odx_param, dop, dops);
+        }
+        Some(ParamData::System { dop, .. }) => {
+            odx_param.xsi_type = Some("SYSTEM".into());
+            set_dop_ref(&mut odx_param, dop, dops);
+        }
+        Some(ParamData::TableKey { .. }) => {
+            odx_param.xsi_type = Some("TABLE-KEY".into());
+        }
+        Some(ParamData::TableEntry { target, .. }) => {
+            odx_param.xsi_type = Some("TABLE-ENTRY".into());
+            odx_param.target = Some(match target {
+                TableEntryRowFragment::Key => "KEY".into(),
+                TableEntryRowFragment::Struct => "STRUCT".into(),
+            });
+        }
+        Some(ParamData::TableStruct { .. }) => {
+            odx_param.xsi_type = Some("TABLE-STRUCT".into());
+        }
+        None => {}
     }
 
     odx_param
@@ -605,7 +630,20 @@ fn ir_param_to_odx(p: &Param, dops: &[OdxDataObjectProp]) -> OdxParam {
 
 // --- DOP collection ---
 
-fn collect_dops_from_params(params: &[Param], dops: &mut Vec<OdxDataObjectProp>) {
+#[derive(Default)]
+struct DopCollection {
+    data_object_props: Vec<OdxDataObjectProp>,
+    structures: Vec<OdxStructure>,
+    dtc_dops: Vec<OdxDtcDop>,
+    end_of_pdu_fields: Vec<OdxEndOfPduField>,
+    static_fields: Vec<OdxStaticField>,
+    dynamic_length_fields: Vec<OdxDynamicLengthField>,
+    muxs: Vec<OdxMux>,
+    env_datas: Vec<OdxEnvData>,
+    env_data_descs: Vec<OdxEnvDataDesc>,
+}
+
+fn collect_dops_from_params(params: &[Param], col: &mut DopCollection) {
     for p in params {
         let dop = match &p.specific_data {
             Some(ParamData::Value { dop, .. }) => Some(dop.as_ref()),
@@ -616,14 +654,124 @@ fn collect_dops_from_params(params: &[Param], dops: &mut Vec<OdxDataObjectProp>)
         };
 
         if let Some(dop) = dop {
-            if !dop.short_name.is_empty()
-                && !dops
-                    .iter()
-                    .any(|d| d.short_name.as_deref() == Some(&dop.short_name))
-            {
-                dops.push(ir_dop_to_odx(dop));
+            if dop.short_name.is_empty() {
+                continue;
+            }
+            let name = &dop.short_name;
+            match &dop.specific_data {
+                Some(DopData::NormalDop { .. }) | None => {
+                    if !col.data_object_props.iter().any(|d| d.short_name.as_deref() == Some(name.as_str())) {
+                        col.data_object_props.push(ir_dop_to_odx(dop));
+                    }
+                }
+                Some(DopData::Structure { params, byte_size, is_visible }) => {
+                    if !col.structures.iter().any(|s| s.short_name.as_deref() == Some(name.as_str())) {
+                        col.structures.push(ir_structure_to_odx(name, params, *byte_size, *is_visible, &col.data_object_props));
+                    }
+                }
+                Some(DopData::DtcDop { diag_coded_type, physical_type, compu_method, dtcs, is_visible }) => {
+                    if !col.dtc_dops.iter().any(|d| d.short_name.as_deref() == Some(name.as_str())) {
+                        col.dtc_dops.push(ir_dtc_dop_to_odx(name, diag_coded_type, physical_type, compu_method, dtcs, *is_visible));
+                    }
+                }
+                Some(DopData::EndOfPduField { max_number_of_items, min_number_of_items, .. }) => {
+                    if !col.end_of_pdu_fields.iter().any(|f| f.short_name.as_deref() == Some(name.as_str())) {
+                        col.end_of_pdu_fields.push(OdxEndOfPduField {
+                            id: Some(format!("EOPF_{name}")),
+                            short_name: Some(name.clone()),
+                            max_number_of_items: *max_number_of_items,
+                            min_number_of_items: *min_number_of_items,
+                        });
+                    }
+                }
+                Some(DopData::StaticField { fixed_number_of_items, item_byte_size, .. }) => {
+                    if !col.static_fields.iter().any(|f| f.short_name.as_deref() == Some(name.as_str())) {
+                        col.static_fields.push(OdxStaticField {
+                            id: Some(format!("SF_{name}")),
+                            short_name: Some(name.clone()),
+                            fixed_number_of_items: Some(*fixed_number_of_items),
+                            item_byte_size: Some(*item_byte_size),
+                        });
+                    }
+                }
+                Some(DopData::DynamicLengthField { offset, .. }) => {
+                    if !col.dynamic_length_fields.iter().any(|f| f.short_name.as_deref() == Some(name.as_str())) {
+                        col.dynamic_length_fields.push(OdxDynamicLengthField {
+                            id: Some(format!("DLF_{name}")),
+                            short_name: Some(name.clone()),
+                            offset: Some(*offset),
+                        });
+                    }
+                }
+                Some(DopData::MuxDop { .. }) => {
+                    if !col.muxs.iter().any(|m| m.short_name.as_deref() == Some(name.as_str())) {
+                        col.muxs.push(OdxMux {
+                            id: Some(format!("MUX_{name}")),
+                            short_name: Some(name.clone()),
+                        });
+                    }
+                }
+                Some(DopData::EnvData { .. }) => {
+                    if !col.env_datas.iter().any(|e| e.short_name.as_deref() == Some(name.as_str())) {
+                        col.env_datas.push(OdxEnvData {
+                            id: Some(format!("ED_{name}")),
+                            short_name: Some(name.clone()),
+                        });
+                    }
+                }
+                Some(DopData::EnvDataDesc { .. }) => {
+                    if !col.env_data_descs.iter().any(|e| e.short_name.as_deref() == Some(name.as_str())) {
+                        col.env_data_descs.push(OdxEnvDataDesc {
+                            id: Some(format!("EDD_{name}")),
+                            short_name: Some(name.clone()),
+                        });
+                    }
+                }
             }
         }
+    }
+}
+
+fn ir_structure_to_odx(
+    name: &str,
+    params: &[Param],
+    byte_size: Option<u32>,
+    _is_visible: bool,
+    dops: &[OdxDataObjectProp],
+) -> OdxStructure {
+    OdxStructure {
+        id: Some(format!("STRUCT_{name}")),
+        short_name: Some(name.to_string()),
+        byte_size,
+        params: if params.is_empty() {
+            None
+        } else {
+            Some(ParamsWrapper {
+                items: params.iter().map(|p| ir_param_to_odx(p, dops)).collect(),
+            })
+        },
+        sdgs: None,
+    }
+}
+
+fn ir_dtc_dop_to_odx(
+    name: &str,
+    diag_coded_type: &Option<DiagCodedType>,
+    physical_type: &Option<PhysicalType>,
+    compu_method: &Option<CompuMethod>,
+    _dtcs: &[Dtc],
+    is_visible: bool,
+) -> OdxDtcDop {
+    OdxDtcDop {
+        id: Some(format!("DTCDOP_{name}")),
+        short_name: Some(name.to_string()),
+        long_name: None,
+        sdgs: None,
+        is_visible: Some(is_visible.to_string()),
+        diag_coded_type: diag_coded_type.as_ref().map(ir_dct_to_odx),
+        physical_type: physical_type.as_ref().map(ir_pt_to_odx),
+        compu_method: compu_method.as_ref().map(ir_cm_to_odx),
+        dtcs: None,
     }
 }
 
