@@ -40,7 +40,7 @@ pub struct EcuSharedData {
 }
 
 /// Maps to FBS DiagLayer
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DiagLayer {
     pub short_name: String,
     pub long_name: Option<LongName>,
@@ -92,7 +92,7 @@ pub struct MatchingParameter {
 // --- Services ---
 
 /// Maps to FBS DiagComm
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DiagComm {
     pub short_name: String,
     pub long_name: Option<LongName>,
@@ -110,7 +110,7 @@ pub struct DiagComm {
 }
 
 /// Maps to FBS DiagService
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DiagService {
     pub diag_comm: DiagComm,
     pub request: Option<Request>,
@@ -151,7 +151,7 @@ pub struct Response {
 // --- Parameters ---
 
 /// Maps to FBS Param
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Param {
     pub id: u32,
     pub param_type: ParamType,
@@ -892,8 +892,9 @@ pub enum DopType {
 }
 
 /// Maps to FBS ParamType
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ParamType {
+    #[default]
     CodedConst,
     Dynamic,
     LengthKey,
@@ -916,8 +917,9 @@ pub enum TableEntryRowFragment {
 }
 
 /// Maps to FBS DiagClassType
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum DiagClassType {
+    #[default]
     StartComm,
     StopComm,
     VariantIdentification,
@@ -935,16 +937,18 @@ pub enum ResponseType {
 }
 
 /// Maps to FBS Addressing
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Addressing {
+    #[default]
     Functional,
     Physical,
     FunctionalOrPhysical,
 }
 
 /// Maps to FBS TransmissionMode
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum TransmissionMode {
+    #[default]
     SendOnly,
     ReceiveOnly,
     SendAndReceive,
