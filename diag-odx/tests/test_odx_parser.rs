@@ -185,6 +185,16 @@ fn test_parse_odx_single_ecu_job() {
     assert_eq!(flash.prog_codes[0].syntax, "JAR");
     assert_eq!(flash.input_params.len(), 1);
     assert_eq!(flash.output_params.len(), 1);
+
+    // DOP-BASE-REF should be resolved
+    let file_path_param = &flash.input_params[0];
+    assert_eq!(file_path_param.short_name, "FilePath");
+    assert!(
+        file_path_param.dop_base.is_some(),
+        "Job param with DOP-BASE-REF should have resolved dop_base"
+    );
+    let dop = file_path_param.dop_base.as_ref().unwrap();
+    assert_eq!(dop.short_name, "VehicleSpeed");
 }
 
 #[test]

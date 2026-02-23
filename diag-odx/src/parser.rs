@@ -310,7 +310,7 @@ fn map_diag_service(
 
 fn map_single_ecu_job(
     job: &odx_model::OdxSingleEcuJob,
-    _index: &OdxIndex,
+    index: &OdxIndex,
 ) -> SingleEcuJob {
     let prog_codes = job
         .prog_codes
@@ -321,19 +321,19 @@ fn map_single_ecu_job(
     let input_params = job
         .input_params
         .as_ref()
-        .map(|w| w.items.iter().map(map_job_param).collect())
+        .map(|w| w.items.iter().map(|p| map_job_param(p, index)).collect())
         .unwrap_or_default();
 
     let output_params = job
         .output_params
         .as_ref()
-        .map(|w| w.items.iter().map(map_job_param).collect())
+        .map(|w| w.items.iter().map(|p| map_job_param(p, index)).collect())
         .unwrap_or_default();
 
     let neg_output_params = job
         .neg_output_params
         .as_ref()
-        .map(|w| w.items.iter().map(map_job_param).collect())
+        .map(|w| w.items.iter().map(|p| map_job_param(p, index)).collect())
         .unwrap_or_default();
 
     SingleEcuJob {
@@ -938,7 +938,22 @@ fn map_prog_code(pc: &odx_model::OdxProgCode) -> ProgCode {
     }
 }
 
-fn map_job_param(jp: &odx_model::OdxJobParam) -> JobParam {
+fn map_job_param(jp: &odx_model::OdxJobParam, index: &OdxIndex) -> JobParam {
+    let dop_base = jp.dop_base_ref.as_ref().and_then(|r| {
+        r.id_ref.as_deref().and_then(|id| {
+            index
+                .data_object_props
+                .get(id)
+                .map(|dop| Box::new(map_data_object_prop(dop, index)))
+                .or_else(|| {
+                    index
+                        .structures
+                        .get(id)
+                        .map(|s| Box::new(map_structure_to_dop(s)))
+                })
+        })
+    });
+
     JobParam {
         short_name: jp.short_name.clone().unwrap_or_default(),
         long_name: jp.long_name.as_ref().map(|ln| LongName {
@@ -946,7 +961,7 @@ fn map_job_param(jp: &odx_model::OdxJobParam) -> JobParam {
             ti: String::new(),
         }),
         physical_default_value: jp.physical_default_value.clone().unwrap_or_default(),
-        dop_base: None,
+        dop_base,
         semantic: jp.semantic.clone().unwrap_or_default(),
     }
 }

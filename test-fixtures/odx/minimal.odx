@@ -152,6 +152,7 @@
             <INPUT-PARAMS>
               <INPUT-PARAM SEMANTIC="DATA">
                 <SHORT-NAME>FilePath</SHORT-NAME>
+                <DOP-BASE-REF ID-REF="DOP_VehicleSpeed"/>
               </INPUT-PARAM>
             </INPUT-PARAMS>
             <OUTPUT-PARAMS>
