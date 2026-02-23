@@ -1,4 +1,5 @@
 pub mod parser;
+pub mod service_generator;
 pub mod writer;
 pub mod yaml_model;
 

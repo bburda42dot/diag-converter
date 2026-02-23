@@ -324,7 +324,7 @@ pub struct DetermineNumberOfItems {
 // --- Type system ---
 
 /// Maps to FBS DiagCodedType
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct DiagCodedType {
     pub type_name: DiagCodedTypeName,
     pub base_type_encoding: String,
@@ -796,18 +796,20 @@ pub struct FunctClass {
 // --- Enums ---
 
 /// Maps to FBS DiagCodedTypeName
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum DiagCodedTypeName {
     LeadingLengthInfoType,
     MinMaxLengthType,
     ParamLengthInfoType,
+    #[default]
     StandardLengthType,
 }
 
 /// Maps to FBS DataType
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum DataType {
     AInt32,
+    #[default]
     AUint32,
     AFloat32,
     AAsciiString,

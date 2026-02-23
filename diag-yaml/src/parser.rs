@@ -93,6 +93,12 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         }
     }
 
+    // Generate services from the `services` section (TesterPresent, ControlDTCSetting, etc.)
+    if let Some(yaml_services) = &doc.services {
+        let gen = crate::service_generator::ServiceGenerator::new(yaml_services);
+        diag_services.extend(gen.generate_all());
+    }
+
     // Build ECU jobs from ecu_jobs section
     let mut single_ecu_jobs = Vec::new();
     if let Some(jobs) = &doc.ecu_jobs {

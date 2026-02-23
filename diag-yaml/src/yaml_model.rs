@@ -350,7 +350,7 @@ pub struct YamlServices {
     pub custom: Option<BTreeMap<String, CustomService>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ServiceEntry {
     #[serde(default)]
     pub enabled: bool,
