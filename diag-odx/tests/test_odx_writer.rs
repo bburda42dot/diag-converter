@@ -160,6 +160,37 @@ fn test_odx_roundtrip_preserves_comparam_refs() {
 }
 
 #[test]
+fn test_odx_roundtrip_preserves_audience_refs() {
+    let xml = include_str!("../../test-fixtures/odx/minimal.odx");
+    let original = parse_odx(xml).unwrap();
+    let odx_output = write_odx(&original).unwrap();
+    let reparsed = parse_odx(&odx_output).unwrap();
+
+    let orig_base = original.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let repr_base = reparsed.variants.iter().find(|v| v.is_base_variant).unwrap();
+
+    let orig_svc = &orig_base.diag_layer.diag_services[0];
+    let repr_svc = &repr_base.diag_layer.diag_services[0];
+
+    // Audience boolean flags
+    assert_eq!(
+        orig_svc.diag_comm.audience.as_ref().map(|a| a.is_development),
+        repr_svc.diag_comm.audience.as_ref().map(|a| a.is_development),
+        "is_development should be preserved"
+    );
+
+    // Enabled audience refs
+    let orig_enabled: Vec<_> = orig_svc.diag_comm.audience.as_ref()
+        .map(|a| a.enabled_audiences.iter().map(|aa| &aa.short_name).collect())
+        .unwrap_or_default();
+    let repr_enabled: Vec<_> = repr_svc.diag_comm.audience.as_ref()
+        .map(|a| a.enabled_audiences.iter().map(|aa| &aa.short_name).collect())
+        .unwrap_or_default();
+    assert_eq!(orig_enabled, repr_enabled, "enabled audience refs should be preserved");
+    assert!(!orig_enabled.is_empty(), "fixture should have at least one enabled audience ref");
+}
+
+#[test]
 fn test_odx_writer_handles_all_param_types() {
     // Roundtrip preserves param xsi_type for all supported variants
     let xml = include_str!("../../test-fixtures/odx/minimal.odx");

@@ -916,9 +916,22 @@ fn map_additional_audience(aa: &odx_model::OdxAdditionalAudience) -> AdditionalA
 }
 
 fn map_audience(aud: &odx_model::OdxAudience) -> Audience {
+    let map_refs = |refs: &Option<odx_model::AudienceRefsWrapper>| -> Vec<AdditionalAudience> {
+        refs.as_ref()
+            .map(|w| {
+                w.items
+                    .iter()
+                    .map(|r| AdditionalAudience {
+                        short_name: r.id_ref.clone().unwrap_or_default(),
+                        long_name: None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
     Audience {
-        enabled_audiences: Vec::new(),
-        disabled_audiences: Vec::new(),
+        enabled_audiences: map_refs(&aud.enabled_audience_refs),
+        disabled_audiences: map_refs(&aud.disabled_audience_refs),
         is_supplier: aud.is_supplier.as_deref() == Some("true"),
         is_development: aud.is_development.as_deref() == Some("true"),
         is_manufacturing: aud.is_manufacturing.as_deref() == Some("true"),

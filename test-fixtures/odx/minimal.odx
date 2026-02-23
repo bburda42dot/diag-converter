@@ -131,7 +131,11 @@
           <DIAG-SERVICE ID="DS_ReadSpeed" SEMANTIC="DATA-READ">
             <SHORT-NAME>Read_VehicleSpeed</SHORT-NAME>
             <LONG-NAME>Read Vehicle Speed</LONG-NAME>
-            <AUDIENCE IS-DEVELOPMENT="true" IS-AFTERSALES="true"/>
+            <AUDIENCE IS-DEVELOPMENT="true" IS-AFTERSALES="true">
+              <ENABLED-AUDIENCE-REFS>
+                <AUDIENCE-REF ID-REF="AA_Dev"/>
+              </ENABLED-AUDIENCE-REFS>
+            </AUDIENCE>
             <REQUEST-REF ID-REF="RQ_ReadSpeed"/>
             <POS-RESPONSE-REFS>
               <POS-RESPONSE-REF ID-REF="PR_ReadSpeed"/>

@@ -1096,10 +1096,27 @@ fn ir_state_chart_to_odx(sc: &StateChart) -> OdxStateChart {
 
 // --- Audience ---
 
+fn audience_refs_to_odx(audiences: &[AdditionalAudience]) -> Option<AudienceRefsWrapper> {
+    if audiences.is_empty() {
+        None
+    } else {
+        Some(AudienceRefsWrapper {
+            items: audiences
+                .iter()
+                .map(|a| OdxRef {
+                    id_ref: Some(a.short_name.clone()),
+                    docref: None,
+                    doctype: None,
+                })
+                .collect(),
+        })
+    }
+}
+
 fn ir_audience_to_odx(aud: &Audience) -> OdxAudience {
     OdxAudience {
-        enabled_audience_refs: None,
-        disabled_audience_refs: None,
+        enabled_audience_refs: audience_refs_to_odx(&aud.enabled_audiences),
+        disabled_audience_refs: audience_refs_to_odx(&aud.disabled_audiences),
         is_supplier: if aud.is_supplier {
             Some("true".into())
         } else {
