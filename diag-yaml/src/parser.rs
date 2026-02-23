@@ -127,6 +127,11 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
     if let Some(security) = &doc.security {
         state_charts.push(parse_security_to_state_chart(security));
     }
+    if let Some(auth) = &doc.authentication {
+        if let Some(sc) = parse_authentication_to_state_chart(auth) {
+            state_charts.push(sc);
+        }
+    }
 
     // Build the main variant containing all services
     let variant = Variant {
@@ -1042,4 +1047,33 @@ fn parse_security_to_state_chart(
         start_state_short_name_ref: String::new(),
         states,
     }
+}
+
+fn parse_authentication_to_state_chart(
+    auth: &Authentication,
+) -> Option<StateChart> {
+    let roles = auth.roles.as_ref()?;
+    if roles.is_empty() {
+        return None;
+    }
+    let states: Vec<State> = roles.iter().map(|(key, role_val)| {
+        let id = role_val.get("id")
+            .map(|v| yaml_value_to_u64(v))
+            .unwrap_or(0);
+        State {
+            short_name: key.clone(),
+            long_name: Some(LongName {
+                value: id.to_string(),
+                ti: String::new(),
+            }),
+        }
+    }).collect();
+
+    Some(StateChart {
+        short_name: "AuthenticationStates".into(),
+        semantic: "AUTHENTICATION".into(),
+        state_transitions: vec![],
+        start_state_short_name_ref: String::new(),
+        states,
+    })
 }

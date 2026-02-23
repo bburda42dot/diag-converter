@@ -150,7 +150,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         sessions: layer.and_then(|l| extract_sessions_from_state_charts(&l.state_charts)),
         state_model: layer.and_then(|l| extract_state_model_from_state_charts(&l.state_charts)),
         security: layer.and_then(|l| extract_security_from_state_charts(&l.state_charts)),
-        authentication: None,
+        authentication: layer.and_then(|l| extract_authentication_from_state_charts(&l.state_charts)),
         identification: None,
         variants: None,
         services: None,
@@ -540,6 +540,32 @@ fn extract_security_from_state_charts(
         });
     }
     Some(levels)
+}
+
+/// Extract authentication roles from an "AuthenticationStates" state chart (semantic = "AUTHENTICATION").
+fn extract_authentication_from_state_charts(
+    state_charts: &[StateChart],
+) -> Option<Authentication> {
+    let sc = state_charts.iter().find(|sc| sc.semantic == "AUTHENTICATION")?;
+    if sc.states.is_empty() {
+        return None;
+    }
+    let mut roles = BTreeMap::new();
+    for state in &sc.states {
+        let id = state.long_name.as_ref()
+            .and_then(|ln| ln.value.parse::<u64>().ok())
+            .unwrap_or(0);
+        let mut role_map = serde_yaml::Mapping::new();
+        role_map.insert(
+            serde_yaml::Value::String("id".into()),
+            serde_yaml::Value::Number(serde_yaml::Number::from(id)),
+        );
+        roles.insert(state.short_name.clone(), serde_yaml::Value::Mapping(role_map));
+    }
+    Some(Authentication {
+        anti_brute_force: None,
+        roles: Some(roles),
+    })
 }
 
 fn ir_memory_to_yaml(mc: &MemoryConfig) -> YamlMemoryConfig {

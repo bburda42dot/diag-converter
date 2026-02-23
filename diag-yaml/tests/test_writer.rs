@@ -262,3 +262,51 @@ security:
     let lvl1 = security_sc2.states.iter().find(|s| s.short_name == "level_1").unwrap();
     assert_eq!(lvl1.long_name.as_ref().unwrap().value, "1");
 }
+
+#[test]
+fn test_authentication_roundtrip() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  id: "AUTH_ECU"
+  name: "AuthTestECU"
+authentication:
+  roles:
+    tester:
+      id: 0
+      timeout_s: 30
+    factory:
+      id: 1
+      timeout_s: 30
+    oem:
+      id: 2
+      timeout_s: 60
+"#;
+
+    let db = parse_yaml(yaml).unwrap();
+    let layer = &db.variants[0].diag_layer;
+
+    let auth_sc = layer.state_charts.iter()
+        .find(|sc| sc.semantic == "AUTHENTICATION")
+        .expect("should have authentication state chart");
+    assert_eq!(auth_sc.states.len(), 3);
+
+    // Verify role IDs
+    let tester = auth_sc.states.iter().find(|s| s.short_name == "tester").unwrap();
+    assert_eq!(tester.long_name.as_ref().unwrap().value, "0");
+    let oem = auth_sc.states.iter().find(|s| s.short_name == "oem").unwrap();
+    assert_eq!(oem.long_name.as_ref().unwrap().value, "2");
+
+    // Roundtrip
+    let yaml_out = write_yaml(&db).unwrap();
+    let db2 = parse_yaml(&yaml_out).unwrap();
+    let layer2 = &db2.variants[0].diag_layer;
+
+    let auth_sc2 = layer2.state_charts.iter()
+        .find(|sc| sc.semantic == "AUTHENTICATION")
+        .expect("authentication state chart must survive roundtrip");
+    assert_eq!(auth_sc.states.len(), auth_sc2.states.len());
+
+    let factory2 = auth_sc2.states.iter().find(|s| s.short_name == "factory").unwrap();
+    assert_eq!(factory2.long_name.as_ref().unwrap().value, "1");
+}
