@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODX VERSION="2.2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <DIAG-LAYER-CONTAINER ID="DLC_Test">
+    <SHORT-NAME>TestECU</SHORT-NAME>
+    <LONG-NAME>Test ECU for unit tests</LONG-NAME>
+    <ADMIN-DATA>
+      <LANGUAGE>en</LANGUAGE>
+      <DOC-REVISIONS>
+        <DOC-REVISION>
+          <REVISION-LABEL>1.0.0</REVISION-LABEL>
+          <STATE>released</STATE>
+          <DATE>2025-01-01</DATE>
+        </DOC-REVISION>
+      </DOC-REVISIONS>
+    </ADMIN-DATA>
+    <BASE-VARIANTS>
+      <BASE-VARIANT ID="BV_TestECU">
+        <SHORT-NAME>TestECU_Base</SHORT-NAME>
+        <LONG-NAME>Test ECU Base Variant</LONG-NAME>
+        <DIAG-DATA-DICTIONARY-SPEC>
+          <DATA-OBJECT-PROPS>
+            <DATA-OBJECT-PROP ID="DOP_VehicleSpeed">
+              <SHORT-NAME>VehicleSpeed</SHORT-NAME>
+              <LONG-NAME>Vehicle Speed</LONG-NAME>
+              <DIAG-CODED-TYPE xsi:type="STANDARD-LENGTH-TYPE" BASE-DATA-TYPE="A_UINT32" IS-HIGHLOW-BYTE-ORDER="false">
+                <BIT-LENGTH>16</BIT-LENGTH>
+              </DIAG-CODED-TYPE>
+              <PHYSICAL-TYPE BASE-DATA-TYPE="A_FLOAT64">
+                <PRECISION>1</PRECISION>
+              </PHYSICAL-TYPE>
+              <COMPU-METHOD>
+                <CATEGORY>LINEAR</CATEGORY>
+                <COMPU-INTERNAL-TO-PHYS>
+                  <COMPU-SCALES>
+                    <COMPU-SCALE>
+                      <COMPU-RATIONAL-COEFFS>
+                        <COMPU-NUMERATOR>
+                          <V>0</V>
+                          <V>0.01</V>
+                        </COMPU-NUMERATOR>
+                        <COMPU-DENOMINATOR>
+                          <V>1</V>
+                        </COMPU-DENOMINATOR>
+                      </COMPU-RATIONAL-COEFFS>
+                    </COMPU-SCALE>
+                  </COMPU-SCALES>
+                </COMPU-INTERNAL-TO-PHYS>
+              </COMPU-METHOD>
+              <UNIT-REF ID-REF="UNIT_kmh"/>
+            </DATA-OBJECT-PROP>
+            <DATA-OBJECT-PROP ID="DOP_EngineStatus">
+              <SHORT-NAME>EngineStatus</SHORT-NAME>
+              <COMPU-METHOD>
+                <CATEGORY>TEXTTABLE</CATEGORY>
+                <COMPU-INTERNAL-TO-PHYS>
+                  <COMPU-SCALES>
+                    <COMPU-SCALE>
+                      <LOWER-LIMIT>0</LOWER-LIMIT>
+                      <UPPER-LIMIT>0</UPPER-LIMIT>
+                      <COMPU-CONST>
+                        <VT>OFF</VT>
+                      </COMPU-CONST>
+                    </COMPU-SCALE>
+                    <COMPU-SCALE>
+                      <LOWER-LIMIT>1</LOWER-LIMIT>
+                      <UPPER-LIMIT>1</UPPER-LIMIT>
+                      <COMPU-CONST>
+                        <VT>RUNNING</VT>
+                      </COMPU-CONST>
+                    </COMPU-SCALE>
+                    <COMPU-SCALE>
+                      <LOWER-LIMIT>2</LOWER-LIMIT>
+                      <UPPER-LIMIT>2</UPPER-LIMIT>
+                      <COMPU-CONST>
+                        <VT>CRANKING</VT>
+                      </COMPU-CONST>
+                    </COMPU-SCALE>
+                  </COMPU-SCALES>
+                  <COMPU-DEFAULT-VALUE>
+                    <VT>UNKNOWN</VT>
+                  </COMPU-DEFAULT-VALUE>
+                </COMPU-INTERNAL-TO-PHYS>
+              </COMPU-METHOD>
+            </DATA-OBJECT-PROP>
+          </DATA-OBJECT-PROPS>
+          <DTC-DOPS>
+            <DTC-DOP ID="DTCDOP_1">
+              <SHORT-NAME>DTC_DOP</SHORT-NAME>
+              <DIAG-CODED-TYPE xsi:type="STANDARD-LENGTH-TYPE" BASE-DATA-TYPE="A_UINT32">
+                <BIT-LENGTH>24</BIT-LENGTH>
+              </DIAG-CODED-TYPE>
+              <DTCS>
+                <DTC ID="DTC_P0100">
+                  <SHORT-NAME>P0100</SHORT-NAME>
+                  <TROUBLE-CODE>256</TROUBLE-CODE>
+                  <DISPLAY-TROUBLE-CODE>P0100</DISPLAY-TROUBLE-CODE>
+                  <TEXT>
+                    <TI>Mass Air Flow Circuit Malfunction</TI>
+                  </TEXT>
+                  <LEVEL>2</LEVEL>
+                </DTC>
+                <DTC ID="DTC_P0200">
+                  <SHORT-NAME>P0200</SHORT-NAME>
+                  <TROUBLE-CODE>512</TROUBLE-CODE>
+                  <DISPLAY-TROUBLE-CODE>P0200</DISPLAY-TROUBLE-CODE>
+                  <TEXT>
+                    <TI>Injector Circuit Malfunction</TI>
+                  </TEXT>
+                  <LEVEL>1</LEVEL>
+                </DTC>
+              </DTCS>
+            </DTC-DOP>
+          </DTC-DOPS>
+          <UNIT-SPEC>
+            <UNITS>
+              <UNIT ID="UNIT_kmh">
+                <SHORT-NAME>km_h</SHORT-NAME>
+                <DISPLAY-NAME>km/h</DISPLAY-NAME>
+              </UNIT>
+            </UNITS>
+            <PHYSICAL-DIMENSIONS>
+              <PHYSICAL-DIMENSION ID="PDIM_Speed">
+                <SHORT-NAME>Speed</SHORT-NAME>
+                <LENGTH-EXP>1</LENGTH-EXP>
+                <TIME-EXP>-1</TIME-EXP>
+              </PHYSICAL-DIMENSION>
+            </PHYSICAL-DIMENSIONS>
+          </UNIT-SPEC>
+        </DIAG-DATA-DICTIONARY-SPEC>
+        <DIAG-COMMS>
+          <DIAG-SERVICE ID="DS_ReadSpeed" SEMANTIC="DATA-READ">
+            <SHORT-NAME>Read_VehicleSpeed</SHORT-NAME>
+            <LONG-NAME>Read Vehicle Speed</LONG-NAME>
+            <AUDIENCE IS-DEVELOPMENT="true" IS-AFTERSALES="true"/>
+            <REQUEST-REF ID-REF="RQ_ReadSpeed"/>
+            <POS-RESPONSE-REFS>
+              <POS-RESPONSE-REF ID-REF="PR_ReadSpeed"/>
+            </POS-RESPONSE-REFS>
+            <NEG-RESPONSE-REFS>
+              <NEG-RESPONSE-REF ID-REF="NR_General"/>
+            </NEG-RESPONSE-REFS>
+          </DIAG-SERVICE>
+          <SINGLE-ECU-JOB ID="SEJ_Flash">
+            <SHORT-NAME>FlashECU</SHORT-NAME>
+            <PROG-CODES>
+              <PROG-CODE>
+                <CODE-FILE>flash.jar</CODE-FILE>
+                <SYNTAX>JAR</SYNTAX>
+                <ENTRYPOINT>com.test.Flash.run</ENTRYPOINT>
+              </PROG-CODE>
+            </PROG-CODES>
+            <INPUT-PARAMS>
+              <INPUT-PARAM SEMANTIC="DATA">
+                <SHORT-NAME>FilePath</SHORT-NAME>
+              </INPUT-PARAM>
+            </INPUT-PARAMS>
+            <OUTPUT-PARAMS>
+              <OUTPUT-PARAM>
+                <SHORT-NAME>Status</SHORT-NAME>
+              </OUTPUT-PARAM>
+            </OUTPUT-PARAMS>
+          </SINGLE-ECU-JOB>
+        </DIAG-COMMS>
+        <REQUESTS>
+          <REQUEST ID="RQ_ReadSpeed">
+            <SHORT-NAME>RQ_ReadSpeed</SHORT-NAME>
+            <BYTE-SIZE>3</BYTE-SIZE>
+            <PARAMS>
+              <PARAM xsi:type="CODED-CONST" SEMANTIC="SERVICE-ID">
+                <SHORT-NAME>SID</SHORT-NAME>
+                <BYTE-POSITION>0</BYTE-POSITION>
+                <CODED-VALUE>34</CODED-VALUE>
+                <DIAG-CODED-TYPE xsi:type="STANDARD-LENGTH-TYPE" BASE-DATA-TYPE="A_UINT32">
+                  <BIT-LENGTH>8</BIT-LENGTH>
+                </DIAG-CODED-TYPE>
+              </PARAM>
+              <PARAM xsi:type="CODED-CONST" SEMANTIC="ID">
+                <SHORT-NAME>DID</SHORT-NAME>
+                <BYTE-POSITION>1</BYTE-POSITION>
+                <CODED-VALUE>256</CODED-VALUE>
+                <DIAG-CODED-TYPE xsi:type="STANDARD-LENGTH-TYPE" BASE-DATA-TYPE="A_UINT32">
+                  <BIT-LENGTH>16</BIT-LENGTH>
+                </DIAG-CODED-TYPE>
+              </PARAM>
+            </PARAMS>
+          </REQUEST>
+        </REQUESTS>
+        <POS-RESPONSES>
+          <POS-RESPONSE ID="PR_ReadSpeed">
+            <SHORT-NAME>PR_ReadSpeed</SHORT-NAME>
+            <BYTE-SIZE>5</BYTE-SIZE>
+            <PARAMS>
+              <PARAM xsi:type="CODED-CONST" SEMANTIC="SERVICE-ID">
+                <SHORT-NAME>SID</SHORT-NAME>
+                <BYTE-POSITION>0</BYTE-POSITION>
+                <CODED-VALUE>98</CODED-VALUE>
+                <DIAG-CODED-TYPE xsi:type="STANDARD-LENGTH-TYPE" BASE-DATA-TYPE="A_UINT32">
+                  <BIT-LENGTH>8</BIT-LENGTH>
+                </DIAG-CODED-TYPE>
+              </PARAM>
+              <PARAM xsi:type="VALUE" SEMANTIC="DATA">
+                <SHORT-NAME>VehicleSpeed</SHORT-NAME>
+                <BYTE-POSITION>3</BYTE-POSITION>
+                <DOP-REF ID-REF="DOP_VehicleSpeed"/>
+              </PARAM>
+            </PARAMS>
+          </POS-RESPONSE>
+        </POS-RESPONSES>
+        <NEG-RESPONSES>
+          <NEG-RESPONSE ID="NR_General">
+            <SHORT-NAME>NR_General</SHORT-NAME>
+            <PARAMS>
+              <PARAM xsi:type="CODED-CONST" SEMANTIC="SERVICE-ID">
+                <SHORT-NAME>SID</SHORT-NAME>
+                <BYTE-POSITION>0</BYTE-POSITION>
+                <CODED-VALUE>127</CODED-VALUE>
+                <DIAG-CODED-TYPE xsi:type="STANDARD-LENGTH-TYPE" BASE-DATA-TYPE="A_UINT32">
+                  <BIT-LENGTH>8</BIT-LENGTH>
+                </DIAG-CODED-TYPE>
+              </PARAM>
+              <PARAM xsi:type="NRC-CONST">
+                <SHORT-NAME>NRC</SHORT-NAME>
+                <BYTE-POSITION>2</BYTE-POSITION>
+                <CODED-VALUES>
+                  <CODED-VALUE>18</CODED-VALUE>
+                  <CODED-VALUE>19</CODED-VALUE>
+                  <CODED-VALUE>49</CODED-VALUE>
+                </CODED-VALUES>
+                <DIAG-CODED-TYPE xsi:type="STANDARD-LENGTH-TYPE" BASE-DATA-TYPE="A_UINT32">
+                  <BIT-LENGTH>8</BIT-LENGTH>
+                </DIAG-CODED-TYPE>
+              </PARAM>
+            </PARAMS>
+          </NEG-RESPONSE>
+        </NEG-RESPONSES>
+        <STATE-CHARTS>
+          <STATE-CHART ID="SC_Session">
+            <SHORT-NAME>SessionState</SHORT-NAME>
+            <START-STATE-SNREF SHORT-NAME="Default"/>
+            <STATES>
+              <STATE ID="S_Default">
+                <SHORT-NAME>Default</SHORT-NAME>
+              </STATE>
+              <STATE ID="S_Extended">
+                <SHORT-NAME>Extended</SHORT-NAME>
+              </STATE>
+            </STATES>
+            <STATE-TRANSITIONS>
+              <STATE-TRANSITION ID="ST_1">
+                <SHORT-NAME>DefaultToExtended</SHORT-NAME>
+                <SOURCE-SNREF SHORT-NAME="Default"/>
+                <TARGET-SNREF SHORT-NAME="Extended"/>
+              </STATE-TRANSITION>
+            </STATE-TRANSITIONS>
+          </STATE-CHART>
+        </STATE-CHARTS>
+        <SDGS>
+          <SDG GID="TestGroup">
+            <SD SI="Key1">Value1</SD>
+            <SD SI="Key2">Value2</SD>
+          </SDG>
+        </SDGS>
+      </BASE-VARIANT>
+    </BASE-VARIANTS>
+    <ECU-VARIANTS>
+      <ECU-VARIANT ID="EV_TestECU_HW1">
+        <SHORT-NAME>TestECU_HW1</SHORT-NAME>
+        <PARENT-REFS>
+          <PARENT-REF ID-REF="BV_TestECU" DOCTYPE="LAYER">
+            <NOT-INHERITED-DIAG-COMMS>
+              <NOT-INHERITED-DIAG-COMM>
+                <DIAG-COMM-SNREF SHORT-NAME="FlashECU"/>
+              </NOT-INHERITED-DIAG-COMM>
+            </NOT-INHERITED-DIAG-COMMS>
+          </PARENT-REF>
+        </PARENT-REFS>
+        <ECU-VARIANT-PATTERNS>
+          <ECU-VARIANT-PATTERN>
+            <MATCHING-PARAMETERS>
+              <MATCHING-PARAMETER>
+                <EXPECTED-VALUE>HW1</EXPECTED-VALUE>
+                <DIAG-COMM-SNREF SHORT-NAME="ReadHardwareVersion"/>
+                <OUT-PARAM-SNREF SHORT-NAME="HardwareVersion"/>
+              </MATCHING-PARAMETER>
+            </MATCHING-PARAMETERS>
+          </ECU-VARIANT-PATTERN>
+        </ECU-VARIANT-PATTERNS>
+      </ECU-VARIANT>
+    </ECU-VARIANTS>
+  </DIAG-LAYER-CONTAINER>
+</ODX>
