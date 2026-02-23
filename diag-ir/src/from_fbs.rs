@@ -906,14 +906,31 @@ fn convert_com_param(cp: &dataformat::ComParam<'_>) -> ComParam {
 }
 
 fn convert_complex_value(cv: &dataformat::ComplexValue<'_>) -> ComplexValue {
-    ComplexValue {
-        entries: cv.entries()
-            .map(|v| (0..v.len()).map(|_i| {
-                // ComplexValue entries are a union - simplified for now
-                SimpleOrComplexValue::Simple(SimpleValue { value: String::new() })
-            }).collect())
-            .unwrap_or_default(),
-    }
+    let entries = cv.entries_type()
+        .map(|types| {
+            let len = types.len();
+            (0..len).map(|i| {
+                match types.get(i) {
+                    dataformat::SimpleOrComplexValueEntry::SimpleValue => {
+                        if let Some(sv) = cv.entries_item_as_simple_value(i) {
+                            SimpleOrComplexValue::Simple(SimpleValue { value: s(sv.value()) })
+                        } else {
+                            SimpleOrComplexValue::Simple(SimpleValue { value: String::new() })
+                        }
+                    }
+                    dataformat::SimpleOrComplexValueEntry::ComplexValue => {
+                        if let Some(nested) = cv.entries_item_as_complex_value(i) {
+                            SimpleOrComplexValue::Complex(Box::new(convert_complex_value(&nested)))
+                        } else {
+                            SimpleOrComplexValue::Simple(SimpleValue { value: String::new() })
+                        }
+                    }
+                    _ => SimpleOrComplexValue::Simple(SimpleValue { value: String::new() }),
+                }
+            }).collect()
+        })
+        .unwrap_or_default();
+    ComplexValue { entries }
 }
 
 fn convert_single_ecu_job(sej: &dataformat::SingleEcuJob<'_>) -> SingleEcuJob {

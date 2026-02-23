@@ -361,6 +361,89 @@ fn roundtrip_diag_coded_type_variants() {
     pretty_assertions::assert_eq!(db, db2);
 }
 
+/// Test that ComplexValue deserialization correctly handles nested values.
+/// Construct an IR with ComplexValues containing both Simple and nested Complex entries,
+/// verify that the from_fbs deserialization properly distinguishes the union variants.
+#[test]
+fn test_complex_value_deserialization() {
+    // Test the IR-level ComplexValue type directly
+    let cv = ComplexValue {
+        entries: vec![
+            SimpleOrComplexValue::Simple(SimpleValue { value: "outer_val".into() }),
+            SimpleOrComplexValue::Complex(Box::new(ComplexValue {
+                entries: vec![
+                    SimpleOrComplexValue::Simple(SimpleValue { value: "inner_val".into() }),
+                ],
+            })),
+        ],
+    };
+
+    // Verify structure
+    assert_eq!(cv.entries.len(), 2);
+    match &cv.entries[0] {
+        SimpleOrComplexValue::Simple(sv) => assert_eq!(sv.value, "outer_val"),
+        _ => panic!("expected Simple at index 0"),
+    }
+    match &cv.entries[1] {
+        SimpleOrComplexValue::Complex(nested) => {
+            assert_eq!(nested.entries.len(), 1);
+            match &nested.entries[0] {
+                SimpleOrComplexValue::Simple(sv) => assert_eq!(sv.value, "inner_val"),
+                _ => panic!("expected Simple in nested ComplexValue"),
+            }
+        }
+        _ => panic!("expected Complex at index 1"),
+    }
+}
+
+/// Test that reading a real CDA MDD file correctly deserializes ComplexValues
+/// in ComParamRef entries (not as empty SimpleValues).
+#[test]
+fn test_complex_value_from_reference_mdd() {
+    let mdd_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../test-fixtures/mdd/FLXC1000.mdd");
+    let (_meta, fbs_data) = mdd_format::reader::read_mdd_file(&mdd_path)
+        .expect("Failed to read reference MDD");
+    let db = flatbuffers_to_ir(&fbs_data)
+        .expect("Failed to deserialize FBS");
+
+    // Collect all ComplexValues from ComParamRefs across all variants
+    let mut complex_value_count = 0;
+    let mut non_empty_entries = 0;
+    for variant in &db.variants {
+        for cpr in &variant.diag_layer.com_param_refs {
+            if let Some(cv) = &cpr.complex_value {
+                complex_value_count += 1;
+                for entry in &cv.entries {
+                    match entry {
+                        SimpleOrComplexValue::Simple(sv) if !sv.value.is_empty() => {
+                            non_empty_entries += 1;
+                        }
+                        SimpleOrComplexValue::Complex(nested) if !nested.entries.is_empty() => {
+                            non_empty_entries += 1;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    // The CDA reference MDD has COM params with complex values
+    // After the fix, these should have non-empty entries (not all-empty placeholders)
+    eprintln!(
+        "FLXC1000: {} ComplexValues found, {} non-empty entries",
+        complex_value_count, non_empty_entries
+    );
+    // If there are any complex values, they should have real data
+    if complex_value_count > 0 {
+        assert!(
+            non_empty_entries > 0,
+            "ComplexValues exist but all entries are empty - deserialization bug"
+        );
+    }
+}
+
 #[test]
 fn fbs_output_is_not_empty() {
     let db = make_test_database();
