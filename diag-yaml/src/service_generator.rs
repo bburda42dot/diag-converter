@@ -34,6 +34,8 @@ impl<'a> ServiceGenerator<'a> {
         result.extend(self.generate_diagnostic_session_control());
         result.extend(self.generate_security_access());
         result.extend(self.generate_ecu_reset());
+        result.extend(self.generate_authentication());
+        result.extend(self.generate_communication_control());
         result.extend(self.generate_tester_present());
         result.extend(self.generate_control_dtc_setting());
         result.extend(self.generate_clear_diagnostic_information());
@@ -218,6 +220,72 @@ impl<'a> ServiceGenerator<'a> {
                     )
                 })
                 .collect()
+        }
+    }
+
+    // --- Authentication and Communication Control (Task 12c) ---
+
+    /// Authentication (0x29): one service per configured subfunction.
+    pub fn generate_authentication(&self) -> Vec<DiagService> {
+        let entry = match &self.services.authentication {
+            Some(e) if e.enabled => e,
+            _ => return vec![],
+        };
+
+        let subfuncs = match &entry.subfunctions {
+            Some(serde_yaml::Value::Mapping(map)) => map,
+            _ => return vec![],
+        };
+
+        subfuncs.iter().filter_map(|(k, v)| {
+            let name = k.as_str()?;
+            let subfunc = yaml_value_to_u8(v);
+            Some(build_service(
+                &format!("Authentication_{name}"),
+                "AUTHENTICATION",
+                vec![
+                    coded_const_param("SID", 0, 8, "0x29"),
+                    coded_const_param("SubFunction", 1, 8, &format!("0x{subfunc:02X}")),
+                    value_param("AuthenticationData", 2, 0), // variable length
+                ],
+                vec![
+                    coded_const_param("SID", 0, 8, "0x69"),
+                    matching_request_param("SubFunction_Echo", 1, 1),
+                    value_param("ReturnParameter", 2, 8),
+                    value_param("AuthReturnValue", 3, 0), // variable length
+                ],
+            ))
+        }).collect()
+    }
+
+    /// CommunicationControl (0x28): one service per configured subfunction.
+    pub fn generate_communication_control(&self) -> Vec<DiagService> {
+        let entry = match &self.services.communication_control {
+            Some(e) if e.enabled => e,
+            _ => return vec![],
+        };
+
+        match &entry.subfunctions {
+            Some(serde_yaml::Value::Mapping(map)) => {
+                map.iter().filter_map(|(k, v)| {
+                    let name = k.as_str()?;
+                    let subfunc = yaml_value_to_u8(v);
+                    Some(comm_control_service(name, subfunc))
+                }).collect()
+            }
+            Some(serde_yaml::Value::Sequence(seq)) => {
+                seq.iter().map(|v| {
+                    let subfunc = yaml_value_to_u8(v);
+                    let name = comm_control_name(subfunc);
+                    comm_control_service(&name, subfunc)
+                }).collect()
+            }
+            _ => {
+                // Default subtypes
+                DEFAULT_COMM_CONTROL_SUBTYPES.iter().map(|(name, subfunc)| {
+                    comm_control_service(name, *subfunc)
+                }).collect()
+            }
         }
     }
 
@@ -419,6 +487,37 @@ fn matching_request_param(name: &str, byte_pos: u32, byte_length: u32) -> Param 
     }
 }
 
+const DEFAULT_COMM_CONTROL_SUBTYPES: &[(&str, u8)] = &[
+    ("enableRxAndTx", 0x00),
+    ("enableRxAndDisableTx", 0x01),
+    ("disableRxAndEnableTx", 0x02),
+    ("disableRxAndTx", 0x03),
+];
+
+fn comm_control_name(subfunc: u8) -> String {
+    DEFAULT_COMM_CONTROL_SUBTYPES
+        .iter()
+        .find(|(_, v)| *v == subfunc)
+        .map(|(name, _)| name.to_string())
+        .unwrap_or_else(|| format!("0x{subfunc:02X}"))
+}
+
+fn comm_control_service(name: &str, subfunc: u8) -> DiagService {
+    build_service(
+        &format!("CommunicationControl_{name}"),
+        "COMMUNICATION-CONTROL",
+        vec![
+            coded_const_param("SID", 0, 8, "0x28"),
+            coded_const_param("SubFunction", 1, 8, &format!("0x{subfunc:02X}")),
+            value_param("CommunicationType", 2, 8),
+        ],
+        vec![
+            coded_const_param("SID", 0, 8, "0x68"),
+            matching_request_param("SubFunction_Echo", 1, 1),
+        ],
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -590,5 +689,84 @@ mod tests {
         let gen = ServiceGenerator::new(&svc);
         let services = gen.generate_ecu_reset();
         assert_eq!(services.len(), 3); // hardReset, keyOffOnReset, softReset
+    }
+
+    #[test]
+    fn test_authentication_from_subfunctions() {
+        let svc = services_with(|s| {
+            let mut entry = enabled_entry();
+            let mut map = serde_yaml::Mapping::new();
+            map.insert("deAuthenticate".into(), serde_yaml::Value::Number(0.into()));
+            map.insert("verifyCertificateUnidirectional".into(), serde_yaml::Value::Number(1.into()));
+            map.insert("proofOfOwnership".into(), serde_yaml::Value::Number(3.into()));
+            entry.subfunctions = Some(serde_yaml::Value::Mapping(map));
+            s.authentication = Some(entry);
+        });
+        let gen = ServiceGenerator::new(&svc);
+        let services = gen.generate_authentication();
+        assert_eq!(services.len(), 3);
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "Authentication_deAuthenticate"));
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "Authentication_proofOfOwnership"));
+        // Verify SID
+        let req = services[0].request.as_ref().unwrap();
+        if let Some(ParamData::CodedConst { coded_value, .. }) = &req.params[0].specific_data {
+            assert_eq!(coded_value, "0x29");
+        }
+    }
+
+    #[test]
+    fn test_authentication_disabled() {
+        let svc = services_with(|_| {}); // no authentication entry
+        let gen = ServiceGenerator::new(&svc);
+        assert!(gen.generate_authentication().is_empty());
+    }
+
+    #[test]
+    fn test_communication_control_from_sequence() {
+        let svc = services_with(|s| {
+            let mut entry = enabled_entry();
+            entry.subfunctions = Some(serde_yaml::Value::Sequence(vec![
+                serde_yaml::Value::Number(0.into()),
+                serde_yaml::Value::Number(1.into()),
+                serde_yaml::Value::Number(3.into()),
+            ]));
+            s.communication_control = Some(entry);
+        });
+        let gen = ServiceGenerator::new(&svc);
+        let services = gen.generate_communication_control();
+        assert_eq!(services.len(), 3);
+        assert_eq!(services[0].diag_comm.short_name, "CommunicationControl_enableRxAndTx");
+        assert_eq!(services[1].diag_comm.short_name, "CommunicationControl_enableRxAndDisableTx");
+        assert_eq!(services[2].diag_comm.short_name, "CommunicationControl_disableRxAndTx");
+        // Verify SID
+        let req = services[0].request.as_ref().unwrap();
+        if let Some(ParamData::CodedConst { coded_value, .. }) = &req.params[0].specific_data {
+            assert_eq!(coded_value, "0x28");
+        }
+    }
+
+    #[test]
+    fn test_communication_control_defaults() {
+        let svc = services_with(|s| s.communication_control = Some(enabled_entry()));
+        let gen = ServiceGenerator::new(&svc);
+        let services = gen.generate_communication_control();
+        assert_eq!(services.len(), 4); // 4 default subtypes
+    }
+
+    #[test]
+    fn test_communication_control_from_map() {
+        let svc = services_with(|s| {
+            let mut entry = enabled_entry();
+            let mut map = serde_yaml::Mapping::new();
+            map.insert("enableRxAndTx".into(), serde_yaml::Value::Number(0.into()));
+            map.insert("disableRxAndTx".into(), serde_yaml::Value::Number(3.into()));
+            entry.subfunctions = Some(serde_yaml::Value::Mapping(map));
+            s.communication_control = Some(entry);
+        });
+        let gen = ServiceGenerator::new(&svc);
+        let services = gen.generate_communication_control();
+        assert_eq!(services.len(), 2);
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "CommunicationControl_enableRxAndTx"));
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "CommunicationControl_disableRxAndTx"));
     }
 }
