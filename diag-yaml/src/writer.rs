@@ -163,6 +163,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         annotations: None,
         x_oem: None,
         ecu_jobs,
+        memory: db.memory.as_ref().map(ir_memory_to_yaml),
     }
 }
 
@@ -440,5 +441,68 @@ fn ir_job_to_yaml(job: &SingleEcuJob) -> EcuJob {
         access: None,
         audience: None,
         annotations: None,
+    }
+}
+
+fn ir_memory_to_yaml(mc: &MemoryConfig) -> YamlMemoryConfig {
+    let default_address_format = Some(YamlAddressFormat {
+        address_bytes: mc.default_address_format.address_bytes,
+        length_bytes: mc.default_address_format.length_bytes,
+    });
+
+    let regions: BTreeMap<String, YamlMemoryRegion> = mc.regions.iter().map(|r| {
+        let session = r.session.as_ref().map(|sessions| {
+            if sessions.len() == 1 {
+                serde_yaml::Value::String(sessions[0].clone())
+            } else {
+                serde_yaml::Value::Sequence(sessions.iter().map(|s| serde_yaml::Value::String(s.clone())).collect())
+            }
+        });
+        (r.name.clone(), YamlMemoryRegion {
+            name: r.name.clone(),
+            description: r.description.clone(),
+            start: r.start_address,
+            end: r.start_address + r.size,
+            access: match r.access {
+                MemoryAccess::Read => "read".into(),
+                MemoryAccess::Write => "write".into(),
+                MemoryAccess::ReadWrite => "read_write".into(),
+                MemoryAccess::Execute => "execute".into(),
+            },
+            address_format: r.address_format.map(|af| YamlAddressFormat {
+                address_bytes: af.address_bytes, length_bytes: af.length_bytes,
+            }),
+            security_level: r.security_level.clone(),
+            session,
+        })
+    }).collect();
+
+    let data_blocks: BTreeMap<String, YamlDataBlock> = mc.data_blocks.iter().map(|b| {
+        (b.name.clone(), YamlDataBlock {
+            name: b.name.clone(),
+            description: b.description.clone(),
+            block_type: match b.block_type {
+                DataBlockType::Download => "download".into(),
+                DataBlockType::Upload => "upload".into(),
+            },
+            memory_address: b.memory_address,
+            memory_size: b.memory_size,
+            format: match b.format {
+                DataBlockFormat::Raw => "raw".into(),
+                DataBlockFormat::Encrypted => "encrypted".into(),
+                DataBlockFormat::Compressed => "compressed".into(),
+                DataBlockFormat::EncryptedCompressed => "encrypted_compressed".into(),
+            },
+            max_block_length: b.max_block_length,
+            security_level: b.security_level.clone(),
+            session: b.session.clone(),
+            checksum_type: b.checksum_type.clone(),
+        })
+    }).collect();
+
+    YamlMemoryConfig {
+        default_address_format,
+        regions: if regions.is_empty() { None } else { Some(regions) },
+        data_blocks: if data_blocks.is_empty() { None } else { Some(data_blocks) },
     }
 }

@@ -91,6 +91,7 @@ fn odx_to_ir(odx: &Odx, index: &OdxIndex) -> Result<DiagDatabase, OdxParseError>
         variants,
         functional_groups,
         dtcs: all_dtcs,
+        memory: None,
     })
 }
 

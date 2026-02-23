@@ -105,3 +105,85 @@ fn test_writable_did_roundtrip() {
         "writable DID count must be preserved through IR -> YAML -> IR roundtrip"
     );
 }
+
+#[test]
+fn test_memory_config_roundtrip() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  id: "MEM_ECU"
+  name: "MemoryTestECU"
+memory:
+  default_address_format:
+    address_bytes: 4
+    length_bytes: 2
+  regions:
+    flash:
+      name: Flash
+      description: "Main flash region"
+      start: 0x08000000
+      end: 0x080FFFFF
+      access: read_write
+      security_level: "level_1"
+      session: programming
+    calibration:
+      name: Calibration
+      start: 0x20000000
+      end: 0x2000FFFF
+      access: read
+      session:
+        - default
+        - extended
+  data_blocks:
+    firmware:
+      name: FirmwareUpdate
+      description: "ECU firmware download"
+      type: download
+      memory_address: 0x08000000
+      memory_size: 0x100000
+      format: compressed
+      max_block_length: 0xFFF
+      session: programming
+"#;
+
+    let db = parse_yaml(yaml).unwrap();
+    let mem = db.memory.as_ref().expect("memory config should be parsed");
+
+    // Verify parsed structure
+    assert_eq!(mem.default_address_format.address_bytes, 4);
+    assert_eq!(mem.default_address_format.length_bytes, 2);
+    assert_eq!(mem.regions.len(), 2);
+    assert_eq!(mem.data_blocks.len(), 1);
+
+    // Check a region
+    let flash = mem.regions.iter().find(|r| r.name == "Flash").unwrap();
+    assert_eq!(flash.start_address, 0x08000000);
+    assert_eq!(flash.size, 0x000FFFFF);
+    assert_eq!(flash.access, diag_ir::MemoryAccess::ReadWrite);
+    assert_eq!(flash.security_level.as_deref(), Some("level_1"));
+    assert_eq!(flash.session.as_deref(), Some(&["programming".to_string()][..]));
+
+    // Check multi-session region
+    let cal = mem.regions.iter().find(|r| r.name == "Calibration").unwrap();
+    assert_eq!(cal.session.as_ref().unwrap().len(), 2);
+
+    // Check data block
+    let fw = &mem.data_blocks[0];
+    assert_eq!(fw.name, "FirmwareUpdate");
+    assert_eq!(fw.block_type, diag_ir::DataBlockType::Download);
+    assert_eq!(fw.format, diag_ir::DataBlockFormat::Compressed);
+
+    // Roundtrip: write back to YAML and re-parse
+    let yaml_out = write_yaml(&db).unwrap();
+    let db2 = parse_yaml(&yaml_out).unwrap();
+    let mem2 = db2.memory.as_ref().expect("memory config should survive roundtrip");
+
+    assert_eq!(mem.default_address_format, mem2.default_address_format);
+    assert_eq!(mem.regions.len(), mem2.regions.len());
+    assert_eq!(mem.data_blocks.len(), mem2.data_blocks.len());
+
+    let flash2 = mem2.regions.iter().find(|r| r.name == "Flash").unwrap();
+    assert_eq!(flash.start_address, flash2.start_address);
+    assert_eq!(flash.size, flash2.size);
+    assert_eq!(flash.access, flash2.access);
+}

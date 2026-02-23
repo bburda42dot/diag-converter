@@ -13,6 +13,7 @@ pub struct DiagDatabase {
     pub variants: Vec<Variant>,
     pub functional_groups: Vec<FunctionalGroup>,
     pub dtcs: Vec<Dtc>,
+    pub memory: Option<MemoryConfig>,
 }
 
 // --- Variant system ---
@@ -978,4 +979,83 @@ pub enum ComParamUsage {
     EcuComm,
     Application,
     Tester,
+}
+
+// --- Memory configuration ---
+
+/// Memory configuration for the ECU (ISO 14229 memory operations)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MemoryConfig {
+    pub default_address_format: AddressFormat,
+    pub regions: Vec<MemoryRegion>,
+    pub data_blocks: Vec<DataBlock>,
+}
+
+/// Address and length format for memory operations
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AddressFormat {
+    pub address_bytes: u8,
+    pub length_bytes: u8,
+}
+
+impl Default for AddressFormat {
+    fn default() -> Self {
+        Self { address_bytes: 4, length_bytes: 4 }
+    }
+}
+
+/// Memory access permissions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum MemoryAccess {
+    #[default]
+    Read,
+    Write,
+    ReadWrite,
+    Execute,
+}
+
+/// A memory region in the ECU
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MemoryRegion {
+    pub name: String,
+    pub description: Option<String>,
+    pub start_address: u64,
+    pub size: u64,
+    pub access: MemoryAccess,
+    pub address_format: Option<AddressFormat>,
+    pub security_level: Option<String>,
+    pub session: Option<Vec<String>>,
+}
+
+/// Type of data block transfer
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum DataBlockType {
+    #[default]
+    Download,
+    Upload,
+}
+
+/// Data format/compression for block transfers
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum DataBlockFormat {
+    #[default]
+    Raw,
+    Encrypted,
+    Compressed,
+    EncryptedCompressed,
+}
+
+/// A data block for transfer operations (RequestDownload/RequestUpload)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DataBlock {
+    pub name: String,
+    pub description: Option<String>,
+    pub block_type: DataBlockType,
+    pub memory_address: u64,
+    pub memory_size: u64,
+    pub format: DataBlockFormat,
+    pub max_block_length: Option<u64>,
+    pub security_level: Option<String>,
+    pub session: Option<String>,
+    pub checksum_type: Option<String>,
 }

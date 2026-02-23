@@ -196,6 +196,7 @@ fn make_test_database() -> DiagDatabase {
             sdgs: None,
             is_temporary: false,
         }],
+        memory: None,
     }
 }
 

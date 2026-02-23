@@ -46,6 +46,7 @@ pub fn flatbuffers_to_ir(fbs_data: &[u8]) -> Result<DiagDatabase, ConversionErro
         variants,
         functional_groups,
         dtcs,
+        memory: None,
     })
 }
 

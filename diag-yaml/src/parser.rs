@@ -140,6 +140,8 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         parent_refs: vec![],
     };
 
+    let memory = doc.memory.as_ref().map(parse_memory_config);
+
     Ok(DiagDatabase {
         version,
         ecu_name,
@@ -148,6 +150,7 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         variants: vec![variant],
         functional_groups: vec![],
         dtcs,
+        memory,
     })
 }
 
@@ -888,4 +891,64 @@ fn uint16_coded_type() -> DiagCodedType {
             condensed: false,
         }),
     }
+}
+
+// --- Memory config ---
+
+fn parse_memory_config(mc: &YamlMemoryConfig) -> MemoryConfig {
+    let default_address_format = mc.default_address_format.as_ref()
+        .map(|af| AddressFormat { address_bytes: af.address_bytes, length_bytes: af.length_bytes })
+        .unwrap_or_default();
+
+    let regions = mc.regions.as_ref().map(|regs| {
+        regs.values().map(|r| {
+            let session = r.session.as_ref().and_then(|s| match s {
+                serde_yaml::Value::String(s) => Some(vec![s.clone()]),
+                serde_yaml::Value::Sequence(seq) => Some(seq.iter().filter_map(|v| v.as_str().map(String::from)).collect()),
+                _ => None,
+            });
+            MemoryRegion {
+                name: r.name.clone(),
+                description: r.description.clone(),
+                start_address: r.start,
+                size: r.end.saturating_sub(r.start),
+                access: match r.access.as_str() {
+                    "write" => MemoryAccess::Write,
+                    "read_write" => MemoryAccess::ReadWrite,
+                    "execute" => MemoryAccess::Execute,
+                    _ => MemoryAccess::Read,
+                },
+                address_format: r.address_format.as_ref().map(|af| AddressFormat {
+                    address_bytes: af.address_bytes, length_bytes: af.length_bytes,
+                }),
+                security_level: r.security_level.clone(),
+                session,
+            }
+        }).collect()
+    }).unwrap_or_default();
+
+    let data_blocks = mc.data_blocks.as_ref().map(|blocks| {
+        blocks.values().map(|b| DataBlock {
+            name: b.name.clone(),
+            description: b.description.clone(),
+            block_type: match b.block_type.as_str() {
+                "upload" => DataBlockType::Upload,
+                _ => DataBlockType::Download,
+            },
+            memory_address: b.memory_address,
+            memory_size: b.memory_size,
+            format: match b.format.as_str() {
+                "encrypted" => DataBlockFormat::Encrypted,
+                "compressed" => DataBlockFormat::Compressed,
+                "encrypted_compressed" => DataBlockFormat::EncryptedCompressed,
+                _ => DataBlockFormat::Raw,
+            },
+            max_block_length: b.max_block_length,
+            security_level: b.security_level.clone(),
+            session: b.session.clone(),
+            checksum_type: b.checksum_type.clone(),
+        }).collect()
+    }).unwrap_or_default();
+
+    MemoryConfig { default_address_format, regions, data_blocks }
 }

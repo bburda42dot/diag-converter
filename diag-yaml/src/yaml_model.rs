@@ -53,6 +53,8 @@ pub struct YamlDocument {
     pub x_oem: Option<serde_yaml::Value>,
     #[serde(default)]
     pub ecu_jobs: Option<BTreeMap<String, EcuJob>>,
+    #[serde(default)]
+    pub memory: Option<YamlMemoryConfig>,
 }
 
 
@@ -625,3 +627,65 @@ pub struct JobParamDef {
     #[serde(default)]
     pub default_value: Option<serde_yaml::Value>,
 }
+
+// --- Memory configuration ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YamlMemoryConfig {
+    #[serde(default)]
+    pub default_address_format: Option<YamlAddressFormat>,
+    #[serde(default)]
+    pub regions: Option<BTreeMap<String, YamlMemoryRegion>>,
+    #[serde(default)]
+    pub data_blocks: Option<BTreeMap<String, YamlDataBlock>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YamlAddressFormat {
+    #[serde(default = "default_4")]
+    pub address_bytes: u8,
+    #[serde(default = "default_4")]
+    pub length_bytes: u8,
+}
+
+fn default_4() -> u8 { 4 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YamlMemoryRegion {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub start: u64,
+    pub end: u64,
+    pub access: String,
+    #[serde(default)]
+    pub address_format: Option<YamlAddressFormat>,
+    #[serde(default)]
+    pub security_level: Option<String>,
+    #[serde(default)]
+    pub session: Option<serde_yaml::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YamlDataBlock {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(rename = "type", default = "default_download")]
+    pub block_type: String,
+    pub memory_address: u64,
+    pub memory_size: u64,
+    #[serde(default = "default_raw")]
+    pub format: String,
+    #[serde(default)]
+    pub max_block_length: Option<u64>,
+    #[serde(default)]
+    pub security_level: Option<String>,
+    #[serde(default)]
+    pub session: Option<String>,
+    #[serde(default)]
+    pub checksum_type: Option<String>,
+}
+
+fn default_download() -> String { "download".into() }
+fn default_raw() -> String { "raw".into() }
