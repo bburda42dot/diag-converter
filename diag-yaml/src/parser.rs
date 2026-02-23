@@ -123,8 +123,26 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         }
     }
 
-    // Build SDGs from sdgs section
-    let sdgs = doc.sdgs.as_ref().map(|sdg_map| convert_sdgs(sdg_map));
+    // Build SDGs from sdgs section, plus identification metadata
+    let mut layer_sdg_vec: Vec<Sdg> = Vec::new();
+    if let Some(sdg_map) = &doc.sdgs {
+        let converted = convert_sdgs(sdg_map);
+        layer_sdg_vec.extend(converted.sdgs);
+    }
+    if let Some(ident) = &doc.identification {
+        if let Ok(ident_yaml) = serde_yaml::to_string(ident) {
+            layer_sdg_vec.push(Sdg {
+                caption_sn: "identification".into(),
+                sds: vec![SdOrSdg::Sd(Sd {
+                    value: ident_yaml,
+                    si: String::new(),
+                    ti: String::new(),
+                })],
+                si: String::new(),
+            });
+        }
+    }
+    let sdgs = if layer_sdg_vec.is_empty() { None } else { Some(Sdgs { sdgs: layer_sdg_vec }) };
 
     // Build DTCs
     let dtcs = if let Some(serde_yaml::Value::Mapping(dtc_map)) = &doc.dtcs {

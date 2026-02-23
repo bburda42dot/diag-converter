@@ -397,3 +397,27 @@ fn test_access_patterns_roundtrip() {
         "PreConditionStateRefs count should be preserved"
     );
 }
+
+#[test]
+fn test_identification_roundtrip() {
+    let content = include_str!("../../test-fixtures/yaml/example-ecm.yml");
+    let db = parse_yaml(content).unwrap();
+    let yaml_out = write_yaml(&db).unwrap();
+    let db2 = parse_yaml(&yaml_out).unwrap();
+
+    // Verify identification is stored in SDG and survives roundtrip
+    let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let base2 = db2.variants.iter().find(|v| v.is_base_variant).unwrap();
+
+    let has_ident_sdg = |layer: &diag_ir::DiagLayer| -> bool {
+        layer.sdgs.as_ref().map_or(false, |sdgs| {
+            sdgs.sdgs.iter().any(|sdg| sdg.caption_sn == "identification")
+        })
+    };
+
+    assert!(has_ident_sdg(&base.diag_layer), "Original should have identification SDG");
+    assert!(has_ident_sdg(&base2.diag_layer), "Roundtripped should have identification SDG");
+
+    // Check that the YAML output contains identification content
+    assert!(yaml_out.contains("expected_idents"), "YAML output should contain identification section");
+}

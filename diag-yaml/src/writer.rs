@@ -150,7 +150,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         state_model: layer.and_then(|l| extract_state_model_from_state_charts(&l.state_charts)),
         security: layer.and_then(|l| extract_security_from_state_charts(&l.state_charts)),
         authentication: layer.and_then(|l| extract_authentication_from_state_charts(&l.state_charts)),
-        identification: None,
+        identification: base_variant.and_then(|v| extract_identification(&v.diag_layer)),
         variants: extract_variants(db),
         services: None,
         access_patterns: base_variant.and_then(|v| extract_access_patterns(v)),
@@ -364,6 +364,21 @@ fn extract_access_pattern_name(diag_comm: &DiagComm) -> String {
 }
 
 /// Reconstruct access_patterns from PreConditionStateRef data on services.
+/// Extract identification section from DiagLayer SDG metadata.
+fn extract_identification(layer: &DiagLayer) -> Option<Identification> {
+    let sdgs = layer.sdgs.as_ref()?;
+    for sdg in &sdgs.sdgs {
+        if sdg.caption_sn == "identification" {
+            if let Some(SdOrSdg::Sd(sd)) = sdg.sds.first() {
+                if let Ok(ident) = serde_yaml::from_str::<Identification>(&sd.value) {
+                    return Some(ident);
+                }
+            }
+        }
+    }
+    None
+}
+
 fn extract_access_patterns(variant: &Variant) -> Option<BTreeMap<String, AccessPattern>> {
     let mut patterns: BTreeMap<String, AccessPattern> = BTreeMap::new();
 
