@@ -142,6 +142,19 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
             });
         }
     }
+    if let Some(comparams) = &doc.comparams {
+        if let Ok(cp_yaml) = serde_yaml::to_string(comparams) {
+            layer_sdg_vec.push(Sdg {
+                caption_sn: "comparams".into(),
+                sds: vec![SdOrSdg::Sd(Sd {
+                    value: cp_yaml,
+                    si: String::new(),
+                    ti: String::new(),
+                })],
+                si: String::new(),
+            });
+        }
+    }
     let sdgs = if layer_sdg_vec.is_empty() { None } else { Some(Sdgs { sdgs: layer_sdg_vec }) };
 
     // Build DTCs

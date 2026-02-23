@@ -421,3 +421,27 @@ fn test_identification_roundtrip() {
     // Check that the YAML output contains identification content
     assert!(yaml_out.contains("expected_idents"), "YAML output should contain identification section");
 }
+
+#[test]
+fn test_comparams_roundtrip() {
+    let content = include_str!("../../test-fixtures/yaml/example-ecm.yml");
+    let db = parse_yaml(content).unwrap();
+    let yaml_out = write_yaml(&db).unwrap();
+    let db2 = parse_yaml(&yaml_out).unwrap();
+
+    let has_comparams_sdg = |layer: &diag_ir::DiagLayer| -> bool {
+        layer.sdgs.as_ref().map_or(false, |sdgs| {
+            sdgs.sdgs.iter().any(|sdg| sdg.caption_sn == "comparams")
+        })
+    };
+
+    let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let base2 = db2.variants.iter().find(|v| v.is_base_variant).unwrap();
+
+    assert!(has_comparams_sdg(&base.diag_layer), "Original should have comparams SDG");
+    assert!(has_comparams_sdg(&base2.diag_layer), "Roundtripped should have comparams SDG");
+
+    // Verify YAML output contains comparams content
+    assert!(yaml_out.contains("comparams"), "YAML output should contain comparams section");
+    assert!(yaml_out.contains("P2_Client"), "YAML output should contain P2_Client param");
+}

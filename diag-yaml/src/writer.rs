@@ -145,7 +145,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         ecu,
         audience: None,
         sdgs,
-        comparams: None,
+        comparams: base_variant.and_then(|v| extract_comparams(&v.diag_layer)),
         sessions: layer.and_then(|l| extract_sessions_from_state_charts(&l.state_charts)),
         state_model: layer.and_then(|l| extract_state_model_from_state_charts(&l.state_charts)),
         security: layer.and_then(|l| extract_security_from_state_charts(&l.state_charts)),
@@ -372,6 +372,21 @@ fn extract_identification(layer: &DiagLayer) -> Option<Identification> {
             if let Some(SdOrSdg::Sd(sd)) = sdg.sds.first() {
                 if let Ok(ident) = serde_yaml::from_str::<Identification>(&sd.value) {
                     return Some(ident);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract comparams section from DiagLayer SDG metadata.
+fn extract_comparams(layer: &DiagLayer) -> Option<YamlComParams> {
+    let sdgs = layer.sdgs.as_ref()?;
+    for sdg in &sdgs.sdgs {
+        if sdg.caption_sn == "comparams" {
+            if let Some(SdOrSdg::Sd(sd)) = sdg.sds.first() {
+                if let Ok(cp) = serde_yaml::from_str::<YamlComParams>(&sd.value) {
+                    return Some(cp);
                 }
             }
         }
