@@ -119,6 +119,15 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         vec![]
     };
 
+    // Build state charts from sessions, state_model, and security
+    let mut state_charts = Vec::new();
+    if let Some(sessions) = &doc.sessions {
+        state_charts.push(parse_sessions_to_state_chart(sessions, doc.state_model.as_ref()));
+    }
+    if let Some(security) = &doc.security {
+        state_charts.push(parse_security_to_state_chart(security));
+    }
+
     // Build the main variant containing all services
     let variant = Variant {
         diag_layer: DiagLayer {
@@ -131,7 +140,7 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
             com_param_refs: vec![],
             diag_services,
             single_ecu_jobs,
-            state_charts: vec![],
+            state_charts,
             additional_audiences: vec![],
             sdgs,
         },
@@ -951,4 +960,86 @@ fn parse_memory_config(mc: &YamlMemoryConfig) -> MemoryConfig {
     }).unwrap_or_default();
 
     MemoryConfig { default_address_format, regions, data_blocks }
+}
+
+// --- Sessions and security -> state chart ---
+
+fn yaml_value_to_u64(v: &serde_yaml::Value) -> u64 {
+    match v {
+        serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0),
+        serde_yaml::Value::String(s) => {
+            if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+                u64::from_str_radix(hex, 16).unwrap_or(0)
+            } else {
+                s.parse().unwrap_or(0)
+            }
+        }
+        _ => 0,
+    }
+}
+
+fn parse_sessions_to_state_chart(
+    sessions: &BTreeMap<String, Session>,
+    state_model: Option<&StateModel>,
+) -> StateChart {
+    let states: Vec<State> = sessions.iter().map(|(key, session)| {
+        let id = yaml_value_to_u64(&session.id);
+        State {
+            short_name: key.clone(),
+            long_name: Some(LongName {
+                value: id.to_string(),
+                ti: session.alias.clone().unwrap_or_default(),
+            }),
+        }
+    }).collect();
+
+    // Determine start state from state_model or default to "default"
+    let start_state = state_model
+        .and_then(|sm| sm.initial_state.as_ref())
+        .map(|is| is.session.clone())
+        .unwrap_or_else(|| "default".into());
+
+    // Build transitions from state_model.session_transitions
+    let state_transitions = state_model
+        .and_then(|sm| sm.session_transitions.as_ref())
+        .map(|transitions| {
+            transitions.iter().flat_map(|(from, targets)| {
+                targets.iter().map(move |to| StateTransition {
+                    short_name: format!("{from}_to_{to}"),
+                    source_short_name_ref: from.clone(),
+                    target_short_name_ref: to.clone(),
+                })
+            }).collect()
+        })
+        .unwrap_or_default();
+
+    StateChart {
+        short_name: "SessionStates".into(),
+        semantic: "SESSION".into(),
+        state_transitions,
+        start_state_short_name_ref: start_state,
+        states,
+    }
+}
+
+fn parse_security_to_state_chart(
+    security: &BTreeMap<String, SecurityLevel>,
+) -> StateChart {
+    let states: Vec<State> = security.iter().map(|(key, level)| {
+        State {
+            short_name: key.clone(),
+            long_name: Some(LongName {
+                value: level.level.to_string(),
+                ti: String::new(),
+            }),
+        }
+    }).collect();
+
+    StateChart {
+        short_name: "SecurityAccessStates".into(),
+        semantic: "SECURITY".into(),
+        state_transitions: vec![],
+        start_state_short_name_ref: String::new(),
+        states,
+    }
 }

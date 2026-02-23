@@ -187,3 +187,78 @@ memory:
     assert_eq!(flash.size, flash2.size);
     assert_eq!(flash.access, flash2.access);
 }
+
+#[test]
+fn test_sessions_state_model_security_roundtrip() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  id: "SC_ECU"
+  name: "StateChartECU"
+sessions:
+  default:
+    id: 1
+    alias: "DS"
+  extended:
+    id: 3
+    alias: "EXTDS"
+  programming:
+    id: 2
+state_model:
+  initial_state:
+    session: default
+  session_transitions:
+    default:
+      - extended
+      - programming
+    extended:
+      - default
+security:
+  level_1:
+    level: 1
+    seed_size: 4
+    key_size: 4
+  level_2:
+    level: 2
+    seed_size: 8
+    key_size: 8
+"#;
+
+    let db = parse_yaml(yaml).unwrap();
+    let layer = &db.variants[0].diag_layer;
+
+    // Verify state charts were built
+    assert_eq!(layer.state_charts.len(), 2, "should have session + security state charts");
+
+    let session_sc = layer.state_charts.iter().find(|sc| sc.semantic == "SESSION").unwrap();
+    assert_eq!(session_sc.states.len(), 3);
+    assert_eq!(session_sc.start_state_short_name_ref, "default");
+    assert_eq!(session_sc.state_transitions.len(), 3); // default->extended, default->programming, extended->default
+
+    let security_sc = layer.state_charts.iter().find(|sc| sc.semantic == "SECURITY").unwrap();
+    assert_eq!(security_sc.states.len(), 2);
+
+    // Roundtrip
+    let yaml_out = write_yaml(&db).unwrap();
+    let db2 = parse_yaml(&yaml_out).unwrap();
+    let layer2 = &db2.variants[0].diag_layer;
+
+    assert_eq!(layer2.state_charts.len(), 2);
+
+    let session_sc2 = layer2.state_charts.iter().find(|sc| sc.semantic == "SESSION").unwrap();
+    assert_eq!(session_sc.states.len(), session_sc2.states.len());
+    assert_eq!(session_sc.start_state_short_name_ref, session_sc2.start_state_short_name_ref);
+    assert_eq!(session_sc.state_transitions.len(), session_sc2.state_transitions.len());
+
+    // Verify session IDs survived
+    let ext_state = session_sc2.states.iter().find(|s| s.short_name == "extended").unwrap();
+    assert_eq!(ext_state.long_name.as_ref().unwrap().value, "3");
+    assert_eq!(ext_state.long_name.as_ref().unwrap().ti, "EXTDS");
+
+    let security_sc2 = layer2.state_charts.iter().find(|sc| sc.semantic == "SECURITY").unwrap();
+    assert_eq!(security_sc.states.len(), security_sc2.states.len());
+
+    // Verify security levels survived
+    let lvl1 = security_sc2.states.iter().find(|s| s.short_name == "level_1").unwrap();
+    assert_eq!(lvl1.long_name.as_ref().unwrap().value, "1");
+}

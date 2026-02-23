@@ -147,9 +147,9 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         audience: None,
         sdgs,
         comparams: None,
-        sessions: None,
-        state_model: None,
-        security: None,
+        sessions: layer.and_then(|l| extract_sessions_from_state_charts(&l.state_charts)),
+        state_model: layer.and_then(|l| extract_state_model_from_state_charts(&l.state_charts)),
+        security: layer.and_then(|l| extract_security_from_state_charts(&l.state_charts)),
         authentication: None,
         identification: None,
         variants: None,
@@ -442,6 +442,104 @@ fn ir_job_to_yaml(job: &SingleEcuJob) -> EcuJob {
         audience: None,
         annotations: None,
     }
+}
+
+/// Extract sessions from a "SessionStates" state chart (semantic = "SESSION").
+fn extract_sessions_from_state_charts(
+    state_charts: &[StateChart],
+) -> Option<BTreeMap<String, Session>> {
+    let sc = state_charts.iter().find(|sc| sc.semantic == "SESSION")?;
+    if sc.states.is_empty() {
+        return None;
+    }
+    let mut sessions = BTreeMap::new();
+    for state in &sc.states {
+        let (id_val, alias) = if let Some(ln) = &state.long_name {
+            let id: u64 = ln.value.parse().unwrap_or(0);
+            let alias = if ln.ti.is_empty() { None } else { Some(ln.ti.clone()) };
+            (serde_yaml::Value::Number(serde_yaml::Number::from(id)), alias)
+        } else {
+            (serde_yaml::Value::Number(serde_yaml::Number::from(0u64)), None)
+        };
+        sessions.insert(state.short_name.clone(), Session {
+            id: id_val,
+            alias,
+            requires_unlock: None,
+            timing: None,
+        });
+    }
+    Some(sessions)
+}
+
+/// Extract state_model from a "SessionStates" state chart (transitions + start state).
+fn extract_state_model_from_state_charts(
+    state_charts: &[StateChart],
+) -> Option<StateModel> {
+    let sc = state_charts.iter().find(|sc| sc.semantic == "SESSION")?;
+    let has_start = !sc.start_state_short_name_ref.is_empty()
+        && sc.start_state_short_name_ref != "default";
+    let has_transitions = !sc.state_transitions.is_empty();
+    if !has_start && !has_transitions {
+        return None;
+    }
+
+    let initial_state = if has_start {
+        Some(StateModelState {
+            session: sc.start_state_short_name_ref.clone(),
+            security: None,
+            authentication_role: None,
+        })
+    } else {
+        None
+    };
+
+    let session_transitions = if has_transitions {
+        let mut trans_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for t in &sc.state_transitions {
+            trans_map.entry(t.source_short_name_ref.clone())
+                .or_default()
+                .push(t.target_short_name_ref.clone());
+        }
+        Some(trans_map)
+    } else {
+        None
+    };
+
+    Some(StateModel {
+        initial_state,
+        session_transitions,
+        session_change_resets_security: None,
+        session_change_resets_authentication: None,
+        s3_timeout_resets_to_default: None,
+    })
+}
+
+/// Extract security levels from a "SecurityAccessStates" state chart (semantic = "SECURITY").
+fn extract_security_from_state_charts(
+    state_charts: &[StateChart],
+) -> Option<BTreeMap<String, SecurityLevel>> {
+    let sc = state_charts.iter().find(|sc| sc.semantic == "SECURITY")?;
+    if sc.states.is_empty() {
+        return None;
+    }
+    let mut levels = BTreeMap::new();
+    for state in &sc.states {
+        let level_num = state.long_name.as_ref()
+            .and_then(|ln| ln.value.parse::<u32>().ok())
+            .unwrap_or(0);
+        levels.insert(state.short_name.clone(), SecurityLevel {
+            level: level_num,
+            seed_request: serde_yaml::Value::Null,
+            key_send: serde_yaml::Value::Null,
+            seed_size: 0,
+            key_size: 0,
+            algorithm: String::new(),
+            max_attempts: 0,
+            delay_on_fail_ms: 0,
+            allowed_sessions: vec![],
+        });
+    }
+    Some(levels)
 }
 
 fn ir_memory_to_yaml(mc: &MemoryConfig) -> YamlMemoryConfig {
