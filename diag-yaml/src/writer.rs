@@ -113,13 +113,14 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         let mut dtc_map = serde_yaml::Mapping::new();
         for dtc in &db.dtcs {
             let key = serde_yaml::Value::Number(serde_yaml::Number::from(dtc.trouble_code as u64));
+            let (snapshots, extended_data) = extract_dtc_records(dtc);
             let yaml_dtc = YamlDtc {
                 name: dtc.short_name.clone(),
                 sae: dtc.display_trouble_code.clone(),
                 description: dtc.text.as_ref().map(|t| t.value.clone()),
                 severity: dtc.level,
-                snapshots: None,
-                extended_data: None,
+                snapshots,
+                extended_data,
                 x_oem: None,
             };
             dtc_map.insert(key, serde_yaml::to_value(&yaml_dtc).unwrap_or_default());
@@ -157,7 +158,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         types: if types_map.is_empty() { None } else { Some(types_map) },
         dids: if dids_map.is_empty() { None } else { Some(serde_yaml::Value::Mapping(dids_map)) },
         routines: if routines_map.is_empty() { None } else { Some(serde_yaml::Value::Mapping(routines_map)) },
-        dtc_config: None,
+        dtc_config: base_variant.and_then(|v| extract_dtc_config(&v.diag_layer)),
         dtcs,
         annotations: None,
         x_oem: None,
@@ -372,6 +373,43 @@ fn extract_identification(layer: &DiagLayer) -> Option<Identification> {
             if let Some(SdOrSdg::Sd(sd)) = sdg.sds.first() {
                 if let Ok(ident) = serde_yaml::from_str::<Identification>(&sd.value) {
                     return Some(ident);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract snapshot and extended_data references from DTC SDGs.
+fn extract_dtc_records(dtc: &Dtc) -> (Option<Vec<String>>, Option<Vec<String>>) {
+    let sdgs = match &dtc.sdgs {
+        Some(s) => s,
+        None => return (None, None),
+    };
+    let mut snapshots = None;
+    let mut extended_data = None;
+    for sdg in &sdgs.sdgs {
+        let names: Vec<String> = sdg.sds.iter().filter_map(|sd| {
+            if let SdOrSdg::Sd(sd) = sd { Some(sd.value.clone()) } else { None }
+        }).collect();
+        if names.is_empty() { continue; }
+        match sdg.caption_sn.as_str() {
+            "dtc_snapshots" => snapshots = Some(names),
+            "dtc_extended_data" => extended_data = Some(names),
+            _ => {}
+        }
+    }
+    (snapshots, extended_data)
+}
+
+/// Extract dtc_config from DiagLayer SDG metadata.
+fn extract_dtc_config(layer: &DiagLayer) -> Option<DtcConfig> {
+    let sdgs = layer.sdgs.as_ref()?;
+    for sdg in &sdgs.sdgs {
+        if sdg.caption_sn == "dtc_config" {
+            if let Some(SdOrSdg::Sd(sd)) = sdg.sds.first() {
+                if let Ok(dc) = serde_yaml::from_str::<DtcConfig>(&sd.value) {
+                    return Some(dc);
                 }
             }
         }

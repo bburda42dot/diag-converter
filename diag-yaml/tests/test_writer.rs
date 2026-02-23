@@ -445,3 +445,32 @@ fn test_comparams_roundtrip() {
     assert!(yaml_out.contains("comparams"), "YAML output should contain comparams section");
     assert!(yaml_out.contains("P2_Client"), "YAML output should contain P2_Client param");
 }
+
+#[test]
+fn test_dtc_config_roundtrip() {
+    let content = include_str!("../../test-fixtures/yaml/example-ecm.yml");
+    let db = parse_yaml(content).unwrap();
+
+    // Verify DTCs have snapshot/extended_data references in SDGs
+    let dtc = db.dtcs.iter().find(|d| d.short_name == "CrankshaftPositionCorrelation").unwrap();
+    let sdgs = dtc.sdgs.as_ref().expect("DTC should have SDGs");
+    let has_snap = sdgs.sdgs.iter().any(|s| s.caption_sn == "dtc_snapshots");
+    let has_ext = sdgs.sdgs.iter().any(|s| s.caption_sn == "dtc_extended_data");
+    assert!(has_snap, "DTC should have snapshot references");
+    assert!(has_ext, "DTC should have extended_data references");
+
+    // Roundtrip
+    let yaml_out = write_yaml(&db).unwrap();
+    let db2 = parse_yaml(&yaml_out).unwrap();
+
+    // Verify DTC snapshot/extended_data survive
+    let dtc2 = db2.dtcs.iter().find(|d| d.short_name == "CrankshaftPositionCorrelation").unwrap();
+    let sdgs2 = dtc2.sdgs.as_ref().expect("Roundtripped DTC should have SDGs");
+    assert!(sdgs2.sdgs.iter().any(|s| s.caption_sn == "dtc_snapshots"));
+    assert!(sdgs2.sdgs.iter().any(|s| s.caption_sn == "dtc_extended_data"));
+
+    // Verify dtc_config is in the YAML output
+    assert!(yaml_out.contains("dtc_config"), "YAML output should contain dtc_config");
+    assert!(yaml_out.contains("snapshots"), "dtc_config should contain snapshots");
+    assert!(yaml_out.contains("extended_data"), "dtc_config should contain extended_data");
+}

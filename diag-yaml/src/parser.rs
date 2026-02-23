@@ -155,6 +155,19 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
             });
         }
     }
+    if let Some(dtc_config) = &doc.dtc_config {
+        if let Ok(dc_yaml) = serde_yaml::to_string(dtc_config) {
+            layer_sdg_vec.push(Sdg {
+                caption_sn: "dtc_config".into(),
+                sds: vec![SdOrSdg::Sd(Sd {
+                    value: dc_yaml,
+                    si: String::new(),
+                    ti: String::new(),
+                })],
+                si: String::new(),
+            });
+        }
+    }
     let sdgs = if layer_sdg_vec.is_empty() { None } else { Some(Sdgs { sdgs: layer_sdg_vec }) };
 
     // Build DTCs
@@ -884,6 +897,31 @@ fn convert_single_sdg(yaml_sdg: &YamlSdg) -> Sdg {
 
 /// Convert a YAML DTC to IR DTC.
 fn convert_dtc(trouble_code: u32, yaml_dtc: &YamlDtc) -> Dtc {
+    // Store snapshot and extended_data references in SDGs for roundtrip
+    let mut sdg_entries = Vec::new();
+    if let Some(snaps) = &yaml_dtc.snapshots {
+        if !snaps.is_empty() {
+            sdg_entries.push(Sdg {
+                caption_sn: "dtc_snapshots".into(),
+                sds: snaps.iter().map(|s| SdOrSdg::Sd(Sd {
+                    value: s.clone(), si: String::new(), ti: String::new(),
+                })).collect(),
+                si: String::new(),
+            });
+        }
+    }
+    if let Some(ext) = &yaml_dtc.extended_data {
+        if !ext.is_empty() {
+            sdg_entries.push(Sdg {
+                caption_sn: "dtc_extended_data".into(),
+                sds: ext.iter().map(|s| SdOrSdg::Sd(Sd {
+                    value: s.clone(), si: String::new(), ti: String::new(),
+                })).collect(),
+                si: String::new(),
+            });
+        }
+    }
+
     Dtc {
         short_name: yaml_dtc.name.clone(),
         trouble_code,
@@ -893,7 +931,7 @@ fn convert_dtc(trouble_code: u32, yaml_dtc: &YamlDtc) -> Dtc {
             ti: String::new(),
         }),
         level: yaml_dtc.severity,
-        sdgs: None,
+        sdgs: if sdg_entries.is_empty() { None } else { Some(Sdgs { sdgs: sdg_entries }) },
         is_temporary: false,
     }
 }
