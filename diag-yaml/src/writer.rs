@@ -158,7 +158,9 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         authentication: layer.and_then(|l| extract_authentication_from_state_charts(&l.state_charts)),
         identification: base_variant.and_then(|v| extract_identification(&v.diag_layer)),
         variants: extract_variants(db),
-        services: None,
+        services: layer
+            .map(|l| service_extractor::extract_services(&l.diag_services))
+            .filter(|s| service_extractor::has_any_service(s)),
         access_patterns: base_variant.and_then(|v| extract_access_patterns(v)),
         types: if types_map.is_empty() { None } else { Some(types_map) },
         dids: if dids_map.is_empty() { None } else { Some(serde_yaml::Value::Mapping(dids_map)) },
