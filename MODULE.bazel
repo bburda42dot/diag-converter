@@ -1,0 +1,33 @@
+module(
+    name = "diag_converter",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "rules_rust", version = "0.67.0")
+flatbuffers_src = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+flatbuffers_src(
+    name = "flatbuffers_src",
+    url = "https://github.com/alexmohr/flatbuffers/archive/0ba3307d.tar.gz",
+    strip_prefix = "flatbuffers-0ba3307d110a6def7419ad1158245cdf47c6d0c5",
+    sha256 = "da7cd5ac7da86c0e869973a449d39b1a66a781a223c6a5aaeeeb82a9f2b9cc7c",
+    build_file = "//:flatbuffers_src.BUILD",
+    # Remove sub-package BUILD files so glob(["**"]) can cross package boundaries
+    patch_cmds = ["find . -mindepth 2 \\( -name BUILD -o -name BUILD.bazel \\) -delete"],
+)
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    versions = ["1.85.0"],
+)
+use_repo(rust, "rust_toolchains")
+
+register_toolchains("@rust_toolchains//:all")
+
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "//:Cargo.lock",
+    manifests = ["//:Cargo.toml"],
+)
+use_repo(crate, "crates")

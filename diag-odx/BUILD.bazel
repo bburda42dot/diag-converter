@@ -1,0 +1,37 @@
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+rust_library(
+    name = "diag_odx",
+    srcs = glob(["src/**/*.rs"]),
+    crate_name = "diag_odx",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//diag-ir:diag_ir",
+        "@crates//:log",
+        "@crates//:quick-xml",
+        "@crates//:serde",
+        "@crates//:thiserror",
+        "@crates//:zip",
+    ],
+)
+
+rust_test(
+    name = "diag_odx_test",
+    crate = ":diag_odx",
+)
+
+[rust_test(
+    name = test_file.replace("tests/", "").replace(".rs", ""),
+    srcs = [test_file],
+    compile_data = ["//test-fixtures:odx_fixtures"],
+    data = ["//test-fixtures:odx_fixtures"],
+    deps = [
+        ":diag_odx",
+        "//diag-ir:diag_ir",
+        "@crates//:pretty_assertions",
+        "@crates//:quick-xml",
+        "@crates//:serde",
+        "@crates//:tempfile",
+        "@crates//:zip",
+    ],
+) for test_file in glob(["tests/*.rs"])]

@@ -1,2 +1,14 @@
+# Cargo
 /target/
+
+# Bazel
+/bazel-*
+user.bazelrc
+
+# Worktrees
 /.worktrees/
+
+# IDE
+.vscode/
+.idea/
+*.swp

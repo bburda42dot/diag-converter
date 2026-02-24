@@ -43,47 +43,54 @@ fn get_flatbuffers_info() -> Result<(String, String), Box<dyn std::error::Error>
 }
 
 fn generate_flatbuffers() -> Result<(), Box<dyn std::error::Error>> {
-    let (flatc_repo, flatc_rev) = get_flatbuffers_info()?;
     let out_dir = std::env::var("OUT_DIR")?;
-    let flatc_dir = PathBuf::from(&out_dir).join("flatc");
 
-    // Clone flatbuffers repo if not present
-    if !flatc_dir.exists() {
-        let status = std::process::Command::new("git")
-            .args(["clone", &flatc_repo, flatc_dir.to_str().unwrap()])
-            .status()?;
-        if !status.success() {
-            return Err("git clone flatbuffers failed".into());
+    // If FLATC is set, use the pre-built binary instead of building from source.
+    // This is required for Bazel builds where network and cmake are unavailable in sandbox.
+    let flatc_binary = if let Ok(flatc) = std::env::var("FLATC") {
+        PathBuf::from(flatc)
+    } else {
+        // Cargo path: clone flatbuffers repo and build flatc via cmake
+        let (flatc_repo, flatc_rev) = get_flatbuffers_info()?;
+        let flatc_dir = PathBuf::from(&out_dir).join("flatc");
+
+        if !flatc_dir.exists() {
+            let status = std::process::Command::new("git")
+                .args(["clone", &flatc_repo, flatc_dir.to_str().unwrap()])
+                .status()?;
+            if !status.success() {
+                return Err("git clone flatbuffers failed".into());
+            }
+
+            let status = std::process::Command::new("git")
+                .args(["checkout", &flatc_rev])
+                .current_dir(&flatc_dir)
+                .status()?;
+            if !status.success() {
+                return Err("git checkout flatc rev failed".into());
+            }
         }
 
-        let status = std::process::Command::new("git")
-            .args(["checkout", &flatc_rev])
-            .current_dir(&flatc_dir)
-            .status()?;
-        if !status.success() {
-            return Err("git checkout flatc rev failed".into());
-        }
-    }
+        let flatc_built = flatc_dir.join("build").join("flatc");
+        if !flatc_built.exists() {
+            let status = std::process::Command::new("cmake")
+                .args(["-B", "build", "-S", "."])
+                .current_dir(&flatc_dir)
+                .status()?;
+            if !status.success() {
+                return Err("cmake configure flatc failed".into());
+            }
 
-    // Build flatc via cmake
-    let flatc_binary = flatc_dir.join("build").join("flatc");
-    if !flatc_binary.exists() {
-        let status = std::process::Command::new("cmake")
-            .args(["-B", "build", "-S", "."])
-            .current_dir(&flatc_dir)
-            .status()?;
-        if !status.success() {
-            return Err("cmake configure flatc failed".into());
+            let status = std::process::Command::new("cmake")
+                .args(["--build", "build", "--target", "flatc", "-j"])
+                .current_dir(&flatc_dir)
+                .status()?;
+            if !status.success() {
+                return Err("cmake build flatc failed".into());
+            }
         }
-
-        let status = std::process::Command::new("cmake")
-            .args(["--build", "build", "--target", "flatc", "-j"])
-            .current_dir(&flatc_dir)
-            .status()?;
-        if !status.success() {
-            return Err("cmake build flatc failed".into());
-        }
-    }
+        flatc_built
+    };
 
     // Generate Rust code from FBS schema
     let fbs_output_dir = PathBuf::from(&out_dir).join("fbs_generated");

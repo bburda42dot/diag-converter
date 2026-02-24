@@ -1,0 +1,34 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
+
+rust_binary(
+    name = "diag_converter",
+    srcs = glob(["src/**/*.rs"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        "//diag-ir:diag_ir",
+        "//diag-odx:diag_odx",
+        "//diag-yaml:diag_yaml",
+        "//mdd-format:mdd_format",
+        "@crates//:anyhow",
+        "@crates//:clap",
+        "@crates//:env_logger",
+        "@crates//:log",
+        "@crates//:rayon",
+        "@crates//:serde_yaml",
+    ],
+)
+
+# Integration tests
+[rust_test(
+    name = test_file.replace("tests/", "").replace(".rs", ""),
+    srcs = [test_file],
+    compile_data = ["//test-fixtures:test_fixtures"],
+    data = ["//test-fixtures:test_fixtures"],
+    rustc_env = {"CARGO_MANIFEST_DIR": "diag-cli"},
+    deps = [
+        "//diag-ir:diag_ir",
+        "//diag-odx:diag_odx",
+        "//diag-yaml:diag_yaml",
+        "//mdd-format:mdd_format",
+    ],
+) for test_file in glob(["tests/*.rs"])]

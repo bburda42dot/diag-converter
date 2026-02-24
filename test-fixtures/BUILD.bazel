@@ -1,0 +1,23 @@
+filegroup(
+    name = "test_fixtures",
+    srcs = glob(["**/*"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "yaml_fixtures",
+    srcs = glob(["yaml/**"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "mdd_fixtures",
+    srcs = glob(["mdd/**"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "odx_fixtures",
+    srcs = glob(["odx/**"]),
+    visibility = ["//visibility:public"],
+)

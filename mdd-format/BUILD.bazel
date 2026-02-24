@@ -1,0 +1,56 @@
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+cargo_build_script(
+    name = "build_script",
+    srcs = ["build.rs"],
+    build_script_env = {
+        "FLATC": "$(execpath @flatbuffers_src//:flatc)",
+    },
+    data = [
+        "proto/file_format.proto",
+        "schemas/diagnostic_description.fbs",
+        "//:Cargo.toml",
+    ],
+    tools = ["@flatbuffers_src//:flatc"],
+    deps = [
+        "@crates//:cargo_toml",
+        "@crates//:prost-build",
+    ],
+)
+
+rust_library(
+    name = "mdd_format",
+    srcs = glob(["src/**/*.rs"]),
+    crate_name = "mdd_format",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":build_script",
+        "@crates//:flatbuffers",
+        "@crates//:flate2",
+        "@crates//:log",
+        "@crates//:prost",
+        "@crates//:sha2",
+        "@crates//:thiserror",
+        "@crates//:xz2",
+        "@crates//:zstd",
+    ],
+)
+
+rust_test(
+    name = "mdd_format_test",
+    crate = ":mdd_format",
+)
+
+# Integration tests
+[rust_test(
+    name = test_file.replace("tests/", "").replace(".rs", ""),
+    srcs = [test_file],
+    deps = [
+        ":mdd_format",
+        "@crates//:pretty_assertions",
+        "@crates//:prost",
+        "@crates//:sha2",
+        "@crates//:tempfile",
+    ],
+) for test_file in glob(["tests/*.rs"])]
