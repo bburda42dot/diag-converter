@@ -474,3 +474,27 @@ fn test_dtc_config_roundtrip() {
     assert!(yaml_out.contains("snapshots"), "dtc_config should contain snapshots");
     assert!(yaml_out.contains("extended_data"), "dtc_config should contain extended_data");
 }
+
+#[test]
+fn test_yaml_roundtrip_flxc1000_preserves_all_services() {
+    let content = include_str!("../../test-fixtures/yaml/FLXC1000.yml");
+    let original = parse_yaml(content).unwrap();
+    let yaml_output = write_yaml(&original).unwrap();
+    let reparsed = parse_yaml(&yaml_output).unwrap();
+
+    let orig_base = original.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let reparse_base = reparsed.variants.iter().find(|v| v.is_base_variant).unwrap();
+
+    let orig_svc_names: Vec<&str> = orig_base.diag_layer.diag_services.iter()
+        .map(|s| s.diag_comm.short_name.as_str())
+        .collect();
+    let reparse_svc_names: Vec<&str> = reparse_base.diag_layer.diag_services.iter()
+        .map(|s| s.diag_comm.short_name.as_str())
+        .collect();
+
+    assert_eq!(
+        orig_svc_names.len(),
+        reparse_svc_names.len(),
+        "Service count must be preserved. Original: {orig_svc_names:?}, Reparsed: {reparse_svc_names:?}"
+    );
+}
