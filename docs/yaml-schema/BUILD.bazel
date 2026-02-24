@@ -1,0 +1,10 @@
+exports_files(
+    ["schema.json"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "schema_json",
+    srcs = ["schema.json"],
+    visibility = ["//visibility:public"],
+)

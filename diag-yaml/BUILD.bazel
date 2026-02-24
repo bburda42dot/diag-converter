@@ -1,1 +1,44 @@
-# Placeholder - will be populated in Task 7
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+rust_library(
+    name = "diag_yaml",
+    srcs = glob(["src/**/*.rs"]),
+    compile_data = ["//docs/yaml-schema:schema_json"],
+    crate_name = "diag_yaml",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//diag-ir:diag_ir",
+        "@crates//:jsonschema",
+        "@crates//:log",
+        "@crates//:serde",
+        "@crates//:serde_json",
+        "@crates//:serde_yaml",
+        "@crates//:thiserror",
+    ],
+)
+
+rust_test(
+    name = "diag_yaml_test",
+    crate = ":diag_yaml",
+)
+
+[rust_test(
+    name = test_file.replace("tests/", "").replace(".rs", ""),
+    srcs = [test_file],
+    compile_data = [
+        "//test-fixtures:yaml_fixtures",
+        "//test-fixtures:odx_fixtures",
+    ],
+    data = [
+        "//test-fixtures:yaml_fixtures",
+        "//test-fixtures:odx_fixtures",
+    ],
+    deps = [
+        ":diag_yaml",
+        "//diag-ir:diag_ir",
+        "@crates//:pretty_assertions",
+        "@crates//:serde_json",
+        "@crates//:serde_yaml",
+        "@crates//:tempfile",
+    ],
+) for test_file in glob(["tests/*.rs"])]
