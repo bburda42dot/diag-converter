@@ -5,6 +5,18 @@
 //! DiagService entries, it reconstructs the YamlServices struct by detecting
 //! UDS service patterns via the `semantic` field and SID constants.
 //!
+//! ## Interaction with other writer sections
+//!
+//! - **DiagnosticSessionControl**: only `enabled: true` is emitted (no subfunctions).
+//!   The generator falls back to the `sessions:` section, which the writer already
+//!   extracts from state charts.
+//! - **SecurityAccess**: only `enabled: true` is emitted. The generator reads actual
+//!   security levels from the `security:` section, which the writer extracts from
+//!   state charts (with seed_request/key_send bytes enriched from IR services).
+//! - **ECUReset, Authentication, CommunicationControl**: subfunctions are reconstructed
+//!   from service names since these have no standalone writer sections.
+//! - **ControlDTCSetting**: only `enabled: true` - generator always produces on/off.
+//!
 //! ## Known limitations
 //!
 //! ServiceEntry fields that are YAML-level config hints (addressing_mode,
@@ -15,7 +27,7 @@
 
 use diag_ir::types::{DiagService, ParamData, ParamType};
 
-use crate::yaml_model::ServiceEntry;
+use crate::yaml_model::{ServiceEntry, YamlServices};
 
 /// Extract the UDS SID byte from a service's first request parameter.
 /// Returns `None` if the service has no request or no SID CodedConst param.
@@ -52,6 +64,168 @@ fn parse_hex_or_decimal(s: &str) -> Option<u8> {
         u8::from_str_radix(hex, 16).ok()
     } else {
         s.parse().ok()
+    }
+}
+
+/// Reconstruct YamlServices from a list of IR DiagService entries.
+///
+/// Groups services by their `semantic` field and SID, then builds the
+/// corresponding ServiceEntry for each UDS service type.
+///
+/// Services that map to other YAML sections (DIDs -> `dids`, routines -> `routines`)
+/// are intentionally skipped here.
+pub fn extract_services(services: &[DiagService]) -> YamlServices {
+    let mut yaml = YamlServices::default();
+
+    let mut has_session = false;
+    let mut has_security = false;
+    let mut reset_svcs = Vec::new();
+    let mut auth_svcs = Vec::new();
+    let mut comm_svcs = Vec::new();
+    let mut has_download = false;
+    let mut has_upload = false;
+    let mut has_tester_present = false;
+    let mut has_dtc_setting = false;
+    let mut has_clear_dtc = false;
+    let mut has_read_dtc = false;
+
+    for svc in services {
+        match svc.diag_comm.semantic.as_str() {
+            "SESSION" => has_session = true,
+            "SECURITY-ACCESS" => has_security = true,
+            "ECU-RESET" => reset_svcs.push(svc),
+            "AUTHENTICATION" => auth_svcs.push(svc),
+            "COMMUNICATION-CONTROL" => comm_svcs.push(svc),
+            "DOWNLOAD" => has_download = true,
+            "UPLOAD" => has_upload = true,
+            "TESTING" => has_tester_present = true,
+            "CONTROL-DTC-SETTING" => has_dtc_setting = true,
+            "CLEAR-DTC" => has_clear_dtc = true,
+            "READ-DTC-INFO" => has_read_dtc = true,
+            // DID/routine/IO services handled by writer's dids/routines sections
+            "DATA-IDENT" | "ROUTINE" | "IO-CONTROL" => {}
+            _ => {}
+        }
+    }
+
+    // SessionControl: enabled only, generator uses sessions: section
+    if has_session {
+        yaml.diagnostic_session_control = Some(ServiceEntry {
+            enabled: true,
+            ..Default::default()
+        });
+    }
+
+    // SecurityAccess: enabled only, generator uses security: section
+    if has_security {
+        yaml.security_access = Some(ServiceEntry {
+            enabled: true,
+            ..Default::default()
+        });
+    }
+
+    if !reset_svcs.is_empty() {
+        yaml.ecu_reset = Some(extract_subfunction_entry(&reset_svcs, "ECUReset_"));
+    }
+
+    if !auth_svcs.is_empty() {
+        yaml.authentication = Some(extract_subfunction_entry(&auth_svcs, "Authentication_"));
+    }
+
+    if !comm_svcs.is_empty() {
+        yaml.communication_control = Some(extract_comm_control_entry(&comm_svcs));
+    }
+
+    if has_download {
+        yaml.request_download = Some(ServiceEntry {
+            enabled: true,
+            ..Default::default()
+        });
+    }
+
+    if has_upload {
+        yaml.request_upload = Some(ServiceEntry {
+            enabled: true,
+            ..Default::default()
+        });
+    }
+
+    if has_tester_present {
+        yaml.tester_present = Some(ServiceEntry {
+            enabled: true,
+            ..Default::default()
+        });
+    }
+
+    if has_dtc_setting {
+        yaml.control_dtc_setting = Some(ServiceEntry {
+            enabled: true,
+            ..Default::default()
+        });
+    }
+
+    if has_clear_dtc {
+        yaml.clear_diagnostic_information = Some(ServiceEntry {
+            enabled: true,
+            ..Default::default()
+        });
+    }
+
+    if has_read_dtc {
+        yaml.read_dtc_information = Some(ServiceEntry {
+            enabled: true,
+            ..Default::default()
+        });
+    }
+
+    yaml
+}
+
+/// Returns true if the YamlServices has at least one service type set.
+pub fn has_any_service(svcs: &YamlServices) -> bool {
+    svcs.diagnostic_session_control.is_some()
+        || svcs.ecu_reset.is_some()
+        || svcs.security_access.is_some()
+        || svcs.authentication.is_some()
+        || svcs.communication_control.is_some()
+        || svcs.request_download.is_some()
+        || svcs.request_upload.is_some()
+        || svcs.tester_present.is_some()
+        || svcs.control_dtc_setting.is_some()
+        || svcs.clear_diagnostic_information.is_some()
+        || svcs.read_dtc_information.is_some()
+}
+
+/// The 4 default CommunicationControl subtypes from service_generator.rs.
+const DEFAULT_COMM_CONTROL_SUBTYPES: &[(&str, u8)] = &[
+    ("enableRxAndTx", 0x00),
+    ("enableRxAndDisableTx", 0x01),
+    ("disableRxAndEnableTx", 0x02),
+    ("disableRxAndTx", 0x03),
+];
+
+/// Build a CommunicationControl ServiceEntry.
+///
+/// If the services match the 4 default subtypes exactly, emit `subfunctions: None`
+/// so the generator uses `DEFAULT_COMM_CONTROL_SUBTYPES`. Otherwise reconstruct
+/// explicit subfunctions.
+fn extract_comm_control_entry(services: &[&DiagService]) -> ServiceEntry {
+    let is_default = services.len() == DEFAULT_COMM_CONTROL_SUBTYPES.len()
+        && DEFAULT_COMM_CONTROL_SUBTYPES.iter().all(|(name, sf_byte)| {
+            let expected_name = format!("CommunicationControl_{name}");
+            services.iter().any(|svc| {
+                svc.diag_comm.short_name == expected_name
+                    && extract_subfunction(svc) == Some(*sf_byte)
+            })
+        });
+
+    if is_default {
+        ServiceEntry {
+            enabled: true,
+            ..Default::default()
+        }
+    } else {
+        extract_subfunction_entry(services, "CommunicationControl_")
     }
 }
 
@@ -120,6 +294,55 @@ mod tests {
         }
     }
 
+    fn make_subfunction_service(
+        name: &str,
+        semantic: &str,
+        sid: &str,
+        subfunc: &str,
+    ) -> DiagService {
+        DiagService {
+            diag_comm: DiagComm {
+                short_name: name.to_string(),
+                semantic: semantic.to_string(),
+                ..Default::default()
+            },
+            request: Some(Request {
+                params: vec![
+                    Param {
+                        short_name: "SID".to_string(),
+                        param_type: ParamType::CodedConst,
+                        byte_position: Some(0),
+                        bit_position: Some(0),
+                        specific_data: Some(ParamData::CodedConst {
+                            coded_value: sid.to_string(),
+                            diag_coded_type: DiagCodedType {
+                                is_high_low_byte_order: true,
+                                ..Default::default()
+                            },
+                        }),
+                        ..Default::default()
+                    },
+                    Param {
+                        short_name: "SubFunction".to_string(),
+                        param_type: ParamType::CodedConst,
+                        byte_position: Some(1),
+                        bit_position: Some(0),
+                        specific_data: Some(ParamData::CodedConst {
+                            coded_value: subfunc.to_string(),
+                            diag_coded_type: DiagCodedType {
+                                is_high_low_byte_order: true,
+                                ..Default::default()
+                            },
+                        }),
+                        ..Default::default()
+                    },
+                ],
+                sdgs: None,
+            }),
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn test_extract_sid_from_service() {
         let svc = make_service("TesterPresent", "TESTING", "0x3E");
@@ -130,5 +353,171 @@ mod tests {
     fn test_extract_sid_returns_none_for_no_request() {
         let svc = DiagService::default();
         assert_eq!(extract_sid(&svc), None);
+    }
+
+    #[test]
+    fn test_extract_tester_present() {
+        let services = vec![make_service("TesterPresent", "TESTING", "0x3E")];
+        let yaml_svcs = extract_services(&services);
+        assert!(
+            yaml_svcs
+                .tester_present
+                .as_ref()
+                .map_or(false, |e| e.enabled)
+        );
+    }
+
+    #[test]
+    fn test_extract_session_control_enabled_no_subfunctions() {
+        let services = vec![
+            make_subfunction_service("DiagnosticSessionControl_default", "SESSION", "0x10", "0x01"),
+            make_subfunction_service(
+                "DiagnosticSessionControl_programming",
+                "SESSION",
+                "0x10",
+                "0x02",
+            ),
+        ];
+        let yaml_svcs = extract_services(&services);
+        let entry = yaml_svcs.diagnostic_session_control.as_ref().unwrap();
+        assert!(entry.enabled);
+        assert!(
+            entry.subfunctions.is_none(),
+            "subfunctions should be None - generator should use sessions: section instead"
+        );
+    }
+
+    #[test]
+    fn test_extract_ecu_reset_with_subfunctions() {
+        let services = vec![
+            make_subfunction_service("ECUReset_hardReset", "ECU-RESET", "0x11", "0x01"),
+            make_subfunction_service("ECUReset_softReset", "ECU-RESET", "0x11", "0x03"),
+        ];
+        let yaml_svcs = extract_services(&services);
+        let entry = yaml_svcs.ecu_reset.as_ref().unwrap();
+        assert!(entry.enabled);
+        let subfuncs = entry.subfunctions.as_ref().unwrap();
+        let map = subfuncs.as_mapping().unwrap();
+        assert_eq!(map.len(), 2);
+        assert!(map.contains_key(&serde_yaml::Value::String("hardReset".to_string())));
+        assert!(map.contains_key(&serde_yaml::Value::String("softReset".to_string())));
+    }
+
+    #[test]
+    fn test_extract_empty_services() {
+        let yaml_svcs = extract_services(&[]);
+        assert!(yaml_svcs.diagnostic_session_control.is_none());
+        assert!(yaml_svcs.tester_present.is_none());
+    }
+
+    #[test]
+    fn test_did_services_not_in_yaml_services() {
+        let services = vec![
+            make_service("Read_VINDataIdentifier", "DATA-IDENT", "0x22"),
+            make_service("TesterPresent", "TESTING", "0x3E"),
+        ];
+        let yaml_svcs = extract_services(&services);
+        assert!(
+            yaml_svcs
+                .tester_present
+                .as_ref()
+                .map_or(false, |e| e.enabled)
+        );
+        assert!(yaml_svcs.read_data_by_identifier.is_none());
+    }
+
+    #[test]
+    fn test_extract_security_access_enabled_no_subfunctions() {
+        let services = vec![
+            make_subfunction_service(
+                "SecurityAccess_RequestSeed_level_01",
+                "SECURITY-ACCESS",
+                "0x27",
+                "0x01",
+            ),
+            make_subfunction_service(
+                "SecurityAccess_SendKey_level_01",
+                "SECURITY-ACCESS",
+                "0x27",
+                "0x02",
+            ),
+        ];
+        let yaml_svcs = extract_services(&services);
+        let entry = yaml_svcs.security_access.as_ref().unwrap();
+        assert!(entry.enabled);
+        assert!(
+            entry.subfunctions.is_none(),
+            "subfunctions should be None - generator uses security: section instead"
+        );
+    }
+
+    #[test]
+    fn test_extract_comm_control_default_subfunctions() {
+        let default_services = vec![
+            make_subfunction_service(
+                "CommunicationControl_enableRxAndTx",
+                "COMMUNICATION-CONTROL",
+                "0x28",
+                "0x00",
+            ),
+            make_subfunction_service(
+                "CommunicationControl_enableRxAndDisableTx",
+                "COMMUNICATION-CONTROL",
+                "0x28",
+                "0x01",
+            ),
+            make_subfunction_service(
+                "CommunicationControl_disableRxAndEnableTx",
+                "COMMUNICATION-CONTROL",
+                "0x28",
+                "0x02",
+            ),
+            make_subfunction_service(
+                "CommunicationControl_disableRxAndTx",
+                "COMMUNICATION-CONTROL",
+                "0x28",
+                "0x03",
+            ),
+        ];
+        let yaml_svcs = extract_services(&default_services);
+        let entry = yaml_svcs.communication_control.as_ref().unwrap();
+        assert!(entry.enabled);
+        assert!(
+            entry.subfunctions.is_none(),
+            "Default comm control subtypes should not emit explicit subfunctions"
+        );
+    }
+
+    #[test]
+    fn test_extract_comm_control_custom_subfunctions() {
+        let custom_services = vec![make_subfunction_service(
+            "CommunicationControl_customMode",
+            "COMMUNICATION-CONTROL",
+            "0x28",
+            "0x05",
+        )];
+        let yaml_svcs = extract_services(&custom_services);
+        let entry = yaml_svcs.communication_control.as_ref().unwrap();
+        assert!(entry.enabled);
+        assert!(
+            entry.subfunctions.is_some(),
+            "Non-default comm control subtypes should emit explicit subfunctions"
+        );
+    }
+
+    #[test]
+    fn test_has_any_service_empty() {
+        let svcs = YamlServices::default();
+        assert!(!has_any_service(&svcs));
+    }
+
+    #[test]
+    fn test_has_any_service_with_tester_present() {
+        let mut svcs = YamlServices::default();
+        svcs.tester_present = Some(ServiceEntry {
+            enabled: true,
+            ..Default::default()
+        });
+        assert!(has_any_service(&svcs));
     }
 }
