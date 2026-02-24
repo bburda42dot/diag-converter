@@ -57,6 +57,10 @@ enum Command {
         /// Lenient parsing: log warnings instead of failing on malformed ODX references
         #[arg(short = 'L', long)]
         lenient: bool,
+
+        /// Write .log file alongside output (off, info, debug)
+        #[arg(long, default_value = "off")]
+        log_level: String,
     },
 
     /// Validate a diagnostic input file
@@ -203,7 +207,9 @@ fn run_convert(
     audience: Option<&str>,
     include_job_files: Option<&Path>,
     lenient: bool,
+    log_level: &str,
 ) -> Result<()> {
+    let total_start = Instant::now();
     let out_fmt = detect_format(output).context("output file")?;
     let in_fmt = detect_format(input).context("input file")?;
 
@@ -213,7 +219,13 @@ fn run_convert(
 
     log::info!("Converting {:?} -> {:?}", in_fmt, out_fmt);
 
+    let input_size = std::fs::metadata(input)
+        .map(|m| m.len())
+        .unwrap_or(0);
+
+    let parse_start = Instant::now();
     let mut db = parse_input(input, verbose, lenient)?;
+    let parse_ms = parse_start.elapsed().as_secs_f64() * 1000.0;
 
     if let Some(aud) = audience {
         let before = db.variants.iter().map(|v| v.diag_layer.diag_services.len()).sum::<usize>();
@@ -225,16 +237,20 @@ fn run_convert(
     }
 
     let validate_start = Instant::now();
-    if let Err(errors) = diag_ir::validate_database(&db) {
-        for e in &errors {
-            log::warn!("Validation: {e}");
-        }
-    }
+    let validation_warnings: Vec<String> =
+        if let Err(errors) = diag_ir::validate_database(&db) {
+            for e in &errors {
+                log::warn!("Validation: {e}");
+            }
+            errors.into_iter().map(|e| e.to_string()).collect()
+        } else {
+            Vec::new()
+        };
+    let validate_ms = validate_start.elapsed().as_secs_f64() * 1000.0;
+
     if verbose {
-        eprintln!(
-            "Validate time: {:.1}ms",
-            validate_start.elapsed().as_secs_f64() * 1000.0
-        );
+        eprintln!("Parse time: {parse_ms:.1}ms");
+        eprintln!("Validate time: {validate_ms:.1}ms");
     }
 
     log::info!(
@@ -255,6 +271,8 @@ fn run_convert(
     }
 
     let write_start = Instant::now();
+    let mut fbs_size: Option<usize> = None;
+
     match out_fmt {
         Format::Yaml => {
             let yaml = diag_yaml::write_yaml(&db).context("writing YAML")?;
@@ -268,6 +286,7 @@ fn run_convert(
         }
         Format::Mdd => {
             let fbs_data = diag_ir::ir_to_flatbuffers(&db);
+            fbs_size = Some(fbs_data.len());
             let extra_chunks = if let Some(dir) = include_job_files {
                 build_job_file_chunks(&db, dir)?
             } else {
@@ -289,15 +308,77 @@ fn run_convert(
         }
     }
 
+    let write_ms = write_start.elapsed().as_secs_f64() * 1000.0;
+    let total_ms = total_start.elapsed().as_secs_f64() * 1000.0;
+
     if verbose {
-        eprintln!(
-            "Write time: {:.1}ms",
-            write_start.elapsed().as_secs_f64() * 1000.0
-        );
+        eprintln!("Write time: {write_ms:.1}ms");
     }
 
     log::info!("Written: {}", output.display());
     println!("Converted {} -> {}", input.display(), output.display());
+
+    // Write .log file if requested
+    if log_level != "off" {
+        let log_path = output.with_extension(
+            format!("{}.log", output.extension().and_then(|e| e.to_str()).unwrap_or("out"))
+        );
+        let output_size = std::fs::metadata(output).map(|m| m.len()).unwrap_or(0);
+        let mut log_lines = Vec::new();
+        log_lines.push(format!("input: {}", input.display()));
+        log_lines.push(format!("input_size: {} bytes", input_size));
+        log_lines.push(format!("output: {}", output.display()));
+        log_lines.push(format!("output_size: {} bytes", output_size));
+        log_lines.push(format!("input_format: {:?}", in_fmt));
+        log_lines.push(format!("output_format: {:?}", out_fmt));
+        log_lines.push(format!("parse_time: {parse_ms:.1}ms"));
+        log_lines.push(format!("validate_time: {validate_ms:.1}ms"));
+        log_lines.push(format!("write_time: {write_ms:.1}ms"));
+        log_lines.push(format!("total_time: {total_ms:.1}ms"));
+        log_lines.push(format!("ecu: {}", db.ecu_name));
+        log_lines.push(format!("variants: {}", db.variants.len()));
+        log_lines.push(format!("dtcs: {}", db.dtcs.len()));
+
+        if let Some(fbs) = fbs_size {
+            log_lines.push(format!("fbs_size: {} bytes", fbs));
+            if output_size > 0 {
+                let ratio = fbs as f64 / output_size as f64;
+                log_lines.push(format!("compression_ratio: {ratio:.2}x"));
+            }
+        }
+
+        if !validation_warnings.is_empty() {
+            log_lines.push(format!("validation_warnings: {}", validation_warnings.len()));
+            if log_level == "debug" {
+                for w in &validation_warnings {
+                    log_lines.push(format!("  - {w}"));
+                }
+            }
+        }
+
+        if log_level == "debug" {
+            let services: usize = db.variants.iter()
+                .map(|v| v.diag_layer.diag_services.len())
+                .sum();
+            let jobs: usize = db.variants.iter()
+                .map(|v| v.diag_layer.single_ecu_jobs.len())
+                .sum();
+            log_lines.push(format!("total_services: {services}"));
+            log_lines.push(format!("total_single_ecu_jobs: {jobs}"));
+            for v in &db.variants {
+                log_lines.push(format!(
+                    "  variant '{}': {} services, {} jobs",
+                    v.diag_layer.short_name,
+                    v.diag_layer.diag_services.len(),
+                    v.diag_layer.single_ecu_jobs.len(),
+                ));
+            }
+        }
+
+        let log_content = log_lines.join("\n") + "\n";
+        std::fs::write(&log_path, &log_content)
+            .with_context(|| format!("writing log to {}", log_path.display()))?;
+    }
 
     Ok(())
 }
@@ -431,6 +512,7 @@ fn run_batch_convert(
     audience: Option<&str>,
     include_job_files: Option<&Path>,
     lenient: bool,
+    log_level: &str,
 ) -> Result<()> {
     use rayon::prelude::*;
 
@@ -453,6 +535,7 @@ fn run_batch_convert(
                 audience,
                 include_job_files,
                 lenient,
+                log_level,
             );
             (input.clone(), result)
         })
@@ -493,6 +576,7 @@ fn main() -> Result<()> {
             audience,
             include_job_files,
             lenient,
+            log_level,
         }) => {
             if verbose {
                 env_logger::Builder::from_env(
@@ -516,6 +600,7 @@ fn main() -> Result<()> {
                     audience.as_deref(),
                     include_job_files.as_deref(),
                     lenient,
+                    &log_level,
                 )
             } else if let Some(dir) = &output_dir {
                 let ext = format_extension(&format)?;
@@ -529,6 +614,7 @@ fn main() -> Result<()> {
                     audience.as_deref(),
                     include_job_files.as_deref(),
                     lenient,
+                    &log_level,
                 )
             } else if input.len() > 1 {
                 bail!("Multiple input files require -O/--output-dir instead of -o/--output")
