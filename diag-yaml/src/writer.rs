@@ -3,6 +3,7 @@
 //! Converts the canonical DiagDatabase IR back to a YAML string using the
 //! OpenSOVD CDA diagnostic YAML schema format.
 
+use crate::service_extractor;
 use crate::yaml_model::*;
 use diag_ir::*;
 use std::collections::BTreeMap;
@@ -149,7 +150,11 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         comparams: base_variant.and_then(|v| extract_comparams(&v.diag_layer)),
         sessions: layer.and_then(|l| extract_sessions_from_state_charts(&l.state_charts)),
         state_model: layer.and_then(|l| extract_state_model_from_state_charts(&l.state_charts)),
-        security: layer.and_then(|l| extract_security_from_state_charts(&l.state_charts)),
+        security: layer.and_then(|l| {
+            let mut levels = extract_security_from_state_charts(&l.state_charts)?;
+            enrich_security_levels(&mut levels, &l.diag_services);
+            Some(levels)
+        }),
         authentication: layer.and_then(|l| extract_authentication_from_state_charts(&l.state_charts)),
         identification: base_variant.and_then(|v| extract_identification(&v.diag_layer)),
         variants: extract_variants(db),
@@ -677,6 +682,82 @@ fn extract_security_from_state_charts(
         });
     }
     Some(levels)
+}
+
+/// Enrich security levels extracted from state charts with actual seed/key
+/// bytes from the SecurityAccess IR services.
+///
+/// The state chart only stores level names and numbers - not the UDS subfunction
+/// bytes or seed/key sizes. These must be reconstructed from the service params.
+fn enrich_security_levels(
+    levels: &mut BTreeMap<String, SecurityLevel>,
+    services: &[DiagService],
+) {
+    for svc in services {
+        if svc.diag_comm.semantic != "SECURITY-ACCESS" {
+            continue;
+        }
+
+        let subfunc = match service_extractor::extract_subfunction(svc) {
+            Some(sf) => sf,
+            None => continue,
+        };
+
+        let name = &svc.diag_comm.short_name;
+
+        // Determine level name from service name prefix
+        let level_name = if let Some(suffix) = name.strip_prefix("SecurityAccess_RequestSeed_") {
+            suffix
+        } else if let Some(suffix) = name.strip_prefix("SecurityAccess_SendKey_") {
+            suffix
+        } else {
+            continue;
+        };
+
+        let Some(level) = levels.get_mut(level_name) else {
+            continue;
+        };
+
+        let is_request_seed = name.starts_with("SecurityAccess_RequestSeed_");
+
+        if is_request_seed {
+            level.seed_request = serde_yaml::Value::String(format!("0x{subfunc:02X}"));
+            // Extract seed size from response's SecuritySeed Value param
+            if let Some(resp) = svc.pos_responses.first() {
+                if let Some(bit_len) = extract_value_param_bit_length(&resp.params, "SecuritySeed")
+                {
+                    level.seed_size = (bit_len / 8).max(1);
+                }
+            }
+        } else {
+            level.key_send = serde_yaml::Value::String(format!("0x{subfunc:02X}"));
+            // Extract key size from request's SecurityKey Value param
+            if let Some(req) = &svc.request {
+                if let Some(bit_len) = extract_value_param_bit_length(&req.params, "SecurityKey") {
+                    level.key_size = (bit_len / 8).max(1);
+                }
+            }
+        }
+    }
+}
+
+/// Extract the bit_length from a Value param's StandardLength DiagCodedType.
+fn extract_value_param_bit_length(params: &[Param], param_name: &str) -> Option<u32> {
+    let param = params
+        .iter()
+        .find(|p| p.short_name == param_name && p.param_type == ParamType::Value)?;
+    if let Some(ParamData::Value { dop, .. }) = &param.specific_data {
+        if let Some(DopData::NormalDop {
+            diag_coded_type: Some(dct),
+            ..
+        }) = &dop.specific_data
+        {
+            if let Some(DiagCodedTypeData::StandardLength { bit_length, .. }) = &dct.specific_data {
+                return Some(*bit_length);
+            }
+        }
+    }
+    None
 }
 
 /// Extract authentication roles from an "AuthenticationStates" state chart (semantic = "AUTHENTICATION").
