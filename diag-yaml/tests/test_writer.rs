@@ -498,3 +498,125 @@ fn test_yaml_roundtrip_flxc1000_preserves_all_services() {
         "Service count must be preserved. Original: {orig_svc_names:?}, Reparsed: {reparse_svc_names:?}"
     );
 }
+
+#[test]
+fn test_yaml_roundtrip_flxc1000_service_names_preserved() {
+    let content = include_str!("../../test-fixtures/yaml/FLXC1000.yml");
+    let original = parse_yaml(content).unwrap();
+    let yaml_output = write_yaml(&original).unwrap();
+    let reparsed = parse_yaml(&yaml_output).unwrap();
+
+    let orig_base = original.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let reparse_base = reparsed.variants.iter().find(|v| v.is_base_variant).unwrap();
+
+    let orig_names: std::collections::BTreeSet<&str> = orig_base
+        .diag_layer
+        .diag_services
+        .iter()
+        .map(|s| s.diag_comm.short_name.as_str())
+        .collect();
+    let reparse_names: std::collections::BTreeSet<&str> = reparse_base
+        .diag_layer
+        .diag_services
+        .iter()
+        .map(|s| s.diag_comm.short_name.as_str())
+        .collect();
+
+    let lost: Vec<&&str> = orig_names.difference(&reparse_names).collect();
+    let gained: Vec<&&str> = reparse_names.difference(&orig_names).collect();
+
+    assert!(lost.is_empty(), "Services lost in roundtrip: {lost:?}");
+    if !gained.is_empty() {
+        eprintln!("Services gained in roundtrip (acceptable): {gained:?}");
+    }
+}
+
+#[test]
+fn test_write_yaml_contains_services_section() {
+    let content = include_str!("../../test-fixtures/yaml/FLXC1000.yml");
+    let db = parse_yaml(content).unwrap();
+    let yaml_output = write_yaml(&db).unwrap();
+
+    assert!(
+        yaml_output.contains("diagnosticSessionControl"),
+        "should contain diagnosticSessionControl"
+    );
+    assert!(
+        yaml_output.contains("ecuReset"),
+        "should contain ecuReset"
+    );
+    assert!(
+        yaml_output.contains("securityAccess"),
+        "should contain securityAccess"
+    );
+    assert!(
+        yaml_output.contains("communicationControl"),
+        "should contain communicationControl"
+    );
+    assert!(
+        yaml_output.contains("testerPresent"),
+        "should contain testerPresent"
+    );
+    assert!(
+        yaml_output.contains("requestDownload"),
+        "should contain requestDownload"
+    );
+}
+
+#[test]
+fn test_yaml_double_roundtrip_stable() {
+    let content = include_str!("../../test-fixtures/yaml/FLXC1000.yml");
+    let ir1 = parse_yaml(content).unwrap();
+    let yaml1 = write_yaml(&ir1).unwrap();
+    let ir2 = parse_yaml(&yaml1).unwrap();
+    let yaml2 = write_yaml(&ir2).unwrap();
+    let ir3 = parse_yaml(&yaml2).unwrap();
+
+    let base2 = ir2.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let base3 = ir3.variants.iter().find(|v| v.is_base_variant).unwrap();
+
+    let names2: Vec<&str> = base2
+        .diag_layer
+        .diag_services
+        .iter()
+        .map(|s| s.diag_comm.short_name.as_str())
+        .collect();
+    let names3: Vec<&str> = base3
+        .diag_layer
+        .diag_services
+        .iter()
+        .map(|s| s.diag_comm.short_name.as_str())
+        .collect();
+
+    assert_eq!(
+        names2, names3,
+        "Second roundtrip should produce identical services. \
+         If this fails, the extractor introduces drift on re-serialization."
+    );
+}
+
+#[test]
+fn test_yaml_roundtrip_preserves_variant_services() {
+    let content = include_str!("../../test-fixtures/yaml/FLXC1000.yml");
+    let original = parse_yaml(content).unwrap();
+    let yaml_output = write_yaml(&original).unwrap();
+    let reparsed = parse_yaml(&yaml_output).unwrap();
+
+    assert_eq!(
+        original.variants.len(),
+        reparsed.variants.len(),
+        "Variant count must be preserved"
+    );
+
+    for (orig_v, reparse_v) in original.variants.iter().zip(reparsed.variants.iter()) {
+        let orig_count = orig_v.diag_layer.diag_services.len();
+        let reparse_count = reparse_v.diag_layer.diag_services.len();
+        assert!(
+            reparse_count >= orig_count || orig_count == 0,
+            "Variant '{}': service count decreased from {} to {}",
+            orig_v.diag_layer.short_name,
+            orig_count,
+            reparse_count,
+        );
+    }
+}
