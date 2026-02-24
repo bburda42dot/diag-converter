@@ -2,6 +2,7 @@ use mdd_format::compression::Compression;
 use mdd_format::reader::{read_mdd_bytes, FILE_MAGIC};
 use mdd_format::writer::{write_mdd_bytes, ExtraChunk, ExtraChunkType, WriteOptions};
 use prost::Message;
+use sha2::{Digest, Sha512};
 
 #[test]
 fn test_write_then_read_no_compression() {
@@ -127,4 +128,50 @@ fn test_no_extra_chunks_by_default() {
     let mdd_file =
         mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
     assert_eq!(mdd_file.chunks.len(), 1, "only diagnostic description chunk");
+}
+
+#[test]
+fn test_sha512_signature_present() {
+    let fake_fbs_data = b"data to hash for signature test";
+    let options = WriteOptions {
+        compression: Compression::None,
+        ..Default::default()
+    };
+
+    let mdd_bytes = write_mdd_bytes(fake_fbs_data, &options).unwrap();
+    let mdd_file =
+        mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
+
+    let desc_chunk = &mdd_file.chunks[0];
+    assert_eq!(desc_chunk.signatures.len(), 1, "should have one signature");
+
+    let sig = &desc_chunk.signatures[0];
+    assert_eq!(sig.algorithm, "sha512_uncompressed");
+    assert_eq!(sig.signature.len(), 64, "SHA-512 produces 64 bytes");
+
+    // Verify the hash matches independently computed SHA-512
+    let expected_hash = Sha512::digest(fake_fbs_data);
+    assert_eq!(sig.signature, expected_hash.as_slice());
+}
+
+#[test]
+fn test_sha512_signature_with_compression() {
+    let fake_fbs_data = b"data to hash - the signature should be of uncompressed data";
+    let options = WriteOptions {
+        compression: Compression::Lzma,
+        ..Default::default()
+    };
+
+    let mdd_bytes = write_mdd_bytes(fake_fbs_data, &options).unwrap();
+
+    // Read back and verify the FBS data is recovered correctly
+    let (_, recovered) = read_mdd_bytes(&mdd_bytes).unwrap();
+    assert_eq!(recovered, fake_fbs_data);
+
+    // Verify signature is of the uncompressed data
+    let mdd_file =
+        mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
+    let sig = &mdd_file.chunks[0].signatures[0];
+    let expected_hash = Sha512::digest(fake_fbs_data);
+    assert_eq!(sig.signature, expected_hash.as_slice());
 }

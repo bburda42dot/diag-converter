@@ -2,6 +2,7 @@ use crate::compression::{self, Compression};
 use crate::fileformat;
 use crate::reader::FILE_MAGIC;
 use prost::Message;
+use sha2::{Digest, Sha512};
 use std::collections::HashMap;
 use std::path::Path;
 use thiserror::Error;
@@ -71,13 +72,23 @@ pub fn write_mdd_bytes(
     options: &WriteOptions,
 ) -> Result<Vec<u8>, MddWriteError> {
     let uncompressed_size = fbs_data.len() as u64;
+
+    // Compute SHA-512 of uncompressed data before compression
+    let hash = Sha512::digest(fbs_data);
+    let signature = fileformat::Signature {
+        algorithm: "sha512_uncompressed".into(),
+        key_identifier: None,
+        metadata: HashMap::new(),
+        signature: hash.to_vec(),
+    };
+
     let chunk_data = compression::compress(fbs_data, &options.compression)?;
 
     let chunk = fileformat::Chunk {
         r#type: fileformat::chunk::DataType::DiagnosticDescription as i32,
         name: Some("diagnostic_description".into()),
         metadata: HashMap::new(),
-        signatures: vec![],
+        signatures: vec![signature],
         compression_algorithm: options.compression.algorithm_name().map(String::from),
         uncompressed_size: if options.compression != Compression::None {
             Some(uncompressed_size)
