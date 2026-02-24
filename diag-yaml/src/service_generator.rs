@@ -640,8 +640,8 @@ mod tests {
     #[test]
     fn test_tester_present_generation() {
         let svc = services_with(|s| s.tester_present = Some(enabled_entry()));
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_tester_present();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_tester_present();
         assert_eq!(services.len(), 1);
         assert_eq!(services[0].diag_comm.short_name, "TesterPresent");
         let req = services[0].request.as_ref().unwrap();
@@ -656,8 +656,8 @@ mod tests {
     #[test]
     fn test_control_dtc_setting_generation() {
         let svc = services_with(|s| s.control_dtc_setting = Some(enabled_entry()));
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_control_dtc_setting();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_control_dtc_setting();
         assert_eq!(services.len(), 2);
         assert_eq!(services[0].diag_comm.short_name, "ControlDTCSetting_on");
         assert_eq!(services[1].diag_comm.short_name, "ControlDTCSetting_off");
@@ -666,8 +666,8 @@ mod tests {
     #[test]
     fn test_clear_dtc_generation() {
         let svc = services_with(|s| s.clear_diagnostic_information = Some(enabled_entry()));
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_clear_diagnostic_information();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_clear_diagnostic_information();
         assert_eq!(services.len(), 1);
         assert_eq!(services[0].diag_comm.short_name, "ClearDiagnosticInformation");
     }
@@ -675,8 +675,8 @@ mod tests {
     #[test]
     fn test_read_dtc_info_generation() {
         let svc = services_with(|s| s.read_dtc_information = Some(enabled_entry()));
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_read_dtc_information();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_read_dtc_information();
         assert_eq!(services.len(), 1);
         assert_eq!(services[0].diag_comm.short_name, "ReadDTCInformation");
     }
@@ -684,8 +684,8 @@ mod tests {
     #[test]
     fn test_disabled_service_generates_nothing() {
         let svc = YamlServices::default();
-        let gen = ServiceGenerator::new(&svc);
-        assert!(gen.generate_all().is_empty());
+        let generator = ServiceGenerator::new(&svc);
+        assert!(generator.generate_all().is_empty());
     }
 
     #[test]
@@ -698,8 +698,8 @@ mod tests {
             entry.subfunctions = Some(serde_yaml::Value::Mapping(map));
             s.diagnostic_session_control = Some(entry);
         });
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_diagnostic_session_control();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_diagnostic_session_control();
         assert_eq!(services.len(), 2);
         assert!(services.iter().any(|s| s.diag_comm.short_name == "DiagnosticSessionControl_default"));
         assert!(services.iter().any(|s| s.diag_comm.short_name == "DiagnosticSessionControl_extended"));
@@ -715,8 +715,8 @@ mod tests {
             ]));
             s.diagnostic_session_control = Some(entry);
         });
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_diagnostic_session_control();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_diagnostic_session_control();
         assert_eq!(services.len(), 2);
         assert_eq!(services[0].diag_comm.short_name, "DiagnosticSessionControl_0x01");
     }
@@ -735,8 +735,8 @@ mod tests {
             id: serde_yaml::Value::Number(2.into()),
             alias: None, requires_unlock: None, timing: None,
         });
-        let gen = ServiceGenerator::new(&svc).with_sessions(Some(&sessions));
-        let services = gen.generate_diagnostic_session_control();
+        let generator = ServiceGenerator::new(&svc).with_sessions(Some(&sessions));
+        let services = generator.generate_diagnostic_session_control();
         assert_eq!(services.len(), 2);
         // Response should include P2 timing params
         let resp = &services[0].pos_responses[0];
@@ -755,8 +755,8 @@ mod tests {
             algorithm: String::new(), max_attempts: 0,
             delay_on_fail_ms: 0, allowed_sessions: vec![],
         });
-        let gen = ServiceGenerator::new(&svc).with_security(Some(&sec));
-        let services = gen.generate_security_access();
+        let generator = ServiceGenerator::new(&svc).with_security(Some(&sec));
+        let services = generator.generate_security_access();
         assert_eq!(services.len(), 2);
         assert_eq!(services[0].diag_comm.short_name, "SecurityAccess_RequestSeed_level_01");
         assert_eq!(services[1].diag_comm.short_name, "SecurityAccess_SendKey_level_01");
@@ -780,8 +780,8 @@ mod tests {
             entry.subfunctions = Some(serde_yaml::Value::Mapping(map));
             s.ecu_reset = Some(entry);
         });
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_ecu_reset();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_ecu_reset();
         assert_eq!(services.len(), 2);
         assert!(services.iter().any(|s| s.diag_comm.short_name == "ECUReset_hardReset"));
         assert!(services.iter().any(|s| s.diag_comm.short_name == "ECUReset_softReset"));
@@ -790,8 +790,8 @@ mod tests {
     #[test]
     fn test_ecu_reset_defaults() {
         let svc = services_with(|s| s.ecu_reset = Some(enabled_entry()));
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_ecu_reset();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_ecu_reset();
         assert_eq!(services.len(), 3); // hardReset, keyOffOnReset, softReset
     }
 
@@ -806,8 +806,8 @@ mod tests {
             entry.subfunctions = Some(serde_yaml::Value::Mapping(map));
             s.authentication = Some(entry);
         });
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_authentication();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_authentication();
         assert_eq!(services.len(), 3);
         assert!(services.iter().any(|s| s.diag_comm.short_name == "Authentication_deAuthenticate"));
         assert!(services.iter().any(|s| s.diag_comm.short_name == "Authentication_proofOfOwnership"));
@@ -821,8 +821,8 @@ mod tests {
     #[test]
     fn test_authentication_disabled() {
         let svc = services_with(|_| {}); // no authentication entry
-        let gen = ServiceGenerator::new(&svc);
-        assert!(gen.generate_authentication().is_empty());
+        let generator = ServiceGenerator::new(&svc);
+        assert!(generator.generate_authentication().is_empty());
     }
 
     #[test]
@@ -836,8 +836,8 @@ mod tests {
             ]));
             s.communication_control = Some(entry);
         });
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_communication_control();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_communication_control();
         assert_eq!(services.len(), 3);
         assert_eq!(services[0].diag_comm.short_name, "CommunicationControl_enableRxAndTx");
         assert_eq!(services[1].diag_comm.short_name, "CommunicationControl_enableRxAndDisableTx");
@@ -852,8 +852,8 @@ mod tests {
     #[test]
     fn test_communication_control_defaults() {
         let svc = services_with(|s| s.communication_control = Some(enabled_entry()));
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_communication_control();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_communication_control();
         assert_eq!(services.len(), 4); // 4 default subtypes
     }
 
@@ -867,8 +867,8 @@ mod tests {
             entry.subfunctions = Some(serde_yaml::Value::Mapping(map));
             s.communication_control = Some(entry);
         });
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_communication_control();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_communication_control();
         assert_eq!(services.len(), 2);
         assert!(services.iter().any(|s| s.diag_comm.short_name == "CommunicationControl_enableRxAndTx"));
         assert!(services.iter().any(|s| s.diag_comm.short_name == "CommunicationControl_disableRxAndTx"));
@@ -877,8 +877,8 @@ mod tests {
     #[test]
     fn test_request_download_group() {
         let svc = services_with(|s| s.request_download = Some(enabled_entry()));
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_request_download();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_request_download();
         assert_eq!(services.len(), 3);
         assert_eq!(services[0].diag_comm.short_name, "RequestDownload");
         assert_eq!(services[1].diag_comm.short_name, "TransferData");
@@ -898,8 +898,8 @@ mod tests {
     #[test]
     fn test_request_upload_group() {
         let svc = services_with(|s| s.request_upload = Some(enabled_entry()));
-        let gen = ServiceGenerator::new(&svc);
-        let services = gen.generate_request_upload();
+        let generator = ServiceGenerator::new(&svc);
+        let services = generator.generate_request_upload();
         assert_eq!(services.len(), 3);
         assert_eq!(services[0].diag_comm.short_name, "RequestUpload");
         assert_eq!(services[1].diag_comm.short_name, "TransferData_Upload");
@@ -909,8 +909,8 @@ mod tests {
     #[test]
     fn test_request_download_disabled() {
         let svc = services_with(|_| {});
-        let gen = ServiceGenerator::new(&svc);
-        assert!(gen.generate_request_download().is_empty());
-        assert!(gen.generate_request_upload().is_empty());
+        let generator = ServiceGenerator::new(&svc);
+        assert!(generator.generate_request_download().is_empty());
+        assert!(generator.generate_request_upload().is_empty());
     }
 }
