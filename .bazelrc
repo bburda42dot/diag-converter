@@ -1,0 +1,5 @@
+# Test output
+test --test_output=errors
+
+# Registries
+common --registry=https://bcr.bazel.build
