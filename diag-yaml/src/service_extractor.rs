@@ -90,21 +90,76 @@ pub fn extract_services(services: &[DiagService]) -> YamlServices {
     let mut has_read_dtc = false;
 
     for svc in services {
-        match svc.diag_comm.semantic.as_str() {
-            "SESSION" => has_session = true,
-            "SECURITY-ACCESS" => has_security = true,
-            "ECU-RESET" => reset_svcs.push(svc),
-            "AUTHENTICATION" => auth_svcs.push(svc),
-            "COMMUNICATION-CONTROL" => comm_svcs.push(svc),
-            "DOWNLOAD" => has_download = true,
-            "UPLOAD" => has_upload = true,
-            "TESTING" => has_tester_present = true,
-            "CONTROL-DTC-SETTING" => has_dtc_setting = true,
-            "CLEAR-DTC" => has_clear_dtc = true,
-            "READ-DTC-INFO" => has_read_dtc = true,
-            // DID/routine/IO services handled by writer's dids/routines sections
-            "DATA-IDENT" | "ROUTINE" | "IO-CONTROL" => {}
-            _ => {}
+        // First try semantic match (reliable for YAML-originated services)
+        let classified = match svc.diag_comm.semantic.as_str() {
+            "SESSION" => {
+                has_session = true;
+                true
+            }
+            "SECURITY-ACCESS" => {
+                has_security = true;
+                true
+            }
+            "ECU-RESET" => {
+                reset_svcs.push(svc);
+                true
+            }
+            "AUTHENTICATION" => {
+                auth_svcs.push(svc);
+                true
+            }
+            "COMMUNICATION-CONTROL" => {
+                comm_svcs.push(svc);
+                true
+            }
+            "DOWNLOAD" => {
+                has_download = true;
+                true
+            }
+            "UPLOAD" => {
+                has_upload = true;
+                true
+            }
+            "TESTING" => {
+                has_tester_present = true;
+                true
+            }
+            "CONTROL-DTC-SETTING" => {
+                has_dtc_setting = true;
+                true
+            }
+            "CLEAR-DTC" => {
+                has_clear_dtc = true;
+                true
+            }
+            "READ-DTC-INFO" => {
+                has_read_dtc = true;
+                true
+            }
+            "DATA-IDENT" | "ROUTINE" | "IO-CONTROL" => true,
+            _ => false,
+        };
+
+        // Fallback: detect by SID for ODX-originated services
+        if !classified {
+            if let Some(sid) = extract_sid(svc) {
+                match sid {
+                    0x10 => has_session = true,
+                    0x11 => reset_svcs.push(svc),
+                    0x27 => has_security = true,
+                    0x28 => comm_svcs.push(svc),
+                    0x29 => auth_svcs.push(svc),
+                    0x34 => has_download = true,
+                    0x35 => has_upload = true,
+                    0x36 | 0x37 => has_download = true,
+                    0x3E => has_tester_present = true,
+                    0x85 => has_dtc_setting = true,
+                    0x14 => has_clear_dtc = true,
+                    0x19 => has_read_dtc = true,
+                    0x22 | 0x2E | 0x2F | 0x31 => {} // DID/IO/routine
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -519,5 +574,91 @@ mod tests {
             ..Default::default()
         });
         assert!(has_any_service(&svcs));
+    }
+
+    #[test]
+    fn test_extract_by_sid_fallback() {
+        let svc = make_service("Default_Start", "", "0x10");
+        let yaml_svcs = extract_services(&[svc]);
+        assert!(
+            yaml_svcs
+                .diagnostic_session_control
+                .as_ref()
+                .map_or(false, |e| e.enabled),
+            "Should detect DiagnosticSessionControl by SID 0x10 even without semantic"
+        );
+    }
+
+    #[test]
+    fn test_extract_odx_comm_control_by_sid() {
+        let svc = make_service("EnableRxAndEnableTx_Control", "", "0x28");
+        let yaml_svcs = extract_services(&[svc]);
+        assert!(
+            yaml_svcs
+                .communication_control
+                .as_ref()
+                .map_or(false, |e| e.enabled),
+            "Should detect CommunicationControl by SID 0x28"
+        );
+    }
+
+    #[test]
+    fn test_extract_odx_with_nonstandard_subfunction_name() {
+        // ODX service with "ResetType" instead of "SubFunction"
+        let svc = DiagService {
+            diag_comm: DiagComm {
+                short_name: "HardReset".to_string(),
+                semantic: String::new(),
+                ..Default::default()
+            },
+            request: Some(Request {
+                params: vec![
+                    Param {
+                        short_name: "SID".to_string(),
+                        param_type: ParamType::CodedConst,
+                        byte_position: Some(0),
+                        bit_position: Some(0),
+                        specific_data: Some(ParamData::CodedConst {
+                            coded_value: "0x11".to_string(),
+                            diag_coded_type: DiagCodedType {
+                                is_high_low_byte_order: true,
+                                ..Default::default()
+                            },
+                        }),
+                        ..Default::default()
+                    },
+                    Param {
+                        short_name: "ResetType".to_string(),
+                        param_type: ParamType::CodedConst,
+                        byte_position: Some(1),
+                        bit_position: Some(0),
+                        specific_data: Some(ParamData::CodedConst {
+                            coded_value: "0x01".to_string(),
+                            diag_coded_type: DiagCodedType {
+                                is_high_low_byte_order: true,
+                                ..Default::default()
+                            },
+                        }),
+                        ..Default::default()
+                    },
+                ],
+                sdgs: None,
+            }),
+            ..Default::default()
+        };
+        let yaml_svcs = extract_services(&[svc]);
+        assert!(
+            yaml_svcs.ecu_reset.as_ref().map_or(false, |e| e.enabled),
+            "Should detect ECUReset by SID 0x11"
+        );
+        assert!(
+            yaml_svcs
+                .ecu_reset
+                .as_ref()
+                .unwrap()
+                .subfunctions
+                .is_some(),
+            "Should extract subfunction by byte position even with non-standard param name"
+        );
     }
 }
