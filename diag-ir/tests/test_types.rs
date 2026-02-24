@@ -117,3 +117,86 @@ fn test_compu_method_constructs_correctly() {
     assert_eq!(cm.category, CompuCategory::Linear);
     assert_eq!(cm.internal_to_phys.unwrap().compu_scales.len(), 1);
 }
+
+#[test]
+fn test_empty_service_name_detected() {
+    let db = DiagDatabase {
+        ecu_name: "TEST".into(),
+        variants: vec![Variant {
+            diag_layer: DiagLayer {
+                short_name: "Base".into(),
+                diag_services: vec![DiagService::default()], // empty short_name
+                ..Default::default()
+            },
+            is_base_variant: true,
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let errors = validate_database(&db).unwrap_err();
+    assert!(
+        errors.iter().any(|e| e.to_string().contains("empty service name")),
+        "should detect empty service name: {:?}", errors
+    );
+}
+
+#[test]
+fn test_duplicate_dtc_id_detected() {
+    let db = DiagDatabase {
+        ecu_name: "TEST".into(),
+        variants: vec![Variant {
+            diag_layer: DiagLayer {
+                short_name: "Base".into(),
+                diag_services: vec![DiagService {
+                    diag_comm: DiagComm { short_name: "Svc".into(), ..Default::default() },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+            is_base_variant: true,
+            ..Default::default()
+        }],
+        dtcs: vec![
+            Dtc { short_name: "DTC_A".into(), trouble_code: 0x123456, ..Default::default() },
+            Dtc { short_name: "DTC_B".into(), trouble_code: 0x123456, ..Default::default() },
+        ],
+        ..Default::default()
+    };
+    let errors = validate_database(&db).unwrap_err();
+    assert!(
+        errors.iter().any(|e| e.to_string().contains("duplicate DTC")),
+        "should detect duplicate DTC ID: {:?}", errors
+    );
+}
+
+#[test]
+fn test_empty_state_chart_detected() {
+    let db = DiagDatabase {
+        ecu_name: "TEST".into(),
+        variants: vec![Variant {
+            diag_layer: DiagLayer {
+                short_name: "Base".into(),
+                diag_services: vec![DiagService {
+                    diag_comm: DiagComm { short_name: "Svc".into(), ..Default::default() },
+                    ..Default::default()
+                }],
+                state_charts: vec![StateChart {
+                    short_name: "EmptyChart".into(),
+                    semantic: String::new(),
+                    state_transitions: vec![],
+                    start_state_short_name_ref: String::new(),
+                    states: vec![],
+                }],
+                ..Default::default()
+            },
+            is_base_variant: true,
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let errors = validate_database(&db).unwrap_err();
+    assert!(
+        errors.iter().any(|e| e.to_string().contains("EmptyChart")),
+        "should detect empty state chart: {:?}", errors
+    );
+}

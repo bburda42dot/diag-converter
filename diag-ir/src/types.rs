@@ -470,7 +470,7 @@ pub struct PhysicalDimension {
 // --- DTCs ---
 
 /// Maps to FBS DTC
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Dtc {
     pub short_name: String,
     pub trouble_code: u32,
