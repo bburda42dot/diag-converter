@@ -30,8 +30,8 @@ rust_test(
         "//test-fixtures:odx_fixtures",
     ],
     data = [
-        "//test-fixtures:yaml_fixtures",
         "//test-fixtures:odx_fixtures",
+        "//test-fixtures:yaml_fixtures",
     ],
     deps = [
         ":diag_yaml",
