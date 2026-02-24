@@ -1,5 +1,6 @@
 pub mod parser;
 pub mod semantic_validator;
+pub mod service_extractor;
 pub mod service_generator;
 pub mod validator;
 pub mod writer;
