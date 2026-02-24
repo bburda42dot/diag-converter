@@ -36,6 +36,10 @@ enum Command {
         /// Parse and validate without writing output
         #[arg(long)]
         dry_run: bool,
+
+        /// Filter output by audience (e.g. development, aftermarket, oem)
+        #[arg(long)]
+        audience: Option<String>,
     },
 
     /// Validate a diagnostic input file
@@ -124,6 +128,7 @@ fn run_convert(
     compression: &str,
     verbose: bool,
     dry_run: bool,
+    audience: Option<&str>,
 ) -> Result<()> {
     if verbose {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
@@ -140,7 +145,16 @@ fn run_convert(
 
     log::info!("Converting {:?} -> {:?}", in_fmt, out_fmt);
 
-    let db = parse_input(input, verbose)?;
+    let mut db = parse_input(input, verbose)?;
+
+    if let Some(aud) = audience {
+        let before = db.variants.iter().map(|v| v.diag_layer.diag_services.len()).sum::<usize>();
+        diag_ir::filter_by_audience(&mut db, aud);
+        let after = db.variants.iter().map(|v| v.diag_layer.diag_services.len()).sum::<usize>();
+        if before != after {
+            log::info!("Audience filter '{aud}': {before} -> {after} services");
+        }
+    }
 
     let validate_start = Instant::now();
     if let Err(errors) = diag_ir::validate_database(&db) {
@@ -330,7 +344,8 @@ fn main() -> Result<()> {
             compression,
             verbose,
             dry_run,
-        }) => run_convert(&input, &output, &compression, verbose, dry_run),
+            audience,
+        }) => run_convert(&input, &output, &compression, verbose, dry_run, audience.as_deref()),
 
         Some(Command::Validate {
             input,

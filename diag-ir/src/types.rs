@@ -19,7 +19,7 @@ pub struct DiagDatabase {
 // --- Variant system ---
 
 /// Maps to FBS Variant
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Variant {
     pub diag_layer: DiagLayer,
     pub is_base_variant: bool,
@@ -769,7 +769,7 @@ pub struct Sdgs {
 }
 
 /// Maps to FBS Audience
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Audience {
     pub enabled_audiences: Vec<AdditionalAudience>,
     pub disabled_audiences: Vec<AdditionalAudience>,
