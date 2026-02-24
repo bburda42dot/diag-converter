@@ -13,6 +13,7 @@ mdd-format = { workspace = true }
 diag-ir = { workspace = true }
 diag-yaml = { workspace = true }
 diag-odx = { workspace = true }
+serde_yaml = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }

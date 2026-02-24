@@ -214,7 +214,7 @@ fn run_convert(
 fn run_validate(input: &Path, quiet: bool, summary: bool) -> Result<()> {
     let mut all_errors: Vec<String> = Vec::new();
 
-    // Schema validation for YAML files
+    // Schema + semantic validation for YAML files
     let in_fmt = detect_format(input).context("input file")?;
     if in_fmt == Format::Yaml {
         let text = std::fs::read_to_string(input)
@@ -222,6 +222,13 @@ fn run_validate(input: &Path, quiet: bool, summary: bool) -> Result<()> {
         if let Err(schema_errors) = diag_yaml::validate_yaml_schema(&text) {
             for e in &schema_errors {
                 all_errors.push(format!("schema: {e}"));
+            }
+        }
+        // Semantic validation on YAML model
+        if let Ok(doc) = serde_yaml::from_str::<diag_yaml::yaml_model::YamlDocument>(&text) {
+            let semantic_issues = diag_yaml::validate_semantics(&doc);
+            for issue in &semantic_issues {
+                all_errors.push(issue.to_string());
             }
         }
     }
