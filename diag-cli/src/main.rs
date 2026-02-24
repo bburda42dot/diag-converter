@@ -18,12 +18,21 @@ struct Cli {
 enum Command {
     /// Convert between diagnostic formats (ODX, YAML, MDD)
     Convert {
-        /// Input file (.odx, .yml/.yaml, .mdd)
-        input: PathBuf,
+        /// Input file(s) (.odx, .pdx, .yml/.yaml, .mdd)
+        #[arg(required = true)]
+        input: Vec<PathBuf>,
 
-        /// Output file (.odx, .yml/.yaml, .mdd)
-        #[arg(short, long)]
-        output: PathBuf,
+        /// Output file (single input mode)
+        #[arg(short, long, conflicts_with = "output_dir")]
+        output: Option<PathBuf>,
+
+        /// Output directory (multi-file mode, output extension inferred from -f/--format)
+        #[arg(short = 'O', long, conflicts_with = "output")]
+        output_dir: Option<PathBuf>,
+
+        /// Output format when using -O (odx, yaml, mdd)
+        #[arg(short, long, default_value = "mdd")]
+        format: String,
 
         /// Compression for MDD output (lzma, gzip, zstd, none)
         #[arg(long, default_value = "lzma")]
@@ -195,12 +204,6 @@ fn run_convert(
     include_job_files: Option<&Path>,
     lenient: bool,
 ) -> Result<()> {
-    if verbose {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
-    } else {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
-    }
-
     let out_fmt = detect_format(output).context("output file")?;
     let in_fmt = detect_format(input).context("input file")?;
 
@@ -409,6 +412,72 @@ fn run_info(input: &Path) -> Result<()> {
     Ok(())
 }
 
+fn format_extension(fmt: &str) -> Result<&str> {
+    match fmt {
+        "odx" => Ok("odx"),
+        "yaml" | "yml" => Ok("yml"),
+        "mdd" => Ok("mdd"),
+        other => bail!("Unknown output format: {other}. Use odx, yaml, or mdd"),
+    }
+}
+
+fn run_batch_convert(
+    inputs: &[PathBuf],
+    output_dir: &Path,
+    out_ext: &str,
+    compression: &str,
+    verbose: bool,
+    dry_run: bool,
+    audience: Option<&str>,
+    include_job_files: Option<&Path>,
+    lenient: bool,
+) -> Result<()> {
+    use rayon::prelude::*;
+
+    if !output_dir.exists() {
+        std::fs::create_dir_all(output_dir)
+            .with_context(|| format!("creating output directory {}", output_dir.display()))?;
+    }
+
+    let results: Vec<(PathBuf, Result<()>)> = inputs
+        .par_iter()
+        .map(|input| {
+            let stem = input.file_stem().unwrap_or_default();
+            let out_path = output_dir.join(format!("{}.{}", stem.to_string_lossy(), out_ext));
+            let result = run_convert(
+                input,
+                &out_path,
+                compression,
+                verbose,
+                dry_run,
+                audience,
+                include_job_files,
+                lenient,
+            );
+            (input.clone(), result)
+        })
+        .collect();
+
+    let mut failed = 0;
+    for (input, result) in &results {
+        if let Err(e) = result {
+            eprintln!("FAILED {}: {e:#}", input.display());
+            failed += 1;
+        }
+    }
+
+    if failed > 0 {
+        bail!("{failed} of {} files failed to convert", inputs.len());
+    }
+
+    println!(
+        "Batch complete: {} files converted to {}",
+        inputs.len(),
+        output_dir.display()
+    );
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -416,22 +485,57 @@ fn main() -> Result<()> {
         Some(Command::Convert {
             input,
             output,
+            output_dir,
+            format,
             compression,
             verbose,
             dry_run,
             audience,
             include_job_files,
             lenient,
-        }) => run_convert(
-            &input,
-            &output,
-            &compression,
-            verbose,
-            dry_run,
-            audience.as_deref(),
-            include_job_files.as_deref(),
-            lenient,
-        ),
+        }) => {
+            if verbose {
+                env_logger::Builder::from_env(
+                    env_logger::Env::default().default_filter_or("debug"),
+                )
+                .init();
+            } else {
+                env_logger::Builder::from_env(
+                    env_logger::Env::default().default_filter_or("warn"),
+                )
+                .init();
+            }
+
+            if input.len() == 1 && output.is_some() {
+                run_convert(
+                    &input[0],
+                    output.as_ref().unwrap(),
+                    &compression,
+                    verbose,
+                    dry_run,
+                    audience.as_deref(),
+                    include_job_files.as_deref(),
+                    lenient,
+                )
+            } else if let Some(dir) = &output_dir {
+                let ext = format_extension(&format)?;
+                run_batch_convert(
+                    &input,
+                    dir,
+                    ext,
+                    &compression,
+                    verbose,
+                    dry_run,
+                    audience.as_deref(),
+                    include_job_files.as_deref(),
+                    lenient,
+                )
+            } else if input.len() > 1 {
+                bail!("Multiple input files require -O/--output-dir instead of -o/--output")
+            } else {
+                bail!("Specify -o/--output (single file) or -O/--output-dir (batch)")
+            }
+        }
 
         Some(Command::Validate {
             input,
@@ -442,8 +546,6 @@ fn main() -> Result<()> {
         Some(Command::Info { input }) => run_info(&input),
 
         None => {
-            // Backwards compat: bare positional arg treated as convert
-            // but we need --output too, so just show help
             if let Some(bare) = cli.bare_input {
                 bail!(
                     "Missing --output. Usage: diag-converter convert {} -o <output>",

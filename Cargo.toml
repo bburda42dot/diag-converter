@@ -43,6 +43,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 
 # CLI
 clap = { version = "4", features = ["derive"] }
+rayon = "1"
 
 # Error handling
 thiserror = "2"
