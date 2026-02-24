@@ -66,13 +66,15 @@ enum Command {
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Format {
     Odx,
+    Pdx,
     Yaml,
     Mdd,
 }
 
 fn detect_format(path: &Path) -> Result<Format> {
     match path.extension().and_then(|e| e.to_str()) {
-        Some("odx" | "pdx") => Ok(Format::Odx),
+        Some("odx") => Ok(Format::Odx),
+        Some("pdx") => Ok(Format::Pdx),
         Some("yml" | "yaml") => Ok(Format::Yaml),
         Some("mdd") => Ok(Format::Mdd),
         Some(ext) => bail!("Unknown file extension: .{ext}"),
@@ -106,6 +108,10 @@ fn parse_input(input: &Path, verbose: bool) -> Result<diag_ir::types::DiagDataba
                 .with_context(|| format!("reading {}", input.display()))?;
             diag_odx::parse_odx(&text)
                 .with_context(|| format!("parsing ODX from {}", input.display()))?
+        }
+        Format::Pdx => {
+            diag_odx::read_pdx_file(input)
+                .with_context(|| format!("reading PDX from {}", input.display()))?
         }
         Format::Mdd => {
             let (_meta, fbs_data) = mdd_format::reader::read_mdd_file(input)
@@ -210,6 +216,9 @@ fn run_convert(
             mdd_format::writer::write_mdd_file(&fbs_data, &options, output)
                 .with_context(|| format!("writing MDD to {}", output.display()))?;
         }
+        Format::Pdx => {
+            bail!("PDX is an input-only format (ZIP archive). Use .odx for ODX output.");
+        }
     }
 
     if verbose {
@@ -291,6 +300,7 @@ fn run_info(input: &Path) -> Result<()> {
 
     let format_str = match in_fmt {
         Format::Odx => "ODX",
+        Format::Pdx => "PDX",
         Format::Yaml => "YAML",
         Format::Mdd => "MDD",
     };

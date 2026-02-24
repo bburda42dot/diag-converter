@@ -38,6 +38,9 @@ quick-xml = { version = "0.37", features = ["serialize"] }
 # Validation
 jsonschema = "0.42"
 
+# Archive
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
 # CLI
 clap = { version = "4", features = ["derive"] }
 
