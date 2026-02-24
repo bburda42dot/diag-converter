@@ -23,6 +23,22 @@ pub struct WriteOptions {
     pub revision: String,
     pub compression: Compression,
     pub metadata: HashMap<String, String>,
+    /// Additional chunks (e.g. JAR_FILE, JAR_FILE_PARTIAL) to include.
+    pub extra_chunks: Vec<ExtraChunk>,
+}
+
+/// An additional chunk to embed in the MDD file.
+#[derive(Debug, Clone)]
+pub struct ExtraChunk {
+    pub chunk_type: ExtraChunkType,
+    pub name: String,
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ExtraChunkType {
+    JarFile,
+    JarFilePartial,
 }
 
 impl Default for WriteOptions {
@@ -33,6 +49,7 @@ impl Default for WriteOptions {
             revision: String::new(),
             compression: Compression::Lzma,
             metadata: HashMap::new(),
+            extra_chunks: Vec::new(),
         }
     }
 }
@@ -72,12 +89,32 @@ pub fn write_mdd_bytes(
         data: Some(chunk_data),
     };
 
+    let mut chunks = vec![chunk];
+
+    for extra in &options.extra_chunks {
+        let data_type = match extra.chunk_type {
+            ExtraChunkType::JarFile => fileformat::chunk::DataType::JarFile,
+            ExtraChunkType::JarFilePartial => fileformat::chunk::DataType::JarFilePartial,
+        };
+        chunks.push(fileformat::Chunk {
+            r#type: data_type as i32,
+            name: Some(extra.name.clone()),
+            metadata: HashMap::new(),
+            signatures: vec![],
+            compression_algorithm: None,
+            uncompressed_size: None,
+            encryption: None,
+            mime_type: None,
+            data: Some(extra.data.clone()),
+        });
+    }
+
     let mdd_file = fileformat::MddFile {
         version: options.version.clone(),
         ecu_name: options.ecu_name.clone(),
         revision: options.revision.clone(),
         metadata: options.metadata.clone(),
-        chunks: vec![chunk],
+        chunks,
         feature_flags: vec![],
         chunks_signature: None,
     };

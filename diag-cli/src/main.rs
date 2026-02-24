@@ -40,6 +40,10 @@ enum Command {
         /// Filter output by audience (e.g. development, aftermarket, oem)
         #[arg(long)]
         audience: Option<String>,
+
+        /// Directory containing job files (JARs) referenced by SingleEcuJob ProgCode entries
+        #[arg(long)]
+        include_job_files: Option<PathBuf>,
     },
 
     /// Validate a diagnostic input file
@@ -128,6 +132,51 @@ fn parse_input(input: &Path, verbose: bool) -> Result<diag_ir::types::DiagDataba
     Ok(db)
 }
 
+/// Collect unique code_file names from all SingleEcuJob ProgCode entries.
+fn collect_code_file_refs(db: &diag_ir::types::DiagDatabase) -> Vec<String> {
+    let mut refs = std::collections::BTreeSet::new();
+    for variant in &db.variants {
+        for job in &variant.diag_layer.single_ecu_jobs {
+            for pc in &job.prog_codes {
+                if !pc.code_file.is_empty() {
+                    refs.insert(pc.code_file.clone());
+                }
+                for lib in &pc.libraries {
+                    if !lib.code_file.is_empty() {
+                        refs.insert(lib.code_file.clone());
+                    }
+                }
+            }
+        }
+    }
+    refs.into_iter().collect()
+}
+
+/// Build ExtraChunk entries by reading referenced job files from a directory.
+fn build_job_file_chunks(
+    db: &diag_ir::types::DiagDatabase,
+    job_files_dir: &Path,
+) -> Result<Vec<mdd_format::writer::ExtraChunk>> {
+    let refs = collect_code_file_refs(db);
+    let mut chunks = Vec::new();
+    for name in &refs {
+        let file_path = job_files_dir.join(name);
+        if !file_path.exists() {
+            log::warn!("Job file not found: {}", file_path.display());
+            continue;
+        }
+        let data = std::fs::read(&file_path)
+            .with_context(|| format!("reading job file {}", file_path.display()))?;
+        log::info!("Including job file: {} ({} bytes)", name, data.len());
+        chunks.push(mdd_format::writer::ExtraChunk {
+            chunk_type: mdd_format::writer::ExtraChunkType::JarFile,
+            name: name.clone(),
+            data,
+        });
+    }
+    Ok(chunks)
+}
+
 fn run_convert(
     input: &Path,
     output: &Path,
@@ -135,6 +184,7 @@ fn run_convert(
     verbose: bool,
     dry_run: bool,
     audience: Option<&str>,
+    include_job_files: Option<&Path>,
 ) -> Result<()> {
     if verbose {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
@@ -206,11 +256,17 @@ fn run_convert(
         }
         Format::Mdd => {
             let fbs_data = diag_ir::ir_to_flatbuffers(&db);
+            let extra_chunks = if let Some(dir) = include_job_files {
+                build_job_file_chunks(&db, dir)?
+            } else {
+                vec![]
+            };
             let options = mdd_format::writer::WriteOptions {
                 version: db.version.clone(),
                 ecu_name: db.ecu_name.clone(),
                 revision: db.revision.clone(),
                 compression: parse_compression(compression)?,
+                extra_chunks,
                 ..Default::default()
             };
             mdd_format::writer::write_mdd_file(&fbs_data, &options, output)
@@ -355,7 +411,16 @@ fn main() -> Result<()> {
             verbose,
             dry_run,
             audience,
-        }) => run_convert(&input, &output, &compression, verbose, dry_run, audience.as_deref()),
+            include_job_files,
+        }) => run_convert(
+            &input,
+            &output,
+            &compression,
+            verbose,
+            dry_run,
+            audience.as_deref(),
+            include_job_files.as_deref(),
+        ),
 
         Some(Command::Validate {
             input,
