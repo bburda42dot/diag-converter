@@ -212,14 +212,29 @@ fn run_convert(
 }
 
 fn run_validate(input: &Path, quiet: bool, summary: bool) -> Result<()> {
+    let mut all_errors: Vec<String> = Vec::new();
+
+    // Schema validation for YAML files
+    let in_fmt = detect_format(input).context("input file")?;
+    if in_fmt == Format::Yaml {
+        let text = std::fs::read_to_string(input)
+            .with_context(|| format!("reading {}", input.display()))?;
+        if let Err(schema_errors) = diag_yaml::validate_yaml_schema(&text) {
+            for e in &schema_errors {
+                all_errors.push(format!("schema: {e}"));
+            }
+        }
+    }
+
+    // IR-level validation (parse first)
     let db = parse_input(input, false)?;
+    if let Err(ir_errors) = diag_ir::validate_database(&db) {
+        for e in &ir_errors {
+            all_errors.push(e.to_string());
+        }
+    }
 
-    let errors = match diag_ir::validate_database(&db) {
-        Err(errors) => errors,
-        Ok(()) => Vec::new(),
-    };
-
-    if errors.is_empty() {
+    if all_errors.is_empty() {
         if !quiet {
             println!("{}: valid", input.display());
         }
@@ -227,24 +242,24 @@ fn run_validate(input: &Path, quiet: bool, summary: bool) -> Result<()> {
     }
 
     if !quiet && !summary {
-        for e in &errors {
+        for e in &all_errors {
             eprintln!("{}: {e}", input.display());
         }
     }
 
-    if summary || (!quiet && !errors.is_empty()) {
+    if summary || (!quiet && !all_errors.is_empty()) {
         println!(
             "{}: {} validation error{}",
             input.display(),
-            errors.len(),
-            if errors.len() == 1 { "" } else { "s" }
+            all_errors.len(),
+            if all_errors.len() == 1 { "" } else { "s" }
         );
     }
 
     bail!(
         "{} validation error{} in {}",
-        errors.len(),
-        if errors.len() == 1 { "" } else { "s" },
+        all_errors.len(),
+        if all_errors.len() == 1 { "" } else { "s" },
         input.display()
     );
 }
