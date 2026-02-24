@@ -95,6 +95,22 @@ diag-converter info input.mdd
 | `diag-odx` | ODX/PDX parser/writer (ISO 22901-1 XML) |
 | `diag-cli` | CLI entry point with convert/validate/info subcommands |
 
+## Prerequisites
+
+The `mdd-format` crate uses Protocol Buffers via `prost-build`, which requires the `protoc` compiler at build time.
+
+| OS | Install command |
+|----|-----------------|
+| Debian/Ubuntu | `sudo apt-get install -y protobuf-compiler cmake` |
+| Fedora | `sudo dnf install protobuf-compiler cmake` |
+| macOS | `brew install protobuf cmake` |
+
+Verify with:
+
+```bash
+protoc --version
+```
+
 ## Building
 
 ### Cargo
