@@ -44,6 +44,10 @@ enum Command {
         /// Directory containing job files (JARs) referenced by SingleEcuJob ProgCode entries
         #[arg(long)]
         include_job_files: Option<PathBuf>,
+
+        /// Lenient parsing: log warnings instead of failing on malformed ODX references
+        #[arg(short = 'L', long)]
+        lenient: bool,
     },
 
     /// Validate a diagnostic input file
@@ -96,7 +100,7 @@ fn parse_compression(s: &str) -> Result<mdd_format::compression::Compression> {
     }
 }
 
-fn parse_input(input: &Path, verbose: bool) -> Result<diag_ir::types::DiagDatabase> {
+fn parse_input(input: &Path, verbose: bool, lenient: bool) -> Result<diag_ir::types::DiagDatabase> {
     let in_fmt = detect_format(input).context("input file")?;
     let start = Instant::now();
 
@@ -110,8 +114,12 @@ fn parse_input(input: &Path, verbose: bool) -> Result<diag_ir::types::DiagDataba
         Format::Odx => {
             let text = std::fs::read_to_string(input)
                 .with_context(|| format!("reading {}", input.display()))?;
-            diag_odx::parse_odx(&text)
-                .with_context(|| format!("parsing ODX from {}", input.display()))?
+            if lenient {
+                diag_odx::parse_odx_lenient(&text)
+            } else {
+                diag_odx::parse_odx(&text)
+            }
+            .with_context(|| format!("parsing ODX from {}", input.display()))?
         }
         Format::Pdx => {
             diag_odx::read_pdx_file(input)
@@ -185,6 +193,7 @@ fn run_convert(
     dry_run: bool,
     audience: Option<&str>,
     include_job_files: Option<&Path>,
+    lenient: bool,
 ) -> Result<()> {
     if verbose {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
@@ -201,7 +210,7 @@ fn run_convert(
 
     log::info!("Converting {:?} -> {:?}", in_fmt, out_fmt);
 
-    let mut db = parse_input(input, verbose)?;
+    let mut db = parse_input(input, verbose, lenient)?;
 
     if let Some(aud) = audience {
         let before = db.variants.iter().map(|v| v.diag_layer.diag_services.len()).sum::<usize>();
@@ -313,7 +322,7 @@ fn run_validate(input: &Path, quiet: bool, summary: bool) -> Result<()> {
     }
 
     // IR-level validation (parse first)
-    let db = parse_input(input, false)?;
+    let db = parse_input(input, false, false)?;
     if let Err(ir_errors) = diag_ir::validate_database(&db) {
         for e in &ir_errors {
             all_errors.push(e.to_string());
@@ -352,7 +361,7 @@ fn run_validate(input: &Path, quiet: bool, summary: bool) -> Result<()> {
 
 fn run_info(input: &Path) -> Result<()> {
     let in_fmt = detect_format(input).context("input file")?;
-    let db = parse_input(input, false)?;
+    let db = parse_input(input, false, false)?;
 
     let format_str = match in_fmt {
         Format::Odx => "ODX",
@@ -412,6 +421,7 @@ fn main() -> Result<()> {
             dry_run,
             audience,
             include_job_files,
+            lenient,
         }) => run_convert(
             &input,
             &output,
@@ -420,6 +430,7 @@ fn main() -> Result<()> {
             dry_run,
             audience.as_deref(),
             include_job_files.as_deref(),
+            lenient,
         ),
 
         Some(Command::Validate {

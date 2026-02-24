@@ -25,6 +25,15 @@ pub enum OdxParseError {
 
 /// Parse an ODX XML string into an IR DiagDatabase.
 pub fn parse_odx(xml: &str) -> Result<DiagDatabase, OdxParseError> {
+    parse_odx_with_options(xml, false)
+}
+
+/// Parse an ODX XML string in lenient mode (skip malformed DOPs, missing refs).
+pub fn parse_odx_lenient(xml: &str) -> Result<DiagDatabase, OdxParseError> {
+    parse_odx_with_options(xml, true)
+}
+
+fn parse_odx_with_options(xml: &str, lenient: bool) -> Result<DiagDatabase, OdxParseError> {
     // Phase 1: XML deserialization
     let odx: Odx = quick_xml::de::from_str(xml)?;
 
@@ -32,10 +41,10 @@ pub fn parse_odx(xml: &str) -> Result<DiagDatabase, OdxParseError> {
     let index = OdxIndex::build(&odx);
 
     // Phase 3 + 4: Merge inheritance and map to IR
-    odx_to_ir(&odx, &index)
+    odx_to_ir(&odx, &index, lenient)
 }
 
-fn odx_to_ir(odx: &Odx, index: &OdxIndex) -> Result<DiagDatabase, OdxParseError> {
+fn odx_to_ir(odx: &Odx, index: &OdxIndex, lenient: bool) -> Result<DiagDatabase, OdxParseError> {
     let dlc = odx
         .diag_layer_container
         .as_ref()
@@ -52,7 +61,7 @@ fn odx_to_ir(odx: &Odx, index: &OdxIndex) -> Result<DiagDatabase, OdxParseError>
     if let Some(w) = &dlc.base_variants {
         for layer in &w.items {
             let merged = MergedLayer::merge(layer, index);
-            let (variant, dtcs) = layer_to_variant(&merged, index, true)?;
+            let (variant, dtcs) = layer_to_variant(&merged, index, true, lenient)?;
             variants.push(variant);
             all_dtcs.extend(dtcs);
         }
@@ -62,7 +71,7 @@ fn odx_to_ir(odx: &Odx, index: &OdxIndex) -> Result<DiagDatabase, OdxParseError>
     if let Some(w) = &dlc.ecu_variants {
         for layer in &w.items {
             let merged = MergedLayer::merge(layer, index);
-            let (variant, dtcs) = layer_to_variant(&merged, index, false)?;
+            let (variant, dtcs) = layer_to_variant(&merged, index, false, lenient)?;
             variants.push(variant);
             all_dtcs.extend(dtcs);
         }
@@ -73,7 +82,7 @@ fn odx_to_ir(odx: &Odx, index: &OdxIndex) -> Result<DiagDatabase, OdxParseError>
             .iter()
             .map(|layer| {
                 let merged = MergedLayer::merge(layer, index);
-                layer_to_functional_group(&merged, index)
+                layer_to_functional_group(&merged, index, lenient)
             })
             .collect::<Result<Vec<_>, _>>()?
     } else {
@@ -99,8 +108,9 @@ fn layer_to_variant(
     merged: &MergedLayer,
     index: &OdxIndex,
     is_base: bool,
+    lenient: bool,
 ) -> Result<(Variant, Vec<Dtc>), OdxParseError> {
-    let (diag_layer, dtcs) = build_diag_layer(merged, index)?;
+    let (diag_layer, dtcs) = build_diag_layer(merged, index, lenient)?;
 
     let variant_patterns = extract_variant_patterns(merged.layer);
     let parent_refs = extract_parent_refs(merged.layer, index);
@@ -119,8 +129,9 @@ fn layer_to_variant(
 fn layer_to_functional_group(
     merged: &MergedLayer,
     index: &OdxIndex,
+    lenient: bool,
 ) -> Result<FunctionalGroup, OdxParseError> {
-    let (diag_layer, _dtcs) = build_diag_layer(merged, index)?;
+    let (diag_layer, _dtcs) = build_diag_layer(merged, index, lenient)?;
     let parent_refs = extract_parent_refs(merged.layer, index);
 
     Ok(FunctionalGroup {
@@ -132,6 +143,7 @@ fn layer_to_functional_group(
 fn build_diag_layer(
     merged: &MergedLayer,
     index: &OdxIndex,
+    lenient: bool,
 ) -> Result<(DiagLayer, Vec<Dtc>), OdxParseError> {
     let layer = merged.layer;
 
@@ -165,14 +177,14 @@ fn build_diag_layer(
     let diag_services: Vec<DiagService> = merged
         .diag_services
         .iter()
-        .map(|ds| map_diag_service(ds, index, &req_map, &pos_resp_map, &neg_resp_map))
+        .map(|ds| map_diag_service(ds, index, &req_map, &pos_resp_map, &neg_resp_map, lenient))
         .collect();
 
     // Map single ECU jobs
     let single_ecu_jobs: Vec<SingleEcuJob> = merged
         .single_ecu_jobs
         .iter()
-        .map(|job| map_single_ecu_job(job, index))
+        .map(|job| map_single_ecu_job(job, index, lenient))
         .collect();
 
     // Map state charts
@@ -242,13 +254,14 @@ fn map_diag_service(
     req_map: &HashMap<&str, &odx_model::OdxRequest>,
     pos_resp_map: &HashMap<&str, &odx_model::OdxResponse>,
     neg_resp_map: &HashMap<&str, &odx_model::OdxResponse>,
+    lenient: bool,
 ) -> DiagService {
     let request = ds
         .request_ref
         .as_ref()
         .and_then(|r| r.id_ref.as_deref())
         .and_then(|id| req_map.get(id).or_else(|| index.requests.get(id)))
-        .map(|r| map_request(r, index));
+        .map(|r| map_request(r, index, lenient));
 
     let pos_responses = ds
         .pos_response_refs
@@ -258,7 +271,7 @@ fn map_diag_service(
                 .iter()
                 .filter_map(|r| r.id_ref.as_deref())
                 .filter_map(|id| pos_resp_map.get(id).or_else(|| index.pos_responses.get(id)))
-                .map(|r| map_response(r, index, ResponseType::PosResponse))
+                .map(|r| map_response(r, index, ResponseType::PosResponse, lenient))
                 .collect()
         })
         .unwrap_or_default();
@@ -271,7 +284,7 @@ fn map_diag_service(
                 .iter()
                 .filter_map(|r| r.id_ref.as_deref())
                 .filter_map(|id| neg_resp_map.get(id).or_else(|| index.neg_responses.get(id)))
-                .map(|r| map_response(r, index, ResponseType::NegResponse))
+                .map(|r| map_response(r, index, ResponseType::NegResponse, lenient))
                 .collect()
         })
         .unwrap_or_default();
@@ -311,6 +324,7 @@ fn map_diag_service(
 fn map_single_ecu_job(
     job: &odx_model::OdxSingleEcuJob,
     index: &OdxIndex,
+    _lenient: bool,
 ) -> SingleEcuJob {
     let prog_codes = job
         .prog_codes
@@ -364,12 +378,12 @@ fn map_single_ecu_job(
 
 // --- Request/Response mapping ---
 
-fn map_request(req: &odx_model::OdxRequest, index: &OdxIndex) -> Request {
+fn map_request(req: &odx_model::OdxRequest, index: &OdxIndex, lenient: bool) -> Request {
     Request {
         params: req
             .params
             .as_ref()
-            .map(|w| w.items.iter().enumerate().map(|(i, p)| map_param(p, i as u32, index)).collect())
+            .map(|w| w.items.iter().enumerate().map(|(i, p)| map_param(p, i as u32, index, lenient)).collect())
             .unwrap_or_default(),
         sdgs: map_sdgs_opt(&req.sdgs),
     }
@@ -379,13 +393,14 @@ fn map_response(
     resp: &odx_model::OdxResponse,
     index: &OdxIndex,
     response_type: ResponseType,
+    lenient: bool,
 ) -> Response {
     Response {
         response_type,
         params: resp
             .params
             .as_ref()
-            .map(|w| w.items.iter().enumerate().map(|(i, p)| map_param(p, i as u32, index)).collect())
+            .map(|w| w.items.iter().enumerate().map(|(i, p)| map_param(p, i as u32, index, lenient)).collect())
             .unwrap_or_default(),
         sdgs: map_sdgs_opt(&resp.sdgs),
     }
@@ -393,7 +408,7 @@ fn map_response(
 
 // --- Parameter mapping ---
 
-fn map_param(p: &odx_model::OdxParam, id: u32, index: &OdxIndex) -> Param {
+fn map_param(p: &odx_model::OdxParam, id: u32, index: &OdxIndex, lenient: bool) -> Param {
     let xsi_type = p.xsi_type.as_deref().unwrap_or("");
 
     let (param_type, specific_data) = match xsi_type {
@@ -424,7 +439,7 @@ fn map_param(p: &odx_model::OdxParam, id: u32, index: &OdxIndex) -> Param {
             }),
         ),
         "VALUE" => {
-            let dop = resolve_dop(p, index);
+            let dop = resolve_dop(p, index, lenient);
             (
                 ParamType::Value,
                 Some(ParamData::Value {
@@ -434,7 +449,7 @@ fn map_param(p: &odx_model::OdxParam, id: u32, index: &OdxIndex) -> Param {
             )
         }
         "PHYS-CONST" => {
-            let dop = resolve_dop(p, index);
+            let dop = resolve_dop(p, index, lenient);
             (
                 ParamType::PhysConst,
                 Some(ParamData::PhysConst {
@@ -457,7 +472,7 @@ fn map_param(p: &odx_model::OdxParam, id: u32, index: &OdxIndex) -> Param {
             }),
         ),
         "SYSTEM" => {
-            let dop = resolve_dop(p, index);
+            let dop = resolve_dop(p, index, lenient);
             (
                 ParamType::System,
                 Some(ParamData::System {
@@ -467,7 +482,7 @@ fn map_param(p: &odx_model::OdxParam, id: u32, index: &OdxIndex) -> Param {
             )
         }
         "LENGTH-KEY" => {
-            let dop = resolve_dop(p, index);
+            let dop = resolve_dop(p, index, lenient);
             (
                 ParamType::LengthKey,
                 Some(ParamData::LengthKeyRef {
@@ -492,7 +507,7 @@ fn map_param(p: &odx_model::OdxParam, id: u32, index: &OdxIndex) -> Param {
     }
 }
 
-fn resolve_dop(p: &odx_model::OdxParam, index: &OdxIndex) -> Dop {
+fn resolve_dop(p: &odx_model::OdxParam, index: &OdxIndex, lenient: bool) -> Dop {
     // Try DOP-REF first
     if let Some(dop_ref) = &p.dop_ref {
         if let Some(id) = dop_ref.id_ref.as_deref() {
@@ -505,6 +520,9 @@ fn resolve_dop(p: &odx_model::OdxParam, index: &OdxIndex) -> Dop {
             if let Some(odx_struct) = index.structures.get(id) {
                 return map_structure_to_dop(odx_struct);
             }
+            if lenient {
+                log::warn!("Unresolved DOP-REF '{}', using empty DOP", id);
+            }
         }
     }
 
@@ -515,6 +533,9 @@ fn resolve_dop(p: &odx_model::OdxParam, index: &OdxIndex) -> Dop {
                 if dop.short_name.as_deref() == Some(sn.as_str()) {
                     return map_data_object_prop(dop, index);
                 }
+            }
+            if lenient {
+                log::warn!("Unresolved DOP-SNREF '{}', using empty DOP", sn);
             }
         }
     }
