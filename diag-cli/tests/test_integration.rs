@@ -188,3 +188,43 @@ fn test_mdd_all_compressions() {
         assert_eq!(db.ecu_name, db2.ecu_name, "Failed for {compression:?}");
     }
 }
+
+// YAML -> IR -> MDD -> IR: memory config survives roundtrip
+#[test]
+fn test_yaml_mdd_roundtrip_preserves_memory_config() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "MEM_ECU"
+memory:
+  default_address_format:
+    address_bytes: 4
+    length_bytes: 4
+  regions:
+    flash:
+      name: flash
+      start: 0x08000000
+      end: 0x08100000
+      access: read_write
+      security_level: Level1
+  data_blocks:
+    app:
+      name: app
+      memory_address: 0x08000000
+      memory_size: 0x00080000
+      block_type: download
+      format: compressed
+"#;
+    let db1 = parse_yaml(yaml).unwrap();
+    assert!(db1.memory.is_some(), "precondition: YAML parser should produce MemoryConfig");
+
+    let fbs = ir_to_flatbuffers(&db1);
+    let db2 = flatbuffers_to_ir(&fbs).unwrap();
+    assert!(db2.memory.is_some(), "MemoryConfig should survive MDD roundtrip");
+
+    let mem = db2.memory.unwrap();
+    assert_eq!(mem.regions.len(), 1);
+    assert_eq!(mem.regions[0].name, "flash");
+    assert_eq!(mem.data_blocks.len(), 1);
+    assert_eq!(mem.data_blocks[0].name, "app");
+}
