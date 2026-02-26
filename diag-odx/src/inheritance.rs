@@ -160,7 +160,7 @@ impl<'a> MergedLayer<'a> {
     }
 
     fn add_own_content(&mut self, layer: &'a DiagLayerVariant) {
-        // Own short names take precedence - track them to dedup
+        // Collect own short names for dedup against inherited content
         let mut own_service_names: HashSet<&str> = HashSet::new();
         let mut own_job_names: HashSet<&str> = HashSet::new();
 
@@ -171,34 +171,30 @@ impl<'a> MergedLayer<'a> {
                         if let Some(sn) = &ds.short_name {
                             own_service_names.insert(sn.as_str());
                         }
-                        self.diag_services.push(ds);
                     }
                     DiagCommEntry::SingleEcuJob(job) => {
                         if let Some(sn) = &job.short_name {
                             own_job_names.insert(sn.as_str());
                         }
-                        self.single_ecu_jobs.push(job);
                     }
                     DiagCommEntry::DiagCommRef(_) => {}
                 }
             }
         }
 
-        // Remove inherited items that are overridden by own content
-        self.diag_services
-            .retain(|ds| {
-                ds.short_name
-                    .as_deref()
-                    .map_or(true, |sn| !own_service_names.contains(sn))
-            });
-        self.single_ecu_jobs
-            .retain(|j| {
-                j.short_name
-                    .as_deref()
-                    .map_or(true, |sn| !own_job_names.contains(sn))
-            });
+        // Remove inherited items overridden by own content
+        self.diag_services.retain(|ds| {
+            ds.short_name
+                .as_deref()
+                .map_or(true, |sn| !own_service_names.contains(sn))
+        });
+        self.single_ecu_jobs.retain(|j| {
+            j.short_name
+                .as_deref()
+                .map_or(true, |sn| !own_job_names.contains(sn))
+        });
 
-        // Re-add own items at the end (they should be the definitive versions)
+        // Add own items (once)
         if let Some(w) = &layer.diag_comms {
             for entry in &w.items {
                 match entry {
