@@ -32,6 +32,29 @@ dids:
 }
 
 #[test]
+fn test_yaml_roundtrip_preserves_annotations_and_x_oem() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+annotations:
+  note: "This is a test annotation"
+x-oem:
+  vendor_code: "XYZ"
+  hw_revision: 42
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    let yaml_out = write_yaml(&db).unwrap();
+    let doc: serde_yaml::Value = serde_yaml::from_str(&yaml_out).unwrap();
+    assert!(doc["annotations"].is_mapping(), "annotations should roundtrip");
+    assert_eq!(
+        doc["annotations"]["note"].as_str(),
+        Some("This is a test annotation")
+    );
+    assert!(doc["x-oem"].is_mapping(), "x-oem should roundtrip");
+}
+
+#[test]
 fn test_yaml_roundtrip_minimal() {
     let content = include_str!("../../test-fixtures/yaml/minimal-ecu.yml");
     let original = parse_yaml(content).unwrap();

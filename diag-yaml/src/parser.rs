@@ -168,6 +168,30 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
             });
         }
     }
+    if let Some(annotations) = &doc.annotations {
+        let ann_json = serde_json::to_string(annotations).unwrap_or_default();
+        layer_sdg_vec.push(Sdg {
+            caption_sn: "yaml_annotations".into(),
+            sds: vec![SdOrSdg::Sd(Sd {
+                value: ann_json,
+                si: String::new(),
+                ti: String::new(),
+            })],
+            si: String::new(),
+        });
+    }
+    if let Some(x_oem) = &doc.x_oem {
+        let xoem_json = serde_json::to_string(x_oem).unwrap_or_default();
+        layer_sdg_vec.push(Sdg {
+            caption_sn: "yaml_x_oem".into(),
+            sds: vec![SdOrSdg::Sd(Sd {
+                value: xoem_json,
+                si: String::new(),
+                ti: String::new(),
+            })],
+            si: String::new(),
+        });
+    }
     let sdgs = if layer_sdg_vec.is_empty() { None } else { Some(Sdgs { sdgs: layer_sdg_vec }) };
 
     // Build DTCs

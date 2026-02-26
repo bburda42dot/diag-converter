@@ -169,8 +169,8 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         routines: if routines_map.is_empty() { None } else { Some(serde_yaml::Value::Mapping(routines_map)) },
         dtc_config: base_variant.and_then(|v| extract_dtc_config(&v.diag_layer)),
         dtcs,
-        annotations: None,
-        x_oem: None,
+        annotations: base_variant.and_then(|v| extract_sdg_json(&v.diag_layer, "yaml_annotations")),
+        x_oem: base_variant.and_then(|v| extract_sdg_json(&v.diag_layer, "yaml_x_oem")),
         ecu_jobs,
         memory: db.memory.as_ref().map(ir_memory_to_yaml),
     }
@@ -399,6 +399,18 @@ fn extract_did_extra(svc: &DiagService) -> (Option<bool>, Option<serde_yaml::Val
         .get("io_control")
         .and_then(|v| serde_json::from_value::<serde_yaml::Value>(v.clone()).ok());
     (snapshot, io_control)
+}
+
+/// Extract a JSON-serialized SDG entry from a DiagLayer by caption, returning it as serde_yaml::Value.
+fn extract_sdg_json(layer: &DiagLayer, caption: &str) -> Option<serde_yaml::Value> {
+    let sdgs = layer.sdgs.as_ref()?;
+    let entry = sdgs.sdgs.iter().find(|e| e.caption_sn == caption)?;
+    let sd = entry.sds.iter().find_map(|c| match c {
+        SdOrSdg::Sd(sd) => Some(&sd.value),
+        _ => None,
+    })?;
+    let json_val: serde_json::Value = serde_json::from_str(sd).ok()?;
+    serde_json::from_value(json_val).ok()
 }
 
 /// Reconstruct access_patterns from PreConditionStateRef data on services.
