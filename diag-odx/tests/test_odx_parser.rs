@@ -316,6 +316,36 @@ fn test_ecu_variant_inherits_dtcs() {
 }
 
 #[test]
+fn test_parse_odx_funct_class_refs() {
+    let db = parse_minimal();
+    let base = db
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
+    let svc = base
+        .diag_layer
+        .diag_services
+        .iter()
+        .find(|s| s.diag_comm.short_name == "Read_VehicleSpeed")
+        .expect("Should have Read_VehicleSpeed");
+    let fc_names: Vec<&str> = svc
+        .diag_comm
+        .funct_classes
+        .iter()
+        .map(|fc| fc.short_name.as_str())
+        .collect();
+    assert!(
+        fc_names.contains(&"Safety"),
+        "should contain Safety funct class"
+    );
+    assert!(
+        fc_names.contains(&"Emission"),
+        "should contain Emission funct class"
+    );
+}
+
+#[test]
 fn test_parse_odx_compu_method_linear() {
     let db = parse_minimal();
     let base = &db.variants.iter().find(|v| v.is_base_variant).unwrap();

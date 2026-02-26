@@ -17,6 +17,14 @@
       <BASE-VARIANT ID="BV_TestECU">
         <SHORT-NAME>TestECU_Base</SHORT-NAME>
         <LONG-NAME>Test ECU Base Variant</LONG-NAME>
+        <FUNCT-CLASSS>
+          <FUNCT-CLASS ID="FC_Safety">
+            <SHORT-NAME>Safety</SHORT-NAME>
+          </FUNCT-CLASS>
+          <FUNCT-CLASS ID="FC_Emission">
+            <SHORT-NAME>Emission</SHORT-NAME>
+          </FUNCT-CLASS>
+        </FUNCT-CLASSS>
         <DIAG-DATA-DICTIONARY-SPEC>
           <DATA-OBJECT-PROPS>
             <DATA-OBJECT-PROP ID="DOP_VehicleSpeed">
@@ -131,6 +139,16 @@
           <DIAG-SERVICE ID="DS_ReadSpeed" SEMANTIC="DATA-READ">
             <SHORT-NAME>Read_VehicleSpeed</SHORT-NAME>
             <LONG-NAME>Read Vehicle Speed</LONG-NAME>
+            <FUNCT-CLASS-REFS>
+              <FUNCT-CLASS-REF ID-REF="FC_Safety"/>
+              <FUNCT-CLASS-REF ID-REF="FC_Emission"/>
+            </FUNCT-CLASS-REFS>
+            <PRE-CONDITION-STATE-REFS>
+              <PRE-CONDITION-STATE-REF ID-REF="S_Default"/>
+            </PRE-CONDITION-STATE-REFS>
+            <STATE-TRANSITION-REFS>
+              <STATE-TRANSITION-REF ID-REF="ST_1"/>
+            </STATE-TRANSITION-REFS>
             <AUDIENCE IS-DEVELOPMENT="true" IS-AFTERSALES="true">
               <ENABLED-AUDIENCE-REFS>
                 <AUDIENCE-REF ID-REF="AA_Dev"/>

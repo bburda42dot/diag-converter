@@ -299,7 +299,22 @@ fn map_diag_service(
                 ti: String::new(),
             }),
             semantic: ds.semantic.clone().unwrap_or_default(),
-            funct_classes: Vec::new(),
+            funct_classes: ds
+                .funct_class_refs
+                .as_ref()
+                .map(|w| {
+                    w.items
+                        .iter()
+                        .filter_map(|r| {
+                            let id = r.id_ref.as_deref()?;
+                            let fc = index.funct_classes.get(id)?;
+                            Some(FunctClass {
+                                short_name: fc.short_name.clone().unwrap_or_default(),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
             sdgs: map_sdgs_opt(&ds.sdgs),
             diag_class_type: parse_diag_class(&ds.diagnostic_class),
             pre_condition_state_refs: Vec::new(),
