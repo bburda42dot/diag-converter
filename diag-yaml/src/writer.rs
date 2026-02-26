@@ -72,6 +72,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
                 }
 
                 let access_name = extract_access_pattern_name(&svc.diag_comm);
+                let (snap, ioc) = extract_did_extra(svc);
                 let did = Did {
                     name: did_name.to_string(),
                     description: svc.diag_comm.long_name.as_ref().map(|ln| ln.value.clone()),
@@ -79,8 +80,8 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
                     access: if access_name.is_empty() { "public".into() } else { access_name },
                     readable: Some(true),
                     writable: None, // Check if there's a matching write service
-                    snapshot: Some(false),
-                    io_control: None,
+                    snapshot: snap.or(Some(false)),
+                    io_control: ioc,
                     annotations: None,
                     audience: None,
                 };
@@ -370,6 +371,34 @@ fn extract_access_pattern_name(diag_comm: &DiagComm) -> String {
         }
     }
     String::new()
+}
+
+/// Extract DID snapshot and io_control from SDG "did_extra" on a service.
+fn extract_did_extra(svc: &DiagService) -> (Option<bool>, Option<serde_yaml::Value>) {
+    let sdgs = match &svc.diag_comm.sdgs {
+        Some(s) => s,
+        None => return (None, None),
+    };
+    let entry = match sdgs.sdgs.iter().find(|e| e.caption_sn == "did_extra") {
+        Some(e) => e,
+        None => return (None, None),
+    };
+    let sd = match entry.sds.iter().find_map(|c| match c {
+        SdOrSdg::Sd(sd) => Some(&sd.value),
+        _ => None,
+    }) {
+        Some(s) => s,
+        None => return (None, None),
+    };
+    let json_val: serde_json::Value = match serde_json::from_str(sd) {
+        Ok(v) => v,
+        Err(_) => return (None, None),
+    };
+    let snapshot = json_val.get("snapshot").and_then(|v| v.as_bool());
+    let io_control = json_val
+        .get("io_control")
+        .and_then(|v| serde_json::from_value::<serde_yaml::Value>(v.clone()).ok());
+    (snapshot, io_control)
 }
 
 /// Reconstruct access_patterns from PreConditionStateRef data on services.

@@ -461,6 +461,32 @@ fn did_to_read_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> DiagS
             specific_data: None,
         });
 
+    // Preserve DID-specific YAML fields in an SDG for roundtrip
+    let mut did_extra = serde_json::Map::new();
+    if let Some(snap) = did.snapshot {
+        did_extra.insert("snapshot".into(), serde_json::Value::Bool(snap));
+    }
+    if let Some(ioc) = &did.io_control {
+        let json_val = serde_json::to_value(ioc).unwrap_or_default();
+        did_extra.insert("io_control".into(), json_val);
+    }
+    let did_sdgs = if did_extra.is_empty() {
+        None
+    } else {
+        let json_str = serde_json::to_string(&did_extra).unwrap_or_default();
+        Some(Sdgs {
+            sdgs: vec![Sdg {
+                caption_sn: "did_extra".into(),
+                sds: vec![SdOrSdg::Sd(Sd {
+                    value: json_str,
+                    si: String::new(),
+                    ti: String::new(),
+                })],
+                si: String::new(),
+            }],
+        })
+    };
+
     DiagService {
         diag_comm: DiagComm {
             short_name: format!("Read_{}", did.name),
@@ -470,7 +496,7 @@ fn did_to_read_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> DiagS
             }),
             semantic: "DATA-READ".into(),
             funct_classes: vec![],
-            sdgs: None,
+            sdgs: did_sdgs,
             diag_class_type: DiagClassType::StartComm,
             pre_condition_state_refs: vec![],
             state_transition_refs: vec![],

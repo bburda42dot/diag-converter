@@ -1,6 +1,37 @@
 use diag_yaml::{parse_yaml, write_yaml};
 
 #[test]
+fn test_yaml_roundtrip_preserves_did_snapshot() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+dids:
+  0xF190:
+    name: VIN
+    type: ascii
+    access: public
+    snapshot: true
+    io_control:
+      freeze_current_state: true
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    let yaml_out = write_yaml(&db).unwrap();
+    let doc: serde_yaml::Value = serde_yaml::from_str(&yaml_out).unwrap();
+    // Writer outputs DID keys as decimal numbers (0xF190 = 61840)
+    let did = &doc["dids"][61840];
+    assert_eq!(
+        did["snapshot"].as_bool(),
+        Some(true),
+        "snapshot should roundtrip"
+    );
+    assert!(
+        did["io_control"].is_mapping(),
+        "io_control should roundtrip"
+    );
+}
+
+#[test]
 fn test_yaml_roundtrip_minimal() {
     let content = include_str!("../../test-fixtures/yaml/minimal-ecu.yml");
     let original = parse_yaml(content).unwrap();
