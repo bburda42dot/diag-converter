@@ -260,6 +260,27 @@ fn test_odx_roundtrip_preserves_state_refs() {
 }
 
 #[test]
+fn test_odx_roundtrip_preserves_admin_data() {
+    let xml = include_str!("../../test-fixtures/odx/minimal.odx");
+    let db = parse_odx(xml).unwrap();
+    let odx_xml = write_odx(&db).unwrap();
+    let db2 = parse_odx(&odx_xml).unwrap();
+
+    assert_eq!(
+        db2.metadata.get("admin_language"),
+        Some(&"en".to_string())
+    );
+    assert_eq!(
+        db2.metadata.get("admin_doc_state"),
+        Some(&"released".to_string())
+    );
+    assert_eq!(
+        db2.metadata.get("admin_doc_date"),
+        Some(&"2025-01-01".to_string())
+    );
+}
+
+#[test]
 fn test_odx_writer_handles_all_param_types() {
     // Roundtrip preserves param xsi_type for all supported variants
     let xml = include_str!("../../test-fixtures/odx/minimal.odx");

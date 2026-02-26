@@ -51,7 +51,7 @@ fn odx_to_ir(odx: &Odx, index: &OdxIndex, lenient: bool) -> Result<DiagDatabase,
         .ok_or_else(|| OdxParseError::MissingElement("DIAG-LAYER-CONTAINER".into()))?;
 
     let ecu_name = dlc.short_name.clone().unwrap_or_default();
-    let revision = extract_revision(&dlc.admin_data);
+    let (revision, admin_extra) = extract_admin_metadata(&dlc.admin_data);
     let version = odx.version.clone().unwrap_or_default();
 
     let mut variants = Vec::new();
@@ -96,7 +96,7 @@ fn odx_to_ir(odx: &Odx, index: &OdxIndex, lenient: bool) -> Result<DiagDatabase,
         version,
         ecu_name,
         revision,
-        metadata: Default::default(),
+        metadata: admin_extra.into_iter().collect(),
         variants,
         functional_groups,
         dtcs: all_dtcs,
@@ -1290,13 +1290,36 @@ fn map_sdg(sdg: &odx_model::OdxSdg) -> Sdg {
 
 // --- Helper functions ---
 
-fn extract_revision(admin_data: &Option<odx_model::AdminData>) -> String {
-    admin_data
+pub const META_ADMIN_LANGUAGE: &str = "admin_language";
+pub const META_ADMIN_DOC_STATE: &str = "admin_doc_state";
+pub const META_ADMIN_DOC_DATE: &str = "admin_doc_date";
+
+fn extract_admin_metadata(
+    admin_data: &Option<odx_model::AdminData>,
+) -> (String, Vec<(String, String)>) {
+    let ad = match admin_data.as_ref() {
+        Some(ad) => ad,
+        None => return (String::new(), vec![]),
+    };
+    let mut extra = Vec::new();
+    if let Some(lang) = &ad.language {
+        extra.push((META_ADMIN_LANGUAGE.into(), lang.clone()));
+    }
+    let revision = ad
+        .doc_revisions
         .as_ref()
-        .and_then(|ad| ad.doc_revisions.as_ref())
         .and_then(|w| w.items.first())
-        .and_then(|r| r.revision_label.clone())
-        .unwrap_or_default()
+        .map(|r| {
+            if let Some(state) = &r.state {
+                extra.push((META_ADMIN_DOC_STATE.into(), state.clone()));
+            }
+            if let Some(date) = &r.date {
+                extra.push((META_ADMIN_DOC_DATE.into(), date.clone()));
+            }
+            r.revision_label.clone().unwrap_or_default()
+        })
+        .unwrap_or_default();
+    (revision, extra)
 }
 
 fn dedup_dtcs(dtcs: &mut Vec<Dtc>) {

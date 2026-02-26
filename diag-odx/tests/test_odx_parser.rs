@@ -387,6 +387,23 @@ fn test_parse_odx_pre_condition_and_state_transition_refs() {
 }
 
 #[test]
+fn test_parse_odx_admin_data_full() {
+    let db = parse_minimal();
+    assert_eq!(
+        db.metadata.get("admin_language").map(|s| s.as_str()),
+        Some("en")
+    );
+    assert_eq!(
+        db.metadata.get("admin_doc_state").map(|s| s.as_str()),
+        Some("released")
+    );
+    assert_eq!(
+        db.metadata.get("admin_doc_date").map(|s| s.as_str()),
+        Some("2025-01-01")
+    );
+}
+
+#[test]
 fn test_parse_odx_compu_method_linear() {
     let db = parse_minimal();
     let base = &db.variants.iter().find(|v| v.is_base_variant).unwrap();

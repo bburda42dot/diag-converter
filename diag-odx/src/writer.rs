@@ -57,16 +57,23 @@ fn ir_to_odx(db: &DiagDatabase) -> Odx {
             id: None,
             short_name: Some(db.ecu_name.clone()),
             long_name: None,
-            admin_data: if db.revision.is_empty() {
+            admin_data: if db.revision.is_empty()
+                && !db.metadata.contains_key("admin_language")
+                && !db.metadata.contains_key("admin_doc_state")
+            {
                 None
             } else {
                 Some(AdminData {
-                    language: None,
+                    language: db.metadata.get("admin_language").cloned(),
                     doc_revisions: Some(DocRevisionsWrapper {
                         items: vec![DocRevision {
-                            revision_label: Some(db.revision.clone()),
-                            state: None,
-                            date: None,
+                            revision_label: if db.revision.is_empty() {
+                                None
+                            } else {
+                                Some(db.revision.clone())
+                            },
+                            state: db.metadata.get("admin_doc_state").cloned(),
+                            date: db.metadata.get("admin_doc_date").cloned(),
                         }],
                     }),
                 })
