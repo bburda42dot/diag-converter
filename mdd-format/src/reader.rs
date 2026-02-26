@@ -64,11 +64,23 @@ pub fn read_mdd_bytes(data: &[u8]) -> Result<(MddMetadata, Vec<u8>), MddReadErro
     let raw_data = chunk.data.as_ref().ok_or(MddReadError::MissingChunkData)?;
 
     // CDA hardcodes LZMA decompression regardless of the compression_algorithm field.
-    // We default to LZMA when the field is absent, matching CDA's behavior.
+    // We try LZMA first (matching CDA behavior). If LZMA fails, we allow raw data
+    // only when it's at least 4 bytes (minimum FlatBuffers size - the root u32 offset).
+    // Anything smaller is definitely invalid.
     let fbs_bytes = match &chunk.compression_algorithm {
         Some(algo) if !algo.is_empty() => compression::decompress(raw_data, algo)?,
-        _ => compression::decompress(raw_data, "lzma")
-            .unwrap_or_else(|_| raw_data.clone()),
+        _ => match compression::decompress(raw_data, "lzma") {
+            Ok(decompressed) => decompressed,
+            Err(_) if raw_data.len() >= 4 => {
+                log::warn!(
+                    "no compression_algorithm specified and LZMA failed; \
+                     treating {} bytes as uncompressed",
+                    raw_data.len()
+                );
+                raw_data.clone()
+            }
+            Err(e) => return Err(MddReadError::DecompressionFailed(e)),
+        },
     };
 
     Ok((metadata, fbs_bytes))
