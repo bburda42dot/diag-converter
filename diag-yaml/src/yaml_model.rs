@@ -294,6 +294,17 @@ pub struct VariantDef {
     pub annotations: Option<serde_yaml::Value>,
 }
 
+impl VariantDef {
+    /// Extract typed services from the `overrides.services` YAML value.
+    /// Returns None if overrides is absent or services sub-key is absent.
+    pub fn override_services(&self) -> Option<YamlServices> {
+        let overrides = self.overrides.as_ref()?;
+        let mapping = overrides.as_mapping()?;
+        let services_val = mapping.get(&serde_yaml::Value::String("services".into()))?;
+        serde_yaml::from_value(services_val.clone()).ok()
+    }
+}
+
 // --- Services ---
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

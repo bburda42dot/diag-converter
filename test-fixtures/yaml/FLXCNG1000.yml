@@ -343,4 +343,4 @@ services:
     temporal_sync: true
 
   testerPresent:
-    enabled: true
+    enabled: false

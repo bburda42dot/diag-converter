@@ -234,7 +234,8 @@ fn parse_coded_value(s: &str) -> u32 {
 /// Extract DID type info from the service's response DOP.
 fn extract_did_type(svc: &DiagService, did_name: &str) -> (serde_yaml::Value, Option<(String, YamlType)>) {
     if let Some(resp) = svc.pos_responses.first() {
-        if let Some(param) = resp.params.first() {
+        // Find the data Value param (skip SID and DID echo params)
+        if let Some(param) = resp.params.iter().find(|p| p.param_type == ParamType::Value) {
             if let Some(ParamData::Value { dop, .. }) = &param.specific_data {
                 if let Some(DopData::NormalDop { diag_coded_type, compu_method, unit_ref, internal_constr, .. }) = &dop.specific_data {
                     let mut yaml_type = YamlType {
@@ -895,11 +896,29 @@ fn extract_variants(db: &DiagDatabase) -> Option<Variants> {
                 serde_yaml::Value::Mapping(detect_map)
             });
 
+        // Extract variant-specific services (e.g., security access on Boot_Variant)
+        let variant_overrides = if !variant.diag_layer.diag_services.is_empty() {
+            let yaml_services = service_extractor::extract_services(&variant.diag_layer.diag_services);
+            if service_extractor::has_any_service(&yaml_services) {
+                let services_val = serde_yaml::to_value(&yaml_services).unwrap_or_default();
+                let mut overrides_map = serde_yaml::Mapping::new();
+                overrides_map.insert(
+                    serde_yaml::Value::String("services".into()),
+                    services_val,
+                );
+                Some(serde_yaml::Value::Mapping(overrides_map))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         definitions.insert(name, VariantDef {
             description: variant.diag_layer.long_name.as_ref().map(|ln| ln.value.clone()),
             detect,
             inheritance: None,
-            overrides: None,
+            overrides: variant_overrides,
             annotations: None,
         });
     }

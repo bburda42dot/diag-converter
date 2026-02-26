@@ -287,6 +287,8 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
                     vname,
                     vdef,
                     &ecu_name,
+                    doc.sessions.as_ref(),
+                    doc.security.as_ref(),
                 );
                 variants.push(ecu_variant);
             }
@@ -600,20 +602,53 @@ fn did_to_read_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> DiagS
         }),
         pos_responses: vec![Response {
             response_type: ResponseType::PosResponse,
-            params: vec![Param {
-                id: 2,
-                param_type: ParamType::Value,
-                short_name: did.name.clone(),
-                semantic: "DATA".into(),
-                sdgs: None,
-                physical_default_value: String::new(),
-                byte_position: Some(3),
-                bit_position: None,
-                specific_data: Some(ParamData::Value {
+            params: vec![
+                // SID = 0x62 (ReadDataByIdentifier positive response)
+                Param {
+                    id: 0,
+                    param_type: ParamType::CodedConst,
+                    short_name: "SID".into(),
+                    semantic: "SERVICE-ID".into(),
+                    sdgs: None,
                     physical_default_value: String::new(),
-                    dop: Box::new(dop),
-                }),
-            }],
+                    byte_position: Some(0),
+                    bit_position: Some(0),
+                    specific_data: Some(ParamData::CodedConst {
+                        coded_value: "0x62".into(),
+                        diag_coded_type: uint8_coded_type(),
+                    }),
+                },
+                // DID echo (matches request byte 1, length 2)
+                Param {
+                    id: 1,
+                    param_type: ParamType::MatchingRequestParam,
+                    short_name: "DID_PR".into(),
+                    semantic: "ID".into(),
+                    sdgs: None,
+                    physical_default_value: String::new(),
+                    byte_position: Some(1),
+                    bit_position: Some(0),
+                    specific_data: Some(ParamData::MatchingRequestParam {
+                        request_byte_pos: 1,
+                        byte_length: 2,
+                    }),
+                },
+                // Data value
+                Param {
+                    id: 2,
+                    param_type: ParamType::Value,
+                    short_name: did.name.clone(),
+                    semantic: "DATA".into(),
+                    sdgs: None,
+                    physical_default_value: String::new(),
+                    byte_position: Some(3),
+                    bit_position: None,
+                    specific_data: Some(ParamData::Value {
+                        physical_default_value: String::new(),
+                        dop: Box::new(dop),
+                    }),
+                },
+            ],
             sdgs: None,
         }],
         neg_responses: vec![],
@@ -704,7 +739,42 @@ fn did_to_write_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> Diag
             ],
             sdgs: None,
         }),
-        pos_responses: vec![],
+        pos_responses: vec![Response {
+            response_type: ResponseType::PosResponse,
+            params: vec![
+                // SID = 0x6E (WriteDataByIdentifier positive response)
+                Param {
+                    id: 0,
+                    param_type: ParamType::CodedConst,
+                    short_name: "SID".into(),
+                    semantic: "SERVICE-ID".into(),
+                    sdgs: None,
+                    physical_default_value: String::new(),
+                    byte_position: Some(0),
+                    bit_position: Some(0),
+                    specific_data: Some(ParamData::CodedConst {
+                        coded_value: "0x6E".into(),
+                        diag_coded_type: uint8_coded_type(),
+                    }),
+                },
+                // DID echo (matches request byte 1, length 2)
+                Param {
+                    id: 1,
+                    param_type: ParamType::MatchingRequestParam,
+                    short_name: "DID_PR".into(),
+                    semantic: "ID".into(),
+                    sdgs: None,
+                    physical_default_value: String::new(),
+                    byte_position: Some(1),
+                    bit_position: Some(0),
+                    specific_data: Some(ParamData::MatchingRequestParam {
+                        request_byte_pos: 1,
+                        byte_length: 2,
+                    }),
+                },
+            ],
+            sdgs: None,
+        }],
         neg_responses: vec![],
         is_cyclic: false,
         is_multiple: false,
@@ -1273,6 +1343,8 @@ fn parse_variant_definition(
     name: &str,
     vdef: &VariantDef,
     base_variant_name: &str,
+    sessions: Option<&BTreeMap<String, Session>>,
+    security: Option<&BTreeMap<String, SecurityLevel>>,
 ) -> Variant {
     // Build matching parameters from detect section
     let variant_patterns = if let Some(detect) = &vdef.detect {
@@ -1286,6 +1358,16 @@ fn parse_variant_definition(
         vec![]
     };
 
+    // Generate variant-specific services from overrides
+    let diag_services = if let Some(yaml_services) = vdef.override_services() {
+        let svc_gen = crate::service_generator::ServiceGenerator::new(&yaml_services)
+            .with_sessions(sessions)
+            .with_security(security);
+        svc_gen.generate_all()
+    } else {
+        vec![]
+    };
+
     Variant {
         diag_layer: DiagLayer {
             short_name: name.to_string(),
@@ -1295,7 +1377,7 @@ fn parse_variant_definition(
             }),
             funct_classes: vec![],
             com_param_refs: vec![],
-            diag_services: vec![],
+            diag_services,
             single_ecu_jobs: vec![],
             state_charts: vec![],
             additional_audiences: vec![],

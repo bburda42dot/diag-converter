@@ -280,8 +280,10 @@ variants:
           param_path: "Identification"
           expected_value: 0xFF0000
       overrides:
-        # Boot variant has security level 7 services
-        services: {}
+        # Boot variant has security access services
+        services:
+          securityAccess:
+            enabled: true
 
     App_0101:
       description: "Application variant v01.01 for FLXC1000"
@@ -368,9 +370,9 @@ services:
 
   # 0x27 - SecurityAccess
   # Source: security_access.py - add_security_access_services()
-  # Note: Only added to Boot_Variant, but schema defines it ECU-wide
+  # Note: Only added to Boot_Variant via variant overrides
   securityAccess:
-    enabled: true
+    enabled: false
     state_effects:
       on_unlock:
         security: from_request
@@ -417,4 +419,4 @@ services:
     temporal_sync: true
 
   testerPresent:
-    enabled: true
+    enabled: false

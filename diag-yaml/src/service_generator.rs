@@ -82,8 +82,6 @@ impl<'a> ServiceGenerator<'a> {
                 vec![
                     coded_const_param("SID", 0, 8, "0x50"),
                     matching_request_param("SubFunction_Echo", 1, 1),
-                    value_param("P2_Server", 2, 16),
-                    value_param("P2Star_Server", 4, 16),
                 ],
             )
         }).collect()
@@ -116,8 +114,6 @@ impl<'a> ServiceGenerator<'a> {
                         vec![
                             coded_const_param("SID", 0, 8, "0x50"),
                             matching_request_param("SubFunction_Echo", 1, 1),
-                            value_param("P2_Server", 2, 16),
-                            value_param("P2Star_Server", 4, 16),
                         ],
                     ))
                 }).collect()
@@ -136,8 +132,6 @@ impl<'a> ServiceGenerator<'a> {
                         vec![
                             coded_const_param("SID", 0, 8, "0x50"),
                             matching_request_param("SubFunction_Echo", 1, 1),
-                            value_param("P2_Server", 2, 16),
-                            value_param("P2Star_Server", 4, 16),
                         ],
                     )
                 }).collect()
@@ -177,7 +171,6 @@ impl<'a> ServiceGenerator<'a> {
                 vec![
                     coded_const_param("SID", 0, 8, "0x67"),
                     matching_request_param("SubFunction_Echo", 1, 1),
-                    value_param("SecuritySeed", 2, (level.seed_size * 8).max(8)),
                 ],
             ));
 
@@ -269,20 +262,29 @@ impl<'a> ServiceGenerator<'a> {
             let name = k.as_str()?;
             let subfunc = yaml_value_to_u8(v);
             let pascal = to_pascal_case(name);
+            // Response params depend on subfunction:
+            // 0x08 (Configuration): [SID, SubFunc_Echo, AuthenticationReturnParameter]
+            // All others: [SID, SubFunc_Echo]
+            let response_params = if subfunc == 0x08 {
+                vec![
+                    coded_const_param("SID", 0, 8, "0x69"),
+                    matching_request_param("SubFunction_Echo", 1, 1),
+                    value_param("AuthenticationReturnParameter", 2, 8),
+                ]
+            } else {
+                vec![
+                    coded_const_param("SID", 0, 8, "0x69"),
+                    matching_request_param("SubFunction_Echo", 1, 1),
+                ]
+            };
             Some(build_service(
                 &format!("Authentication_{pascal}"),
                 "AUTHENTICATION",
                 vec![
                     coded_const_param("SID", 0, 8, "0x29"),
                     coded_const_param("SubFunction", 1, 8, &format!("0x{subfunc:02X}")),
-                    value_param("AuthenticationData", 2, 0), // variable length
                 ],
-                vec![
-                    coded_const_param("SID", 0, 8, "0x69"),
-                    matching_request_param("SubFunction_Echo", 1, 1),
-                    value_param("ReturnParameter", 2, 8),
-                    value_param("AuthReturnValue", 3, 0), // variable length
-                ],
+                response_params,
             ))
         }).collect()
     }
@@ -385,7 +387,6 @@ impl<'a> ServiceGenerator<'a> {
                 "DOWNLOAD",
                 vec![
                     coded_const_param("SID", 0, 8, "0x37"),
-                    value_param("TransferRequestParameterRecord", 1, 0),
                 ],
                 vec![
                     coded_const_param("SID", 0, 8, "0x77"),
@@ -815,9 +816,9 @@ mod tests {
         let generator = ServiceGenerator::new(&svc).with_sessions(Some(&sessions));
         let services = generator.generate_diagnostic_session_control();
         assert_eq!(services.len(), 2);
-        // Response should include P2 timing params
+        // Response should include SID and subfunc echo
         let resp = &services[0].pos_responses[0];
-        assert_eq!(resp.params.len(), 4); // SID, subfunc echo, P2, P2*
+        assert_eq!(resp.params.len(), 2); // SID, subfunc echo
     }
 
     #[test]

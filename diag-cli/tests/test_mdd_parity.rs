@@ -6,19 +6,14 @@
 //!
 //! ## What is compared
 //!
-//! **Hard assertions** (test fails if violated):
+//! All checks are **hard assertions** (test fails if violated):
 //! - ECU name
 //! - Variant count and names
 //! - Base variant: service count, DTC count, state chart count
-//! - Byte size within ±5% of reference
-//!
-//! **Soft comparisons** (logged but don't fail the test):
-//! - Per-service param counts and DOP details
-//! - Services present in one but not the other
-//! - DOP naming differences (toolchains use different naming conventions)
-//!
-//! The soft comparisons are logged to stderr for diagnostic purposes. As the
-//! Rust pipeline matures, these can be promoted to hard assertions.
+//! - Byte size within +-5% of reference
+//! - Per-service param counts (request and positive response)
+//! - Service name sets must match (no extra or missing services)
+//! - Structural counts (com_param_refs, funct_classes)
 
 use diag_ir::*;
 use diag_yaml::parse_yaml;
@@ -201,17 +196,20 @@ fn assert_mdd_parity(yaml: &str, ref_mdd: &[u8], name: &str) {
         our_mdd.len(), ref_mdd.len()
     );
 
-    // ── Soft comparisons (diagnostic) ─────────────────────────────────
+    // ── Content parity (hard assertions) ────────────────────────────
 
     let soft_diffs = collect_soft_diffs(&our_ir, &ref_ir, name);
     if soft_diffs.is_empty() {
         eprintln!("{name}: FULL PARITY - content identical, size deviation {deviation_pct:.1}%");
     } else {
-        eprintln!("{name}: PARTIAL PARITY - {} soft difference(s), size deviation {deviation_pct:.1}%",
-            soft_diffs.len());
+        let mut msg = format!(
+            "{name}: PARITY FAILURE - {} difference(s), size deviation {deviation_pct:.1}%\n",
+            soft_diffs.len()
+        );
         for d in &soft_diffs {
-            eprintln!("  {d}");
+            msg.push_str(&format!("  {d}\n"));
         }
+        panic!("{msg}");
     }
 }
 
