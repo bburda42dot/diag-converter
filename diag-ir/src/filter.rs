@@ -17,6 +17,15 @@ pub fn filter_by_audience(db: &mut DiagDatabase, audience: &str) {
             .single_ecu_jobs
             .retain(|job| is_visible(&job.diag_comm.audience, audience));
     }
+
+    for fg in &mut db.functional_groups {
+        fg.diag_layer
+            .diag_services
+            .retain(|svc| is_visible(&svc.diag_comm.audience, audience));
+        fg.diag_layer
+            .single_ecu_jobs
+            .retain(|job| is_visible(&job.diag_comm.audience, audience));
+    }
 }
 
 fn is_visible(audience_field: &Option<Audience>, target: &str) -> bool {
@@ -100,6 +109,41 @@ mod tests {
         );
         assert!(!is_visible(&svc.diag_comm.audience, "development"));
         assert!(is_visible(&svc.diag_comm.audience, "aftermarket"));
+    }
+
+    #[test]
+    fn test_filter_functional_groups() {
+        let mut db = DiagDatabase {
+            ecu_name: "TEST".into(),
+            functional_groups: vec![FunctionalGroup {
+                diag_layer: DiagLayer {
+                    short_name: "FG_Ident".into(),
+                    diag_services: vec![
+                        make_service("PublicFG", None),
+                        make_service(
+                            "DevOnlyFG",
+                            Some(Audience {
+                                enabled_audiences: vec![aa("development")],
+                                ..Default::default()
+                            }),
+                        ),
+                    ],
+                    ..Default::default()
+                },
+                parent_refs: vec![],
+            }],
+            ..Default::default()
+        };
+
+        filter_by_audience(&mut db, "aftermarket");
+
+        let names: Vec<&str> = db.functional_groups[0]
+            .diag_layer
+            .diag_services
+            .iter()
+            .map(|s| s.diag_comm.short_name.as_str())
+            .collect();
+        assert_eq!(names, vec!["PublicFG"], "DevOnlyFG should be filtered from functional groups");
     }
 
     #[test]
