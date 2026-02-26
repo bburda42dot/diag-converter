@@ -346,6 +346,47 @@ fn test_parse_odx_funct_class_refs() {
 }
 
 #[test]
+fn test_parse_odx_pre_condition_and_state_transition_refs() {
+    let db = parse_minimal();
+    let base = db
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
+    let svc = base
+        .diag_layer
+        .diag_services
+        .iter()
+        .find(|s| s.diag_comm.short_name == "Read_VehicleSpeed")
+        .unwrap();
+
+    // Pre-condition state ref should reference the Default state
+    assert_eq!(
+        svc.diag_comm.pre_condition_state_refs.len(),
+        1,
+        "should have 1 pre-condition state ref"
+    );
+    let pcsr = &svc.diag_comm.pre_condition_state_refs[0];
+    assert_eq!(pcsr.value, "S_Default");
+
+    // State transition ref should reference ST_1
+    assert_eq!(
+        svc.diag_comm.state_transition_refs.len(),
+        1,
+        "should have 1 state transition ref"
+    );
+    let str_ref = &svc.diag_comm.state_transition_refs[0];
+    assert_eq!(str_ref.value, "ST_1");
+    let st = str_ref
+        .state_transition
+        .as_ref()
+        .expect("should have resolved transition");
+    assert_eq!(st.short_name, "DefaultToExtended");
+    assert_eq!(st.source_short_name_ref, "Default");
+    assert_eq!(st.target_short_name_ref, "Extended");
+}
+
+#[test]
 fn test_parse_odx_compu_method_linear() {
     let db = parse_minimal();
     let base = &db.variants.iter().find(|v| v.is_base_variant).unwrap();

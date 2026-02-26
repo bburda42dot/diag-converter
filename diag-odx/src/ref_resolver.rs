@@ -26,6 +26,7 @@ pub struct OdxIndex<'a> {
     pub diag_services: HashMap<&'a str, &'a OdxDiagService>,
     pub single_ecu_jobs: HashMap<&'a str, &'a OdxSingleEcuJob>,
     pub additional_audiences: HashMap<&'a str, &'a OdxAdditionalAudience>,
+    pub state_transitions: HashMap<&'a str, &'a OdxStateTransition>,
     pub funct_classes: HashMap<&'a str, &'a FunctClass>,
 }
 
@@ -49,6 +50,7 @@ impl<'a> OdxIndex<'a> {
             diag_services: HashMap::new(),
             single_ecu_jobs: HashMap::new(),
             additional_audiences: HashMap::new(),
+            state_transitions: HashMap::new(),
             funct_classes: HashMap::new(),
         };
 
@@ -142,6 +144,13 @@ impl<'a> OdxIndex<'a> {
                     for s in &states.items {
                         if let Some(id) = s.id.as_deref() {
                             self.states.insert(id, s);
+                        }
+                    }
+                }
+                if let Some(transitions) = &sc.state_transitions {
+                    for st in &transitions.items {
+                        if let Some(id) = st.id.as_deref() {
+                            self.state_transitions.insert(id, st);
                         }
                     }
                 }

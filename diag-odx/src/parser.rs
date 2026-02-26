@@ -317,8 +317,61 @@ fn map_diag_service(
                 .unwrap_or_default(),
             sdgs: map_sdgs_opt(&ds.sdgs),
             diag_class_type: parse_diag_class(&ds.diagnostic_class),
-            pre_condition_state_refs: Vec::new(),
-            state_transition_refs: Vec::new(),
+            pre_condition_state_refs: ds
+                .pre_condition_state_refs
+                .as_ref()
+                .map(|w| {
+                    w.items
+                        .iter()
+                        .filter_map(|r| {
+                            let id = r.id_ref.as_deref()?;
+                            Some(PreConditionStateRef {
+                                value: id.to_string(),
+                                in_param_if_short_name: String::new(),
+                                in_param_path_short_name: String::new(),
+                                state: index.states.get(id).map(|s| State {
+                                    short_name: s.short_name.clone().unwrap_or_default(),
+                                    long_name: None,
+                                }),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            state_transition_refs: ds
+                .state_transition_refs
+                .as_ref()
+                .map(|w| {
+                    w.items
+                        .iter()
+                        .filter_map(|r| {
+                            let id = r.id_ref.as_deref()?;
+                            Some(StateTransitionRef {
+                                value: id.to_string(),
+                                state_transition: index
+                                    .state_transitions
+                                    .get(id)
+                                    .map(|st| StateTransition {
+                                        short_name: st
+                                            .short_name
+                                            .clone()
+                                            .unwrap_or_default(),
+                                        source_short_name_ref: st
+                                            .source_snref
+                                            .as_ref()
+                                            .and_then(|s| s.short_name.clone())
+                                            .unwrap_or_default(),
+                                        target_short_name_ref: st
+                                            .target_snref
+                                            .as_ref()
+                                            .and_then(|s| s.short_name.clone())
+                                            .unwrap_or_default(),
+                                    }),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
             protocols: Vec::new(),
             audience,
             is_mandatory: ds.is_mandatory.as_deref() == Some("true"),
