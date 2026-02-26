@@ -12,7 +12,7 @@ pub enum ValidationError {
     EmptyEcuName,
     #[error("empty service name in variant '{0}'")]
     EmptyServiceName(String),
-    #[error("duplicate DTC ID {0} in variant '{1}'")]
+    #[error("duplicate DTC ID {0} in database '{1}'")]
     DuplicateDtcId(u32, String),
     #[error("state chart '{0}' has no states in variant '{1}'")]
     EmptyStateChart(String, String),
@@ -54,19 +54,6 @@ pub fn validate_database(db: &DiagDatabase) -> Result<(), Vec<ValidationError>> 
             log::warn!("variant '{}' has no services", vname);
         }
 
-        // Duplicate DTC IDs (check once using the first variant)
-        if variant.is_base_variant {
-            let mut dtc_ids = HashSet::new();
-            for dtc in &db.dtcs {
-                if !dtc_ids.insert(dtc.trouble_code) {
-                    errors.push(ValidationError::DuplicateDtcId(
-                        dtc.trouble_code,
-                        vname.clone(),
-                    ));
-                }
-            }
-        }
-
         // State charts with no states
         for sc in &layer.state_charts {
             if sc.states.is_empty() {
@@ -75,6 +62,17 @@ pub fn validate_database(db: &DiagDatabase) -> Result<(), Vec<ValidationError>> 
                     vname.clone(),
                 ));
             }
+        }
+    }
+
+    // Duplicate DTC IDs (database-wide check, not per-variant)
+    let mut dtc_ids = HashSet::new();
+    for dtc in &db.dtcs {
+        if !dtc_ids.insert(dtc.trouble_code) {
+            errors.push(ValidationError::DuplicateDtcId(
+                dtc.trouble_code,
+                db.ecu_name.clone(),
+            ));
         }
     }
 

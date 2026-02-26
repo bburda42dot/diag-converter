@@ -200,3 +200,33 @@ fn test_empty_state_chart_detected() {
         "should detect empty state chart: {:?}", errors
     );
 }
+
+#[test]
+fn test_duplicate_dtc_detected_without_base_variant() {
+    let db = DiagDatabase {
+        ecu_name: "TEST".into(),
+        variants: vec![Variant {
+            is_base_variant: false,
+            diag_layer: DiagLayer {
+                short_name: "EcuVar".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        }],
+        dtcs: vec![
+            Dtc {
+                short_name: "P0001".into(),
+                trouble_code: 1,
+                ..Default::default()
+            },
+            Dtc {
+                short_name: "P0001_dup".into(),
+                trouble_code: 1, // same code = duplicate
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+    let result = validate_database(&db);
+    assert!(result.is_err(), "duplicate DTC IDs should be caught even without base variants");
+}
