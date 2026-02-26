@@ -72,6 +72,78 @@ pub fn compress(data: &[u8], algo: &Compression) -> Result<Vec<u8>, CompressionE
     }
 }
 
+/// Maximum default decompression size (256 MB) - prevents OOM on malicious inputs.
+pub const MAX_DECOMPRESSED_SIZE: u64 = 256 * 1024 * 1024;
+
+/// Decompress with an upper bound on output size, enforced DURING streaming decompression.
+/// This prevents decompression bombs from consuming all memory before we can check.
+/// All codecs use `Read::take()` to cap output bytes.
+pub fn decompress_bounded(
+    data: &[u8],
+    algorithm: &str,
+    max_size: u64,
+) -> Result<Vec<u8>, CompressionError> {
+    match algorithm {
+        "lzma" => {
+            // NOTE: xz2's memlimit parameter controls decoder working memory (dictionary),
+            // NOT output size. We use Read::take() to limit actual output bytes.
+            const LZMA_MEMLIMIT: u64 = 256 * 1024 * 1024;
+            let decompressor = xz2::stream::Stream::new_lzma_decoder(LZMA_MEMLIMIT)
+                .map_err(|e| CompressionError::DecompressFailed(e.to_string()))?;
+            let decoder = xz2::bufread::XzDecoder::new_stream(
+                std::io::BufReader::new(data),
+                decompressor,
+            );
+            let mut limited = decoder.take(max_size + 1);
+            let mut out = Vec::new();
+            limited
+                .read_to_end(&mut out)
+                .map_err(|e| CompressionError::DecompressFailed(e.to_string()))?;
+            if out.len() as u64 > max_size {
+                return Err(CompressionError::DecompressFailed(format!(
+                    "decompressed size {} exceeds limit {}",
+                    out.len(),
+                    max_size
+                )));
+            }
+            Ok(out)
+        }
+        "gzip" => {
+            use flate2::read::GzDecoder;
+            let decoder = GzDecoder::new(data);
+            let mut limited = decoder.take(max_size + 1);
+            let mut out = Vec::new();
+            limited
+                .read_to_end(&mut out)
+                .map_err(|e| CompressionError::DecompressFailed(e.to_string()))?;
+            if out.len() as u64 > max_size {
+                return Err(CompressionError::DecompressFailed(format!(
+                    "decompressed size exceeds limit {}",
+                    max_size
+                )));
+            }
+            Ok(out)
+        }
+        "zstd" => {
+            let decoder = zstd::Decoder::new(std::io::Cursor::new(data))
+                .map_err(|e| CompressionError::DecompressFailed(e.to_string()))?;
+            let mut limited = decoder.take(max_size + 1);
+            let mut out = Vec::new();
+            limited
+                .read_to_end(&mut out)
+                .map_err(|e| CompressionError::DecompressFailed(e.to_string()))?;
+            if out.len() as u64 > max_size {
+                return Err(CompressionError::DecompressFailed(format!(
+                    "decompressed size exceeds limit {}",
+                    max_size
+                )));
+            }
+            Ok(out)
+        }
+        other => Err(CompressionError::UnknownAlgorithm(other.into())),
+    }
+}
+
 pub fn decompress(data: &[u8], algorithm: &str) -> Result<Vec<u8>, CompressionError> {
     match algorithm {
         "lzma" => {
