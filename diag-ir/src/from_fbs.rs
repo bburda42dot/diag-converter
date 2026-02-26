@@ -47,6 +47,7 @@ pub fn flatbuffers_to_ir(fbs_data: &[u8]) -> Result<DiagDatabase, ConversionErro
         functional_groups,
         dtcs,
         memory: ecu_data.memory().map(|m| convert_memory_config(&m)),
+        type_definitions: vec![],
     })
 }
 

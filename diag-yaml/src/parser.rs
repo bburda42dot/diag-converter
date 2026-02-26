@@ -270,6 +270,7 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         functional_groups: vec![],
         dtcs,
         memory,
+        type_definitions: vec![],
     })
 }
 

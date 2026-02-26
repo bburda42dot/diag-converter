@@ -197,6 +197,7 @@ fn make_test_database() -> DiagDatabase {
             is_temporary: false,
         }],
         memory: None,
+        type_definitions: vec![],
     }
 }
 

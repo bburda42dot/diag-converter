@@ -101,6 +101,7 @@ fn odx_to_ir(odx: &Odx, index: &OdxIndex, lenient: bool) -> Result<DiagDatabase,
         functional_groups,
         dtcs: all_dtcs,
         memory: None,
+        type_definitions: vec![],
     })
 }
 

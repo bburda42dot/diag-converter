@@ -14,6 +14,7 @@ pub struct DiagDatabase {
     pub functional_groups: Vec<FunctionalGroup>,
     pub dtcs: Vec<Dtc>,
     pub memory: Option<MemoryConfig>,
+    pub type_definitions: Vec<TypeDefinition>,
 }
 
 // --- Variant system ---
@@ -1060,4 +1061,18 @@ pub struct DataBlock {
     pub security_level: Option<String>,
     pub session: Option<String>,
     pub checksum_type: Option<String>,
+}
+
+/// A named type definition for YAML roundtrip.
+/// Stores the base type, bit_length, enum_values etc. from the YAML `types:` section.
+/// The enum_values is stored as JSON string to avoid introducing serde_yaml dependency in diag-ir.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct TypeDefinition {
+    pub name: String,
+    pub base: String,
+    pub bit_length: Option<u32>,
+    pub min_length: Option<u32>,
+    pub max_length: Option<u32>,
+    pub enum_values_json: Option<String>,
+    pub description: Option<String>,
 }
