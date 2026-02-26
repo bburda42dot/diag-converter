@@ -126,3 +126,23 @@ fn test_parse_sdgs() {
     let sdgs = sdgs.as_ref().unwrap();
     assert!(!sdgs.sdgs.is_empty(), "SDGs should not be empty");
 }
+
+#[test]
+fn test_version_and_revision_are_independent() {
+    let yaml = r#"
+schema: "1.0"
+meta:
+  revision: "rev42"
+  version: "2.0.0"
+  author: "test"
+  domain: "body"
+  created: "2026-01-01"
+  description: "test"
+ecu:
+  name: "TEST_ECU"
+  id: "ECU001"
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    assert_eq!(db.revision, "rev42");
+    assert_eq!(db.version, "2.0.0", "version should come from meta.version, not meta.revision");
+}

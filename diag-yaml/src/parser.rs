@@ -38,7 +38,7 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
     let version = doc
         .meta
         .as_ref()
-        .map(|m| m.revision.clone())
+        .map(|m| m.version.clone())
         .unwrap_or_default();
 
     // Build metadata from meta section

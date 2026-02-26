@@ -69,6 +69,8 @@ pub struct Meta {
     #[serde(default)]
     pub created: String,
     #[serde(default)]
+    pub version: String,
+    #[serde(default)]
     pub revision: String,
     #[serde(default)]
     pub description: String,

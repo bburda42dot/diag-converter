@@ -31,6 +31,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         author: db.metadata.get("author").cloned().unwrap_or_default(),
         domain: db.metadata.get("domain").cloned().unwrap_or_default(),
         created: db.metadata.get("created").cloned().unwrap_or_default(),
+        version: db.version.clone(),
         revision: db.revision.clone(),
         description: db.metadata.get("description").cloned().unwrap_or_default(),
         tags: vec![],
