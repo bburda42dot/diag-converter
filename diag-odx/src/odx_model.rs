@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename = "ODX")]
 pub struct Odx {
-    #[serde(rename = "@VERSION", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "@VERSION", alias = "@MODEL-VERSION", skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(rename = "DIAG-LAYER-CONTAINER", skip_serializing_if = "Option::is_none")]
     pub diag_layer_container: Option<DiagLayerContainer>,

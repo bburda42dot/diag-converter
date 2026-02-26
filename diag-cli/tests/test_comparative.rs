@@ -1,11 +1,19 @@
 //! Comparative tests: verify diag-converter MDD output is structurally
 //! equivalent to reference MDD files (produced by yaml-to-mdd / CDA toolchain).
+//!
+//! Tests cover three pipelines:
+//! - YAML -> IR -> MDD vs reference MDD
+//! - ODX (PDX) -> IR -> MDD vs reference MDD
+//! - ODX (PDX) -> IR vs YAML -> IR (cross-pipeline)
 
-use diag_ir::{flatbuffers_to_ir, ir_to_flatbuffers};
+use diag_ir::{flatbuffers_to_ir, ir_to_flatbuffers, DiagDatabase};
 use diag_odx::parse_odx;
+use diag_odx::pdx_reader::read_pdx_from_reader;
 use diag_yaml::parse_yaml;
 use mdd_format::reader::read_mdd_bytes;
 use mdd_format::writer::{write_mdd_bytes, WriteOptions};
+use std::collections::BTreeSet;
+use std::io::Cursor;
 
 fn flxc1000_yaml() -> &'static str {
     include_str!("../../test-fixtures/yaml/FLXC1000.yml")
@@ -206,4 +214,269 @@ fn test_reference_mdd_readable() {
         let ir = flatbuffers_to_ir(&fbs);
         assert!(ir.is_ok(), "{name} reference MDD should deserialize to IR: {:?}", ir.err());
     }
+}
+
+// ── ODX (PDX) fixtures ───────────────────────────────────────────────
+
+fn flxc1000_pdx() -> &'static [u8] {
+    include_bytes!("../../test-fixtures/odx/FLXC1000.pdx")
+}
+
+fn flxcng1000_pdx() -> &'static [u8] {
+    include_bytes!("../../test-fixtures/odx/FLXCNG1000.pdx")
+}
+
+fn pdx_to_ir(pdx: &[u8]) -> DiagDatabase {
+    read_pdx_from_reader(Cursor::new(pdx)).unwrap()
+}
+
+fn yaml_to_ir(yaml: &str) -> DiagDatabase {
+    parse_yaml(yaml).unwrap()
+}
+
+fn ref_mdd_to_ir(mdd: &[u8]) -> DiagDatabase {
+    let (_meta, fbs) = read_mdd_bytes(mdd).unwrap();
+    flatbuffers_to_ir(&fbs).unwrap()
+}
+
+/// Normalize variant short_name by stripping ECU name prefix.
+fn strip_ecu_prefix<'a>(name: &'a str, ecu: &str) -> &'a str {
+    let prefix = format!("{ecu}_");
+    name.strip_prefix(&prefix).unwrap_or(name)
+}
+
+// ── ODX (PDX) -> IR basic parsing ────────────────────────────────────
+
+#[test]
+fn test_pdx_flxc1000_parses() {
+    let db = pdx_to_ir(flxc1000_pdx());
+    assert_eq!(db.ecu_name, "FLXC1000");
+    assert!(!db.variants.is_empty(), "should have variants");
+    eprintln!("FLXC1000 PDX: {} variants, base services: {}",
+        db.variants.len(),
+        db.variants.iter().find(|v| v.is_base_variant)
+            .map(|v| v.diag_layer.diag_services.len()).unwrap_or(0));
+}
+
+#[test]
+fn test_pdx_flxcng1000_parses() {
+    let db = pdx_to_ir(flxcng1000_pdx());
+    assert_eq!(db.ecu_name, "FLXCNG1000");
+    assert!(!db.variants.is_empty(), "should have variants");
+    eprintln!("FLXCNG1000 PDX: {} variants, base services: {}",
+        db.variants.len(),
+        db.variants.iter().find(|v| v.is_base_variant)
+            .map(|v| v.diag_layer.diag_services.len()).unwrap_or(0));
+}
+
+// ── ODX vs reference MDD ────────────────────────────────────────────
+
+fn compare_odx_vs_reference_mdd(pdx: &[u8], ref_mdd: &[u8], name: &str) {
+    let odx_ir = pdx_to_ir(pdx);
+    let ref_ir = ref_mdd_to_ir(ref_mdd);
+
+    // ECU name
+    assert_eq!(odx_ir.ecu_name, ref_ir.ecu_name,
+        "{name}: ECU name mismatch (odx={}, ref={})", odx_ir.ecu_name, ref_ir.ecu_name);
+
+    // Variant count
+    assert_eq!(odx_ir.variants.len(), ref_ir.variants.len(),
+        "{name}: variant count mismatch (odx={}, ref={})",
+        odx_ir.variants.len(), ref_ir.variants.len());
+
+    // Variant names (normalized, sorted)
+    let ecu = &odx_ir.ecu_name;
+    let mut odx_var_names: Vec<_> = odx_ir.variants.iter()
+        .map(|v| strip_ecu_prefix(&v.diag_layer.short_name, ecu).to_string()).collect();
+    let mut ref_var_names: Vec<_> = ref_ir.variants.iter()
+        .map(|v| strip_ecu_prefix(&v.diag_layer.short_name, ecu).to_string()).collect();
+    odx_var_names.sort();
+    ref_var_names.sort();
+    assert_eq!(odx_var_names, ref_var_names,
+        "{name}: variant names differ");
+
+    // Base variant service names must match
+    let odx_base = odx_ir.variants.iter().find(|v| v.is_base_variant);
+    let ref_base = ref_ir.variants.iter().find(|v| v.is_base_variant);
+    if let (Some(ob), Some(rb)) = (odx_base, ref_base) {
+        let odx_svc: BTreeSet<_> = ob.diag_layer.diag_services.iter()
+            .map(|s| s.diag_comm.short_name.as_str()).collect();
+        let ref_svc: BTreeSet<_> = rb.diag_layer.diag_services.iter()
+            .map(|s| s.diag_comm.short_name.as_str()).collect();
+        assert_eq!(odx_svc, ref_svc,
+            "{name}: base variant service names differ\n  only in ODX: {:?}\n  only in ref: {:?}",
+            odx_svc.difference(&ref_svc).collect::<Vec<_>>(),
+            ref_svc.difference(&odx_svc).collect::<Vec<_>>());
+
+        // Per-service param counts
+        for odx_svc in &ob.diag_layer.diag_services {
+            let svc_name = &odx_svc.diag_comm.short_name;
+            let ref_svc = rb.diag_layer.diag_services.iter()
+                .find(|s| s.diag_comm.short_name == *svc_name);
+            let Some(ref_svc) = ref_svc else { continue };
+
+            if let (Some(or), Some(rr)) = (&odx_svc.request, &ref_svc.request) {
+                assert_eq!(or.params.len(), rr.params.len(),
+                    "{name}/{svc_name}: request param count {} vs {}",
+                    or.params.len(), rr.params.len());
+            }
+            for (i, (or, rr)) in odx_svc.pos_responses.iter()
+                .zip(ref_svc.pos_responses.iter()).enumerate()
+            {
+                assert_eq!(or.params.len(), rr.params.len(),
+                    "{name}/{svc_name}: pos_resp[{i}] param count {} vs {}",
+                    or.params.len(), rr.params.len());
+            }
+        }
+
+        // State chart count
+        assert_eq!(ob.diag_layer.state_charts.len(), rb.diag_layer.state_charts.len(),
+            "{name}: state chart count mismatch");
+    }
+
+    // Non-base variants: compare variant-specific services.
+    // ODX parser flattens inherited services (from PARENT-REF) onto ECU variants,
+    // so we subtract base variant services to get variant-specific ones.
+    let odx_base_svc: BTreeSet<_> = odx_ir.variants.iter()
+        .find(|v| v.is_base_variant)
+        .map(|v| v.diag_layer.diag_services.iter()
+            .map(|s| s.diag_comm.short_name.as_str()).collect())
+        .unwrap_or_default();
+
+    for odx_v in &odx_ir.variants {
+        if odx_v.is_base_variant { continue; }
+        let vname = strip_ecu_prefix(&odx_v.diag_layer.short_name, ecu);
+        let ref_v = ref_ir.variants.iter().find(|rv|
+            strip_ecu_prefix(&rv.diag_layer.short_name, ecu) == vname
+        ).unwrap();
+
+        // Variant-specific services = total - inherited base services
+        let odx_variant_svc: BTreeSet<_> = odx_v.diag_layer.diag_services.iter()
+            .map(|s| s.diag_comm.short_name.as_str())
+            .filter(|n| !odx_base_svc.contains(n))
+            .collect();
+        let ref_variant_svc: BTreeSet<_> = ref_v.diag_layer.diag_services.iter()
+            .map(|s| s.diag_comm.short_name.as_str()).collect();
+        assert_eq!(odx_variant_svc, ref_variant_svc,
+            "{name}/{vname}: variant-specific services differ\n  only in ODX: {:?}\n  only in ref: {:?}",
+            odx_variant_svc.difference(&ref_variant_svc).collect::<Vec<_>>(),
+            ref_variant_svc.difference(&odx_variant_svc).collect::<Vec<_>>());
+    }
+
+    eprintln!("{name}: ODX vs reference MDD - PASS");
+}
+
+#[test]
+fn test_odx_flxc1000_vs_reference_mdd() {
+    compare_odx_vs_reference_mdd(flxc1000_pdx(), flxc1000_ref_mdd(), "FLXC1000");
+}
+
+#[test]
+fn test_odx_flxcng1000_vs_reference_mdd() {
+    compare_odx_vs_reference_mdd(flxcng1000_pdx(), flxcng1000_ref_mdd(), "FLXCNG1000");
+}
+
+// ── Cross-pipeline: ODX vs YAML ─────────────────────────────────────
+
+fn compare_odx_vs_yaml(pdx: &[u8], yaml: &str, name: &str) {
+    let odx_ir = pdx_to_ir(pdx);
+    let yaml_ir = yaml_to_ir(yaml);
+
+    // ECU name
+    assert_eq!(odx_ir.ecu_name, yaml_ir.ecu_name,
+        "{name}: ECU name mismatch (odx={}, yaml={})", odx_ir.ecu_name, yaml_ir.ecu_name);
+
+    // Variant count
+    assert_eq!(odx_ir.variants.len(), yaml_ir.variants.len(),
+        "{name}: variant count mismatch (odx={}, yaml={})",
+        odx_ir.variants.len(), yaml_ir.variants.len());
+
+    // Variant names
+    let ecu = &odx_ir.ecu_name;
+    let mut odx_var_names: Vec<_> = odx_ir.variants.iter()
+        .map(|v| strip_ecu_prefix(&v.diag_layer.short_name, ecu).to_string()).collect();
+    let mut yaml_var_names: Vec<_> = yaml_ir.variants.iter()
+        .map(|v| strip_ecu_prefix(&v.diag_layer.short_name, ecu).to_string()).collect();
+    odx_var_names.sort();
+    yaml_var_names.sort();
+    assert_eq!(odx_var_names, yaml_var_names,
+        "{name}: variant names differ between ODX and YAML");
+
+    // Base variant service sets
+    let odx_base = odx_ir.variants.iter().find(|v| v.is_base_variant);
+    let yaml_base = yaml_ir.variants.iter().find(|v| v.is_base_variant);
+    if let (Some(ob), Some(yb)) = (odx_base, yaml_base) {
+        let odx_svc: BTreeSet<_> = ob.diag_layer.diag_services.iter()
+            .map(|s| s.diag_comm.short_name.as_str()).collect();
+        let yaml_svc: BTreeSet<_> = yb.diag_layer.diag_services.iter()
+            .map(|s| s.diag_comm.short_name.as_str()).collect();
+        assert_eq!(odx_svc, yaml_svc,
+            "{name}: base variant service names differ between ODX and YAML\n  only in ODX: {:?}\n  only in YAML: {:?}",
+            odx_svc.difference(&yaml_svc).collect::<Vec<_>>(),
+            yaml_svc.difference(&odx_svc).collect::<Vec<_>>());
+
+        // Per-service param counts
+        for odx_svc in &ob.diag_layer.diag_services {
+            let svc_name = &odx_svc.diag_comm.short_name;
+            let yaml_svc = yb.diag_layer.diag_services.iter()
+                .find(|s| s.diag_comm.short_name == *svc_name);
+            let Some(yaml_svc) = yaml_svc else { continue };
+
+            if let (Some(or), Some(yr)) = (&odx_svc.request, &yaml_svc.request) {
+                assert_eq!(or.params.len(), yr.params.len(),
+                    "{name}/{svc_name}: request param count odx={} yaml={}",
+                    or.params.len(), yr.params.len());
+            }
+            for (i, (or, yr)) in odx_svc.pos_responses.iter()
+                .zip(yaml_svc.pos_responses.iter()).enumerate()
+            {
+                assert_eq!(or.params.len(), yr.params.len(),
+                    "{name}/{svc_name}: pos_resp[{i}] param count odx={} yaml={}",
+                    or.params.len(), yr.params.len());
+            }
+        }
+
+        // State chart count
+        assert_eq!(ob.diag_layer.state_charts.len(), yb.diag_layer.state_charts.len(),
+            "{name}: state chart count mismatch between ODX and YAML");
+    }
+
+    // Non-base variants: compare variant-specific services.
+    // ODX flattens inherited services; subtract base to get variant-specific.
+    let odx_base_svc: BTreeSet<_> = odx_ir.variants.iter()
+        .find(|v| v.is_base_variant)
+        .map(|v| v.diag_layer.diag_services.iter()
+            .map(|s| s.diag_comm.short_name.as_str()).collect())
+        .unwrap_or_default();
+
+    for odx_v in &odx_ir.variants {
+        if odx_v.is_base_variant { continue; }
+        let vname = strip_ecu_prefix(&odx_v.diag_layer.short_name, ecu);
+        let yaml_v = yaml_ir.variants.iter().find(|yv|
+            strip_ecu_prefix(&yv.diag_layer.short_name, ecu) == vname
+        ).unwrap();
+
+        let odx_variant_svc: BTreeSet<_> = odx_v.diag_layer.diag_services.iter()
+            .map(|s| s.diag_comm.short_name.as_str())
+            .filter(|n| !odx_base_svc.contains(n))
+            .collect();
+        let yaml_variant_svc: BTreeSet<_> = yaml_v.diag_layer.diag_services.iter()
+            .map(|s| s.diag_comm.short_name.as_str()).collect();
+        assert_eq!(odx_variant_svc, yaml_variant_svc,
+            "{name}/{vname}: variant-specific services differ between ODX and YAML\n  only in ODX: {:?}\n  only in YAML: {:?}",
+            odx_variant_svc.difference(&yaml_variant_svc).collect::<Vec<_>>(),
+            yaml_variant_svc.difference(&odx_variant_svc).collect::<Vec<_>>());
+    }
+
+    eprintln!("{name}: ODX vs YAML - PASS");
+}
+
+#[test]
+fn test_odx_vs_yaml_flxc1000() {
+    compare_odx_vs_yaml(flxc1000_pdx(), flxc1000_yaml(), "FLXC1000");
+}
+
+#[test]
+fn test_odx_vs_yaml_flxcng1000() {
+    compare_odx_vs_yaml(flxcng1000_pdx(), flxcng1000_yaml(), "FLXCNG1000");
 }

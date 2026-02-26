@@ -36,7 +36,8 @@ pub fn read_pdx_from_reader<R: Read + std::io::Seek>(reader: R) -> Result<DiagDa
         let mut entry = archive.by_index(i)?;
         let name = entry.name().to_string();
 
-        if !name.to_lowercase().ends_with(".odx") {
+        let lower = name.to_lowercase();
+        if !lower.ends_with(".odx") && !lower.contains(".odx-") {
             continue;
         }
 
@@ -74,16 +75,23 @@ pub fn read_pdx_from_reader<R: Read + std::io::Seek>(reader: R) -> Result<DiagDa
     merged.ok_or(PdxReadError::NoOdxFiles)
 }
 
-/// Merge two DiagDatabases. The first one's metadata takes precedence.
+/// Merge two DiagDatabases.
+///
+/// Prefer metadata (ECU name, version, revision) from the database that has
+/// actual diagnostic content (variants), since protocol-layer ODX files also
+/// have DIAG-LAYER-CONTAINER but contain no variants.
 fn merge_databases(mut base: DiagDatabase, other: DiagDatabase) -> DiagDatabase {
-    // Use the first ECU name if non-empty
-    if base.ecu_name.is_empty() {
+    let base_has_variants = !base.variants.is_empty();
+    let other_has_variants = !other.variants.is_empty();
+
+    // Prefer ECU name from the database with variants
+    if base.ecu_name.is_empty() || (!base_has_variants && other_has_variants) {
         base.ecu_name = other.ecu_name;
     }
-    if base.version.is_empty() {
+    if base.version.is_empty() || (!base_has_variants && other_has_variants) {
         base.version = other.version;
     }
-    if base.revision.is_empty() {
+    if base.revision.is_empty() || (!base_has_variants && other_has_variants) {
         base.revision = other.revision;
     }
 
