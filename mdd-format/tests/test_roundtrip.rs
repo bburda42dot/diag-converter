@@ -175,3 +175,53 @@ fn test_sha512_signature_with_compression() {
     let expected_hash = Sha512::digest(fake_fbs_data);
     assert_eq!(sig.signature, expected_hash.as_slice());
 }
+
+#[test]
+fn test_no_signature_still_reads_successfully() {
+    // MDD files without signatures (e.g. older CDA-generated files) must still be readable.
+    let fake_fbs = b"data without signature for backward compat test";
+    let options = WriteOptions {
+        compression: Compression::None,
+        ecu_name: "NOSIG".into(),
+        ..Default::default()
+    };
+    let mdd_bytes = write_mdd_bytes(fake_fbs, &options).unwrap();
+
+    // Strip signatures from the encoded MDD to simulate an old file
+    let mut mdd_file =
+        mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
+    mdd_file.chunks[0].signatures.clear();
+    let mut no_sig = FILE_MAGIC.to_vec();
+    mdd_file.encode(&mut no_sig).unwrap();
+
+    let (meta, recovered) = read_mdd_bytes(&no_sig).unwrap();
+    assert_eq!(meta.ecu_name, "NOSIG");
+    assert_eq!(recovered, fake_fbs);
+}
+
+#[test]
+fn test_signature_verification_fails_on_tampered_data() {
+    let fake_fbs = b"original fbs data that we will tamper with after writing";
+    let options = WriteOptions {
+        compression: Compression::None,
+        ecu_name: "TAMPER".into(),
+        ..Default::default()
+    };
+    let mdd_bytes = write_mdd_bytes(fake_fbs, &options).unwrap();
+
+    // Decode, tamper with the FBS data payload directly, re-encode.
+    let mut mdd_file =
+        mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
+    let chunk = &mut mdd_file.chunks[0];
+    let data = chunk.data.as_mut().unwrap();
+    data[0] ^= 0xFF; // corrupt first byte of FBS payload
+
+    let mut tampered = FILE_MAGIC.to_vec();
+    mdd_file.encode(&mut tampered).unwrap();
+
+    let result = read_mdd_bytes(&tampered);
+    assert!(
+        result.is_err(),
+        "tampered MDD data should fail signature verification"
+    );
+}

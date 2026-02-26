@@ -20,6 +20,8 @@ pub enum MddReadError {
     MissingChunkData,
     #[error("decompression failed: {0}")]
     DecompressionFailed(#[from] crate::compression::CompressionError),
+    #[error("SHA-512 signature verification failed: data may be corrupted or tampered")]
+    SignatureMismatch,
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -82,6 +84,20 @@ pub fn read_mdd_bytes(data: &[u8]) -> Result<(MddMetadata, Vec<u8>), MddReadErro
             Err(e) => return Err(MddReadError::DecompressionFailed(e)),
         },
     };
+
+    // Verify SHA-512 signature if present.
+    // Absent signatures are OK (backward compat with older MDD files / CDA output).
+    if let Some(sig) = chunk
+        .signatures
+        .iter()
+        .find(|s| s.algorithm == "sha512_uncompressed")
+    {
+        use sha2::{Digest, Sha512};
+        let actual_hash = Sha512::digest(&fbs_bytes);
+        if actual_hash.as_slice() != sig.signature.as_slice() {
+            return Err(MddReadError::SignatureMismatch);
+        }
+    }
 
     Ok((metadata, fbs_bytes))
 }
