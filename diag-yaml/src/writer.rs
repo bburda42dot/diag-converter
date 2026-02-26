@@ -337,14 +337,14 @@ fn data_type_to_base(dt: &DataType) -> String {
         DataType::AFloat32 => "f32".into(),
         DataType::AFloat64 => "f64".into(),
         DataType::AAsciiString => "ascii".into(),
-        DataType::AUtf8String => "ascii".into(),
-        DataType::AUnicode2String => "ascii".into(),
+        DataType::AUtf8String => "utf8".into(),
+        DataType::AUnicode2String => "unicode".into(),
         DataType::ABytefield => "bytes".into(),
     }
 }
 
 fn bit_length_to_base(bit_length: u32, current: &str) -> String {
-    if current == "ascii" || current == "bytes" {
+    if current == "ascii" || current == "utf8" || current == "unicode" || current == "bytes" {
         return current.to_string();
     }
     let signed = current.starts_with('s') || current.starts_with('i');

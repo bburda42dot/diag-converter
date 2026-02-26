@@ -969,6 +969,8 @@ fn base_type_to_data_type(base: &str) -> (DataType, PhysicalTypeDataType) {
         "f32" => (DataType::AFloat32, PhysicalTypeDataType::AFloat32),
         "f64" => (DataType::AFloat64, PhysicalTypeDataType::AFloat64),
         "ascii" => (DataType::AAsciiString, PhysicalTypeDataType::AAsciiString),
+        "utf8" => (DataType::AUtf8String, PhysicalTypeDataType::AAsciiString),
+        "unicode" => (DataType::AUnicode2String, PhysicalTypeDataType::AAsciiString),
         "bytes" => (DataType::ABytefield, PhysicalTypeDataType::ABytefield),
         "struct" => (DataType::ABytefield, PhysicalTypeDataType::ABytefield),
         _ => (DataType::AUint32, PhysicalTypeDataType::AUint32),
