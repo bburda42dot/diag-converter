@@ -124,6 +124,50 @@ fn test_ir_validation_odx() {
     let _result = validate_database(&db);
 }
 
+// ODX -> FBS -> IR preserves funct_classes, state refs, admin_data
+#[test]
+fn test_odx_mdd_roundtrip_preserves_funct_classes_and_refs() {
+    let db1 = parse_odx(odx_fixture()).unwrap();
+
+    let fbs = ir_to_flatbuffers(&db1);
+    let db2 = flatbuffers_to_ir(&fbs).unwrap();
+
+    let svc1 = db1.variants[0]
+        .diag_layer
+        .diag_services
+        .iter()
+        .find(|s| s.diag_comm.short_name == "Read_VehicleSpeed")
+        .unwrap();
+    let svc2 = db2.variants[0]
+        .diag_layer
+        .diag_services
+        .iter()
+        .find(|s| s.diag_comm.short_name == "Read_VehicleSpeed")
+        .unwrap();
+
+    assert_eq!(
+        svc1.diag_comm.funct_classes.len(),
+        svc2.diag_comm.funct_classes.len(),
+        "funct_classes count should survive ODX->MDD roundtrip"
+    );
+    assert_eq!(
+        svc1.diag_comm.pre_condition_state_refs.len(),
+        svc2.diag_comm.pre_condition_state_refs.len(),
+        "pre_condition_state_refs should survive ODX->MDD roundtrip"
+    );
+    assert_eq!(
+        svc1.diag_comm.state_transition_refs.len(),
+        svc2.diag_comm.state_transition_refs.len(),
+        "state_transition_refs should survive ODX->MDD roundtrip"
+    );
+
+    assert_eq!(
+        db1.metadata.get("admin_language"),
+        db2.metadata.get("admin_language"),
+        "admin_language should survive roundtrip via metadata BTreeMap"
+    );
+}
+
 // MDD with all compression algorithms
 #[test]
 fn test_mdd_all_compressions() {
