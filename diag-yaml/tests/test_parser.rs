@@ -28,13 +28,13 @@ fn test_parse_example_ecm() {
     // Check VIN read service exists
     let vin_svc = services
         .iter()
-        .find(|s| s.diag_comm.short_name == "Read_VIN");
-    assert!(vin_svc.is_some(), "should have Read_VIN service");
+        .find(|s| s.diag_comm.short_name == "VIN_Read");
+    assert!(vin_svc.is_some(), "should have VIN_Read service");
 
     // Check that writable DIDs generate write services
     let write_svc = services
         .iter()
-        .find(|s| s.diag_comm.short_name.starts_with("Write_"));
+        .find(|s| s.diag_comm.short_name.ends_with("_Write"));
     assert!(write_svc.is_some(), "should have at least one write service");
 
     // Check routines are converted
@@ -94,7 +94,7 @@ fn test_parse_type_with_enum() {
         .diag_layer
         .diag_services
         .iter()
-        .find(|s| s.diag_comm.short_name == "Read_ActiveDiagnosticSession");
+        .find(|s| s.diag_comm.short_name == "ActiveDiagnosticSession_Read");
     assert!(
         session_svc.is_some(),
         "should have service for ActiveDiagnosticSession DID"

@@ -77,7 +77,7 @@ fn parse_hex_or_decimal(s: &str) -> Option<u8> {
 pub fn extract_services(services: &[DiagService]) -> YamlServices {
     let mut yaml = YamlServices::default();
 
-    let mut has_session = false;
+    let mut session_svcs = Vec::new();
     let mut has_security = false;
     let mut reset_svcs = Vec::new();
     let mut auth_svcs = Vec::new();
@@ -93,7 +93,7 @@ pub fn extract_services(services: &[DiagService]) -> YamlServices {
         // First try semantic match (reliable for YAML-originated services)
         let classified = match svc.diag_comm.semantic.as_str() {
             "SESSION" => {
-                has_session = true;
+                session_svcs.push(svc);
                 true
             }
             "SECURITY-ACCESS" => {
@@ -144,7 +144,7 @@ pub fn extract_services(services: &[DiagService]) -> YamlServices {
         if !classified {
             if let Some(sid) = extract_sid(svc) {
                 match sid {
-                    0x10 => has_session = true,
+                    0x10 => session_svcs.push(svc),
                     0x11 => reset_svcs.push(svc),
                     0x27 => has_security = true,
                     0x28 => comm_svcs.push(svc),
@@ -163,12 +163,9 @@ pub fn extract_services(services: &[DiagService]) -> YamlServices {
         }
     }
 
-    // SessionControl: enabled only, generator uses sessions: section
-    if has_session {
-        yaml.diagnostic_session_control = Some(ServiceEntry {
-            enabled: true,
-            ..Default::default()
-        });
+    // SessionControl: extract subfunctions to preserve exact names and order
+    if !session_svcs.is_empty() {
+        yaml.diagnostic_session_control = Some(extract_subfunction_entry(&session_svcs, "_Start"));
     }
 
     // SecurityAccess: enabled only, generator uses security: section
@@ -180,7 +177,7 @@ pub fn extract_services(services: &[DiagService]) -> YamlServices {
     }
 
     if !reset_svcs.is_empty() {
-        yaml.ecu_reset = Some(extract_subfunction_entry(&reset_svcs, "ECUReset_"));
+        yaml.ecu_reset = Some(extract_subfunction_entry(&reset_svcs, ""));
     }
 
     if !auth_svcs.is_empty() {
@@ -253,22 +250,31 @@ pub fn has_any_service(svcs: &YamlServices) -> bool {
 
 /// The 4 default CommunicationControl subtypes from service_generator.rs.
 const DEFAULT_COMM_CONTROL_SUBTYPES: &[(&str, u8)] = &[
-    ("enableRxAndTx", 0x00),
-    ("enableRxAndDisableTx", 0x01),
-    ("disableRxAndEnableTx", 0x02),
-    ("disableRxAndTx", 0x03),
+    ("EnableRxAndEnableTx", 0x00),
+    ("EnableRxAndDisableTx", 0x01),
+    ("DisableRxAndEnableTx", 0x02),
+    ("DisableRxAndDisableTx", 0x03),
+    ("EnableRxAndDisableTxWithEnhancedAddressInformation", 0x04),
+    ("EnableRxAndTxWithEnhancedAddressInformation", 0x05),
 ];
 
 /// Build a CommunicationControl ServiceEntry.
 ///
-/// If the services match the 4 default subtypes exactly, emit `subfunctions: None`
-/// so the generator uses `DEFAULT_COMM_CONTROL_SUBTYPES`. Otherwise reconstruct
-/// explicit subfunctions.
+/// If the services match the default subtypes exactly, emit `subfunctions: None`
+/// so the generator uses defaults. TemporalSync is handled separately via
+/// the `temporal_sync` flag. Otherwise reconstruct explicit subfunctions.
 fn extract_comm_control_entry(services: &[&DiagService]) -> ServiceEntry {
-    let is_default = services.len() == DEFAULT_COMM_CONTROL_SUBTYPES.len()
+    // Separate TemporalSync from regular comm control services
+    let regular_svcs: Vec<&DiagService> = services.iter()
+        .filter(|svc| svc.diag_comm.short_name != "TemporalSync_Control")
+        .copied()
+        .collect();
+    let has_temporal_sync = regular_svcs.len() < services.len();
+
+    let is_default = regular_svcs.len() == DEFAULT_COMM_CONTROL_SUBTYPES.len()
         && DEFAULT_COMM_CONTROL_SUBTYPES.iter().all(|(name, sf_byte)| {
-            let expected_name = format!("CommunicationControl_{name}");
-            services.iter().any(|svc| {
+            let expected_name = format!("{name}_Control");
+            regular_svcs.iter().any(|svc| {
                 svc.diag_comm.short_name == expected_name
                     && extract_subfunction(svc) == Some(*sf_byte)
             })
@@ -277,26 +283,35 @@ fn extract_comm_control_entry(services: &[&DiagService]) -> ServiceEntry {
     if is_default {
         ServiceEntry {
             enabled: true,
+            temporal_sync: if has_temporal_sync { Some(true) } else { None },
             ..Default::default()
         }
     } else {
-        extract_subfunction_entry(services, "CommunicationControl_")
+        let mut entry = extract_subfunction_entry(&regular_svcs, "_Control");
+        entry.temporal_sync = if has_temporal_sync { Some(true) } else { None };
+        entry
     }
 }
 
 /// Build a ServiceEntry with subfunctions extracted from service names.
 ///
-/// Given services named `"{prefix}{name}"` (e.g. `"ECUReset_hardReset"`),
-/// extracts the subfunction byte from each service's request and builds a
-/// subfunctions mapping `{name: hex_value}`.
-fn extract_subfunction_entry(services: &[&DiagService], name_prefix: &str) -> ServiceEntry {
+/// Supports both prefix stripping (e.g., `Authentication_` -> `Deauthenticate`)
+/// and suffix stripping (e.g., `_Start` -> `Default`, `_Control` -> `EnableRxAndTx`).
+///
+/// When `strip` ends with `_`, it's treated as a prefix. Otherwise as a suffix.
+fn extract_subfunction_entry(services: &[&DiagService], strip: &str) -> ServiceEntry {
     let mut subfuncs = serde_yaml::Mapping::new();
     for svc in services {
-        let name = svc
-            .diag_comm
-            .short_name
-            .strip_prefix(name_prefix)
-            .unwrap_or(&svc.diag_comm.short_name);
+        let raw = &svc.diag_comm.short_name;
+        let name = if strip.ends_with('_') {
+            // Prefix mode: strip "Authentication_" from "Authentication_Deauthenticate"
+            raw.strip_prefix(strip).unwrap_or(raw)
+        } else if strip.starts_with('_') {
+            // Suffix mode: strip "_Start" from "Default_Start"
+            raw.strip_suffix(strip).unwrap_or(raw)
+        } else {
+            raw.as_str()
+        };
         if let Some(sf) = extract_subfunction(svc) {
             subfuncs.insert(
                 serde_yaml::Value::String(name.to_string()),
@@ -423,30 +438,32 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_session_control_enabled_no_subfunctions() {
+    fn test_extract_session_control_with_subfunctions() {
         let services = vec![
-            make_subfunction_service("DiagnosticSessionControl_default", "SESSION", "0x10", "0x01"),
-            make_subfunction_service(
-                "DiagnosticSessionControl_programming",
-                "SESSION",
-                "0x10",
-                "0x02",
-            ),
+            make_subfunction_service("Default_Start", "SESSION", "0x10", "0x01"),
+            make_subfunction_service("Programming_Start", "SESSION", "0x10", "0x02"),
         ];
         let yaml_svcs = extract_services(&services);
         let entry = yaml_svcs.diagnostic_session_control.as_ref().unwrap();
         assert!(entry.enabled);
-        assert!(
-            entry.subfunctions.is_none(),
-            "subfunctions should be None - generator should use sessions: section instead"
+        let subfuncs = entry.subfunctions.as_ref().expect("subfunctions should be present");
+        let mapping = subfuncs.as_mapping().unwrap();
+        assert_eq!(mapping.len(), 2);
+        assert_eq!(
+            mapping.get(serde_yaml::Value::String("Default".into())),
+            Some(&serde_yaml::Value::String("0x01".into()))
+        );
+        assert_eq!(
+            mapping.get(serde_yaml::Value::String("Programming".into())),
+            Some(&serde_yaml::Value::String("0x02".into()))
         );
     }
 
     #[test]
     fn test_extract_ecu_reset_with_subfunctions() {
         let services = vec![
-            make_subfunction_service("ECUReset_hardReset", "ECU-RESET", "0x11", "0x01"),
-            make_subfunction_service("ECUReset_softReset", "ECU-RESET", "0x11", "0x03"),
+            make_subfunction_service("HardReset", "ECU-RESET", "0x11", "0x01"),
+            make_subfunction_service("SoftReset", "ECU-RESET", "0x11", "0x03"),
         ];
         let yaml_svcs = extract_services(&services);
         let entry = yaml_svcs.ecu_reset.as_ref().unwrap();
@@ -454,8 +471,8 @@ mod tests {
         let subfuncs = entry.subfunctions.as_ref().unwrap();
         let map = subfuncs.as_mapping().unwrap();
         assert_eq!(map.len(), 2);
-        assert!(map.contains_key(&serde_yaml::Value::String("hardReset".to_string())));
-        assert!(map.contains_key(&serde_yaml::Value::String("softReset".to_string())));
+        assert!(map.contains_key(&serde_yaml::Value::String("HardReset".to_string())));
+        assert!(map.contains_key(&serde_yaml::Value::String("SoftReset".to_string())));
     }
 
     #[test]
@@ -468,7 +485,7 @@ mod tests {
     #[test]
     fn test_did_services_not_in_yaml_services() {
         let services = vec![
-            make_service("Read_VINDataIdentifier", "DATA-IDENT", "0x22"),
+            make_service("VINDataIdentifier_Read", "DATA-IDENT", "0x22"),
             make_service("TesterPresent", "TESTING", "0x3E"),
         ];
         let yaml_svcs = extract_services(&services);
@@ -510,28 +527,40 @@ mod tests {
     fn test_extract_comm_control_default_subfunctions() {
         let default_services = vec![
             make_subfunction_service(
-                "CommunicationControl_enableRxAndTx",
+                "EnableRxAndEnableTx_Control",
                 "COMMUNICATION-CONTROL",
                 "0x28",
                 "0x00",
             ),
             make_subfunction_service(
-                "CommunicationControl_enableRxAndDisableTx",
+                "EnableRxAndDisableTx_Control",
                 "COMMUNICATION-CONTROL",
                 "0x28",
                 "0x01",
             ),
             make_subfunction_service(
-                "CommunicationControl_disableRxAndEnableTx",
+                "DisableRxAndEnableTx_Control",
                 "COMMUNICATION-CONTROL",
                 "0x28",
                 "0x02",
             ),
             make_subfunction_service(
-                "CommunicationControl_disableRxAndTx",
+                "DisableRxAndDisableTx_Control",
                 "COMMUNICATION-CONTROL",
                 "0x28",
                 "0x03",
+            ),
+            make_subfunction_service(
+                "EnableRxAndDisableTxWithEnhancedAddressInformation_Control",
+                "COMMUNICATION-CONTROL",
+                "0x28",
+                "0x04",
+            ),
+            make_subfunction_service(
+                "EnableRxAndTxWithEnhancedAddressInformation_Control",
+                "COMMUNICATION-CONTROL",
+                "0x28",
+                "0x05",
             ),
         ];
         let yaml_svcs = extract_services(&default_services);
@@ -546,10 +575,10 @@ mod tests {
     #[test]
     fn test_extract_comm_control_custom_subfunctions() {
         let custom_services = vec![make_subfunction_service(
-            "CommunicationControl_customMode",
+            "CustomMode_Control",
             "COMMUNICATION-CONTROL",
             "0x28",
-            "0x05",
+            "0x10",
         )];
         let yaml_svcs = extract_services(&custom_services);
         let entry = yaml_svcs.communication_control.as_ref().unwrap();

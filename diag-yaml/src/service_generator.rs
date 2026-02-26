@@ -48,6 +48,9 @@ impl<'a> ServiceGenerator<'a> {
     // --- Session, Security, Reset (Task 12b) ---
 
     /// DiagnosticSessionControl (0x10): one service per session.
+    ///
+    /// Service naming follows CDA convention: `{Alias}_Start` (e.g., `Default_Start`).
+    /// Falls back to `{Name}_Start` if no alias is defined.
     pub fn generate_diagnostic_session_control(&self) -> Vec<DiagService> {
         let entry = match &self.services.diagnostic_session_control {
             Some(e) if e.enabled => e,
@@ -67,8 +70,10 @@ impl<'a> ServiceGenerator<'a> {
 
         sessions.iter().map(|(name, session)| {
             let id = yaml_value_to_u8(&session.id);
+            let label = session.alias.as_deref()
+                .unwrap_or(name);
             build_service(
-                &format!("DiagnosticSessionControl_{name}"),
+                &format!("{label}_Start"),
                 "SESSION",
                 vec![
                     coded_const_param("SID", 0, 8, "0x10"),
@@ -85,14 +90,24 @@ impl<'a> ServiceGenerator<'a> {
     }
 
     fn session_services_from_subfunctions(&self, subfuncs: &serde_yaml::Value) -> Vec<DiagService> {
+        // Helper: derive display name from session key using sessions section alias
+        let display_name = |key: &str| -> String {
+            self.sessions
+                .and_then(|s| s.get(key))
+                .and_then(|s| s.alias.as_deref())
+                .unwrap_or(key)
+                .to_string()
+        };
+
         match subfuncs {
             // Map form: {default: 0x01, programming: 0x02, extended: 0x03}
             serde_yaml::Value::Mapping(map) => {
                 map.iter().filter_map(|(k, v)| {
                     let name = k.as_str()?;
                     let id = yaml_value_to_u8(v);
+                    let label = display_name(name);
                     Some(build_service(
-                        &format!("DiagnosticSessionControl_{name}"),
+                        &format!("{label}_Start"),
                         "SESSION",
                         vec![
                             coded_const_param("SID", 0, 8, "0x10"),
@@ -112,7 +127,7 @@ impl<'a> ServiceGenerator<'a> {
                 seq.iter().map(|v| {
                     let id = yaml_value_to_u8(v);
                     build_service(
-                        &format!("DiagnosticSessionControl_0x{id:02X}"),
+                        &format!("0x{id:02X}_Start"),
                         "SESSION",
                         vec![
                             coded_const_param("SID", 0, 8, "0x10"),
@@ -132,6 +147,9 @@ impl<'a> ServiceGenerator<'a> {
     }
 
     /// SecurityAccess (0x27): two services per security level (RequestSeed + SendKey).
+    ///
+    /// Service naming follows CDA convention: `RequestSeed_Level_{n}`, `SendKey_Level_{n}`
+    /// where n is the security level number (not the subfunc byte).
     pub fn generate_security_access(&self) -> Vec<DiagService> {
         let entry = match &self.services.security_access {
             Some(e) if e.enabled => e,
@@ -144,12 +162,13 @@ impl<'a> ServiceGenerator<'a> {
         };
 
         let mut services = Vec::new();
-        for (name, level) in security {
+        for (_name, level) in security {
             let seed_byte = yaml_value_to_u8(&level.seed_request);
             let key_byte = yaml_value_to_u8(&level.key_send);
+            let level_num = level.level;
 
             services.push(build_service(
-                &format!("SecurityAccess_RequestSeed_{name}"),
+                &format!("RequestSeed_Level_{level_num}"),
                 "SECURITY-ACCESS",
                 vec![
                     coded_const_param("SID", 0, 8, "0x27"),
@@ -163,7 +182,7 @@ impl<'a> ServiceGenerator<'a> {
             ));
 
             services.push(build_service(
-                &format!("SecurityAccess_SendKey_{name}"),
+                &format!("SendKey_Level_{level_num}"),
                 "SECURITY-ACCESS",
                 vec![
                     coded_const_param("SID", 0, 8, "0x27"),
@@ -180,6 +199,9 @@ impl<'a> ServiceGenerator<'a> {
     }
 
     /// ECUReset (0x11): one service per configured reset type.
+    ///
+    /// Service naming follows CDA convention: PascalCase reset type name
+    /// (e.g., `HardReset`, `SoftReset`).
     pub fn generate_ecu_reset(&self) -> Vec<DiagService> {
         let entry = match &self.services.ecu_reset {
             Some(e) if e.enabled => e,
@@ -190,8 +212,10 @@ impl<'a> ServiceGenerator<'a> {
             subfuncs.iter().filter_map(|(k, v)| {
                 let name = k.as_str()?;
                 let subfunc = yaml_value_to_u8(v);
+                // Convert camelCase to PascalCase (e.g., hardReset -> HardReset)
+                let pascal = to_pascal_case(name);
                 Some(build_service(
-                    &format!("ECUReset_{name}"),
+                    &pascal,
                     "ECU-RESET",
                     vec![
                         coded_const_param("SID", 0, 8, "0x11"),
@@ -205,11 +229,11 @@ impl<'a> ServiceGenerator<'a> {
             }).collect()
         } else {
             // Default reset types if no subfunctions specified
-            [("hardReset", 0x01u8), ("keyOffOnReset", 0x02), ("softReset", 0x03)]
+            [("HardReset", 0x01u8), ("KeyOffOnReset", 0x02), ("SoftReset", 0x03)]
                 .iter()
                 .map(|(name, subfunc)| {
                     build_service(
-                        &format!("ECUReset_{name}"),
+                        name,
                         "ECU-RESET",
                         vec![
                             coded_const_param("SID", 0, 8, "0x11"),
@@ -228,6 +252,8 @@ impl<'a> ServiceGenerator<'a> {
     // --- Authentication and Communication Control (Task 12c) ---
 
     /// Authentication (0x29): one service per configured subfunction.
+    ///
+    /// Service naming: `Authentication_{PascalName}` (e.g., `Authentication_Deauthenticate`).
     pub fn generate_authentication(&self) -> Vec<DiagService> {
         let entry = match &self.services.authentication {
             Some(e) if e.enabled => e,
@@ -242,8 +268,9 @@ impl<'a> ServiceGenerator<'a> {
         subfuncs.iter().filter_map(|(k, v)| {
             let name = k.as_str()?;
             let subfunc = yaml_value_to_u8(v);
+            let pascal = to_pascal_case(name);
             Some(build_service(
-                &format!("Authentication_{name}"),
+                &format!("Authentication_{pascal}"),
                 "AUTHENTICATION",
                 vec![
                     coded_const_param("SID", 0, 8, "0x29"),
@@ -261,13 +288,16 @@ impl<'a> ServiceGenerator<'a> {
     }
 
     /// CommunicationControl (0x28): one service per configured subfunction.
+    ///
+    /// Default subtypes include enhanced address info variants (0x04, 0x05).
+    /// TemporalSync (0x88) is generated when `temporal_sync: true` in YAML.
     pub fn generate_communication_control(&self) -> Vec<DiagService> {
         let entry = match &self.services.communication_control {
             Some(e) if e.enabled => e,
             _ => return vec![],
         };
 
-        match &entry.subfunctions {
+        let mut services: Vec<DiagService> = match &entry.subfunctions {
             Some(serde_yaml::Value::Mapping(map)) => {
                 map.iter().filter_map(|(k, v)| {
                     let name = k.as_str()?;
@@ -288,7 +318,27 @@ impl<'a> ServiceGenerator<'a> {
                     comm_control_service(name, *subfunc)
                 }).collect()
             }
+        };
+
+        // TemporalSync (subfunc 0x88) with extra temporalEraId parameter
+        if entry.temporal_sync.unwrap_or(false) {
+            services.push(build_service(
+                "TemporalSync_Control",
+                "COMMUNICATION-CONTROL",
+                vec![
+                    coded_const_param("SID", 0, 8, "0x28"),
+                    coded_const_param("SubFunction", 1, 8, "0x88"),
+                    value_param("CommunicationType", 2, 8),
+                    value_param("temporalEraId", 3, 32),
+                ],
+                vec![
+                    coded_const_param("SID", 0, 8, "0x68"),
+                    matching_request_param("SubFunction_Echo", 1, 1),
+                ],
+            ));
         }
+
+        services
     }
 
     // --- Transfer data services (Task 12d) ---
@@ -331,7 +381,7 @@ impl<'a> ServiceGenerator<'a> {
                 ],
             ),
             build_service(
-                "RequestTransferExit",
+                "TransferExit",
                 "DOWNLOAD",
                 vec![
                     coded_const_param("SID", 0, 8, "0x37"),
@@ -479,6 +529,15 @@ impl<'a> ServiceGenerator<'a> {
 
 // --- Helper functions ---
 
+/// Convert a camelCase string to PascalCase (capitalize first letter).
+fn to_pascal_case(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().to_string() + chars.as_str(),
+    }
+}
+
 fn yaml_value_to_u8(v: &serde_yaml::Value) -> u8 {
     match v {
         serde_yaml::Value::Number(n) => {
@@ -607,10 +666,12 @@ fn matching_request_param(name: &str, byte_pos: u32, byte_length: u32) -> Param 
 }
 
 const DEFAULT_COMM_CONTROL_SUBTYPES: &[(&str, u8)] = &[
-    ("enableRxAndTx", 0x00),
-    ("enableRxAndDisableTx", 0x01),
-    ("disableRxAndEnableTx", 0x02),
-    ("disableRxAndTx", 0x03),
+    ("EnableRxAndEnableTx", 0x00),
+    ("EnableRxAndDisableTx", 0x01),
+    ("DisableRxAndEnableTx", 0x02),
+    ("DisableRxAndDisableTx", 0x03),
+    ("EnableRxAndDisableTxWithEnhancedAddressInformation", 0x04),
+    ("EnableRxAndTxWithEnhancedAddressInformation", 0x05),
 ];
 
 fn comm_control_name(subfunc: u8) -> String {
@@ -622,8 +683,9 @@ fn comm_control_name(subfunc: u8) -> String {
 }
 
 fn comm_control_service(name: &str, subfunc: u8) -> DiagService {
+    let pascal = to_pascal_case(name);
     build_service(
-        &format!("CommunicationControl_{name}"),
+        &format!("{pascal}_Control"),
         "COMMUNICATION-CONTROL",
         vec![
             coded_const_param("SID", 0, 8, "0x28"),
@@ -716,8 +778,8 @@ mod tests {
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_diagnostic_session_control();
         assert_eq!(services.len(), 2);
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "DiagnosticSessionControl_default"));
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "DiagnosticSessionControl_extended"));
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "default_Start"));
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "extended_Start"));
     }
 
     #[test]
@@ -733,7 +795,7 @@ mod tests {
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_diagnostic_session_control();
         assert_eq!(services.len(), 2);
-        assert_eq!(services[0].diag_comm.short_name, "DiagnosticSessionControl_0x01");
+        assert_eq!(services[0].diag_comm.short_name, "0x01_Start");
     }
 
     #[test]
@@ -773,8 +835,8 @@ mod tests {
         let generator = ServiceGenerator::new(&svc).with_security(Some(&sec));
         let services = generator.generate_security_access();
         assert_eq!(services.len(), 2);
-        assert_eq!(services[0].diag_comm.short_name, "SecurityAccess_RequestSeed_level_01");
-        assert_eq!(services[1].diag_comm.short_name, "SecurityAccess_SendKey_level_01");
+        assert_eq!(services[0].diag_comm.short_name, "RequestSeed_Level_1");
+        assert_eq!(services[1].diag_comm.short_name, "SendKey_Level_1");
 
         // Verify seed subfunc byte
         let req = services[0].request.as_ref().unwrap();
@@ -798,8 +860,8 @@ mod tests {
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_ecu_reset();
         assert_eq!(services.len(), 2);
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "ECUReset_hardReset"));
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "ECUReset_softReset"));
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "HardReset"));
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "SoftReset"));
     }
 
     #[test]
@@ -824,8 +886,8 @@ mod tests {
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_authentication();
         assert_eq!(services.len(), 3);
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "Authentication_deAuthenticate"));
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "Authentication_proofOfOwnership"));
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "Authentication_DeAuthenticate"));
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "Authentication_ProofOfOwnership"));
         // Verify SID
         let req = services[0].request.as_ref().unwrap();
         if let Some(ParamData::CodedConst { coded_value, .. }) = &req.params[0].specific_data {
@@ -854,9 +916,9 @@ mod tests {
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_communication_control();
         assert_eq!(services.len(), 3);
-        assert_eq!(services[0].diag_comm.short_name, "CommunicationControl_enableRxAndTx");
-        assert_eq!(services[1].diag_comm.short_name, "CommunicationControl_enableRxAndDisableTx");
-        assert_eq!(services[2].diag_comm.short_name, "CommunicationControl_disableRxAndTx");
+        assert_eq!(services[0].diag_comm.short_name, "EnableRxAndEnableTx_Control");
+        assert_eq!(services[1].diag_comm.short_name, "EnableRxAndDisableTx_Control");
+        assert_eq!(services[2].diag_comm.short_name, "DisableRxAndDisableTx_Control");
         // Verify SID
         let req = services[0].request.as_ref().unwrap();
         if let Some(ParamData::CodedConst { coded_value, .. }) = &req.params[0].specific_data {
@@ -869,7 +931,7 @@ mod tests {
         let svc = services_with(|s| s.communication_control = Some(enabled_entry()));
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_communication_control();
-        assert_eq!(services.len(), 4); // 4 default subtypes
+        assert_eq!(services.len(), 6); // 6 default subtypes (including enhanced address info)
     }
 
     #[test]
@@ -885,8 +947,8 @@ mod tests {
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_communication_control();
         assert_eq!(services.len(), 2);
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "CommunicationControl_enableRxAndTx"));
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "CommunicationControl_disableRxAndTx"));
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "EnableRxAndTx_Control"));
+        assert!(services.iter().any(|s| s.diag_comm.short_name == "DisableRxAndTx_Control"));
     }
 
     #[test]
@@ -897,7 +959,7 @@ mod tests {
         assert_eq!(services.len(), 3);
         assert_eq!(services[0].diag_comm.short_name, "RequestDownload");
         assert_eq!(services[1].diag_comm.short_name, "TransferData");
-        assert_eq!(services[2].diag_comm.short_name, "RequestTransferExit");
+        assert_eq!(services[2].diag_comm.short_name, "TransferExit");
         // Verify SIDs
         let check_sid = |svc: &DiagService, expected: &str| {
             let req = svc.request.as_ref().unwrap();

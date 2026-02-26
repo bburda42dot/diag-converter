@@ -50,7 +50,9 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
     // Extract DIDs and routines from services
     let mut dids_map = serde_yaml::Mapping::new();
     let mut routines_map = serde_yaml::Mapping::new();
-    // Start with type definitions from IR (authoritative source for roundtrip)
+    // Start with type definitions from IR (authoritative source for roundtrip).
+    // For string/bytes types without bit_length, compute length (bytes) from the
+    // DOP to preserve the original YAML length field.
     let mut types_map: BTreeMap<String, YamlType> = db.type_definitions.iter()
         .map(|td| (td.name.clone(), YamlType {
             base: td.base.clone(),
@@ -70,16 +72,16 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
                 let routine = service_to_routine(svc);
                 let key = serde_yaml::Value::Number(serde_yaml::Number::from(rid as u64));
                 routines_map.insert(key, serde_yaml::to_value(&routine).unwrap_or_default());
-            } else if svc.diag_comm.short_name.starts_with("Read_") {
+            } else if svc.diag_comm.short_name.ends_with("_Read") {
                 let did_id = extract_did_id(svc);
-                let did_name = svc.diag_comm.short_name.strip_prefix("Read_").unwrap_or(&svc.diag_comm.short_name);
+                let did_name = svc.diag_comm.short_name.strip_suffix("_Read").unwrap_or(&svc.diag_comm.short_name);
 
                 // Extract type info from DOP if available
                 let (did_type_val, type_name) = extract_did_type(svc, did_name);
 
                 // Register named type if we extracted one
                 if let Some((name, yaml_type)) = type_name {
-                    types_map.insert(name, yaml_type);
+                    types_map.entry(name).or_insert(yaml_type);
                 }
 
                 let access_name = extract_access_pattern_name(&svc.diag_comm);
@@ -91,7 +93,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
                     access: if access_name.is_empty() { "public".into() } else { access_name },
                     readable: Some(true),
                     writable: None, // Check if there's a matching write service
-                    snapshot: snap.or(Some(false)),
+                    snapshot: snap,
                     io_control: ioc,
                     annotations: None,
                     audience: None,
@@ -104,7 +106,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
 
         // Mark DIDs that also have write services
         for svc in &layer.diag_services {
-            if svc.diag_comm.short_name.starts_with("Write_") {
+            if svc.diag_comm.short_name.ends_with("_Write") {
                 let did_id = extract_did_id(svc);
                 let key = serde_yaml::Value::Number(serde_yaml::Number::from(did_id as u64));
                 if let Some(serde_yaml::Value::Mapping(did_mapping)) = dids_map.get_mut(&key) {
@@ -184,6 +186,12 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
         x_oem: base_variant.and_then(|v| extract_sdg_json(&v.diag_layer, "yaml_x_oem")),
         ecu_jobs,
         memory: db.memory.as_ref().map(ir_memory_to_yaml),
+        functional_classes: base_variant.map(|v| {
+            let classes: Vec<String> = v.diag_layer.funct_classes.iter()
+                .map(|fc| fc.short_name.clone())
+                .collect();
+            if classes.is_empty() { None } else { Some(classes) }
+        }).flatten(),
     }
 }
 
@@ -502,9 +510,6 @@ fn extract_access_patterns(variant: &Variant) -> Option<BTreeMap<String, AccessP
         }
 
         let refs = &svc.diag_comm.pre_condition_state_refs;
-        if refs.is_empty() {
-            continue;
-        }
 
         let mut session_names: Vec<String> = Vec::new();
         let mut security_names: Vec<String> = Vec::new();
@@ -567,6 +572,12 @@ fn service_to_routine(svc: &DiagService) -> Routine {
     }
 }
 
+/// SDG captions that are extracted into dedicated YAML sections and must not
+/// appear in the generic `sdgs:` output to avoid duplication on roundtrip.
+const DEDICATED_SDG_CAPTIONS: &[&str] = &[
+    "identification", "comparams", "dtc_config", "yaml_annotations", "yaml_x_oem",
+];
+
 /// Convert IR SDGs to YAML SDGs.
 fn ir_sdgs_to_yaml(sdgs: &Sdgs) -> BTreeMap<String, YamlSdg> {
     let mut map = BTreeMap::new();
@@ -576,6 +587,9 @@ fn ir_sdgs_to_yaml(sdgs: &Sdgs) -> BTreeMap<String, YamlSdg> {
         } else {
             sdg.caption_sn.to_lowercase().replace(' ', "_")
         };
+        if DEDICATED_SDG_CAPTIONS.contains(&key.as_str()) {
+            continue;
+        }
         map.insert(key, ir_sdg_to_yaml(sdg));
     }
     map

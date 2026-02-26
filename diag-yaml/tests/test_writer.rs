@@ -175,9 +175,9 @@ fn test_writable_did_roundtrip() {
     // Verify the IR has at least one Write_ service (proving the DID is writable)
     let layer = &db.variants[0].diag_layer;
     let write_services: Vec<_> = layer.diag_services.iter()
-        .filter(|s| s.diag_comm.short_name.starts_with("Write_"))
+        .filter(|s| s.diag_comm.short_name.ends_with("_Write"))
         .collect();
-    assert!(!write_services.is_empty(), "example-ecm.yml should have writable DIDs generating Write_ services");
+    assert!(!write_services.is_empty(), "example-ecm.yml should have writable DIDs generating _Write services");
 
     // Write to YAML and re-parse
     let yaml_output = write_yaml(&db).unwrap();
@@ -186,7 +186,7 @@ fn test_writable_did_roundtrip() {
     // The reparsed IR must still have Write_ services for writable DIDs
     let reparsed_layer = &reparsed.variants[0].diag_layer;
     let reparsed_write_services: Vec<_> = reparsed_layer.diag_services.iter()
-        .filter(|s| s.diag_comm.short_name.starts_with("Write_"))
+        .filter(|s| s.diag_comm.short_name.ends_with("_Write"))
         .collect();
     assert_eq!(
         write_services.len(),
@@ -449,7 +449,7 @@ fn test_access_patterns_roundtrip() {
 
     // Find a service with "extended_write" access (DID with access: extended_write)
     let write_svc = base.diag_layer.diag_services.iter()
-        .find(|s| s.diag_comm.short_name.starts_with("Write_"))
+        .find(|s| s.diag_comm.short_name.ends_with("_Write"))
         .expect("should have at least one Write DID service");
 
     assert!(
@@ -477,7 +477,7 @@ fn test_access_patterns_roundtrip() {
     // Verify access patterns are preserved
     let base2 = db2.variants.iter().find(|v| v.is_base_variant).unwrap();
     let write_svc2 = base2.diag_layer.diag_services.iter()
-        .find(|s| s.diag_comm.short_name.starts_with("Write_"))
+        .find(|s| s.diag_comm.short_name.ends_with("_Write"))
         .expect("should still have Write service after roundtrip");
 
     assert_eq!(

@@ -376,7 +376,7 @@ fn test_parse_odx_pre_condition_and_state_transition_refs() {
         "should have 1 state transition ref"
     );
     let str_ref = &svc.diag_comm.state_transition_refs[0];
-    assert_eq!(str_ref.value, "ST_1");
+    assert_eq!(str_ref.value, "ST_DefaultToExtended");
     let st = str_ref
         .state_transition
         .as_ref()

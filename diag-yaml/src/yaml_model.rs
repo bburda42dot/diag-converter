@@ -55,6 +55,8 @@ pub struct YamlDocument {
     pub ecu_jobs: Option<BTreeMap<String, EcuJob>>,
     #[serde(default)]
     pub memory: Option<YamlMemoryConfig>,
+    #[serde(default)]
+    pub functional_classes: Option<Vec<String>>,
 }
 
 
@@ -402,6 +404,9 @@ pub struct ServiceEntry {
     pub nrc_on_fail: Option<serde_yaml::Value>,
     #[serde(default)]
     pub max_active_events: Option<u32>,
+    // CommunicationControl extras
+    #[serde(default)]
+    pub temporal_sync: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

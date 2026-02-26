@@ -294,7 +294,16 @@ fn ir_diag_layer_to_odx_no_dtcs(diag_layer: &DiagLayer) -> DiagLayerVariant {
             env_datas: opt_wrap(col.env_datas, |v| EnvDatasWrapper { items: v }),
             env_data_descs: opt_wrap(col.env_data_descs, |v| EnvDataDescsWrapper { items: v }),
             tables: None,
-            unit_spec: None,
+            unit_spec: if col.units.is_empty() {
+                None
+            } else {
+                Some(OdxUnitSpec {
+                    units: opt_wrap(col.units, |v| UnitsWrapper { items: v }),
+                    physical_dimensions: opt_wrap(col.physical_dimensions, |v| PhysicalDimensionsWrapper { items: v }),
+                    unit_groups: None,
+                    sdgs: None,
+                })
+            },
             sdgs: None,
         })
     };
@@ -513,7 +522,9 @@ fn ir_diag_service_to_odx(svc: &DiagService, svc_id: &str, idx: usize) -> OdxDia
                     .pre_condition_state_refs
                     .iter()
                     .map(|pcsr| OdxRef {
-                        id_ref: Some(pcsr.value.clone()),
+                        id_ref: Some(pcsr.state.as_ref()
+                            .map(|s| format!("S_{}", s.short_name))
+                            .unwrap_or_else(|| pcsr.value.clone())),
                         docref: None,
                         doctype: None,
                     })
@@ -529,7 +540,9 @@ fn ir_diag_service_to_odx(svc: &DiagService, svc_id: &str, idx: usize) -> OdxDia
                     .state_transition_refs
                     .iter()
                     .map(|str_ref| OdxRef {
-                        id_ref: Some(str_ref.value.clone()),
+                        id_ref: Some(str_ref.state_transition.as_ref()
+                            .map(|st| format!("ST_{}", st.short_name))
+                            .unwrap_or_else(|| str_ref.value.clone())),
                         docref: None,
                         doctype: None,
                     })
@@ -722,6 +735,8 @@ struct DopCollection {
     muxs: Vec<OdxMux>,
     env_datas: Vec<OdxEnvData>,
     env_data_descs: Vec<OdxEnvDataDesc>,
+    units: Vec<OdxUnit>,
+    physical_dimensions: Vec<OdxPhysicalDimension>,
 }
 
 fn collect_dops_from_params(params: &[Param], col: &mut DopCollection) {
@@ -740,7 +755,22 @@ fn collect_dops_from_params(params: &[Param], col: &mut DopCollection) {
             }
             let name = &dop.short_name;
             match &dop.specific_data {
-                Some(DopData::NormalDop { .. }) | None => {
+                Some(DopData::NormalDop { unit_ref, .. }) => {
+                    if !col.data_object_props.iter().any(|d| d.short_name.as_deref() == Some(name.as_str())) {
+                        col.data_object_props.push(ir_dop_to_odx(dop));
+                    }
+                    if let Some(unit) = unit_ref {
+                        if !col.units.iter().any(|u| u.short_name.as_deref() == Some(unit.short_name.as_str())) {
+                            if let Some(pd) = &unit.physical_dimension {
+                                if !col.physical_dimensions.iter().any(|p| p.short_name.as_deref() == Some(pd.short_name.as_str())) {
+                                    col.physical_dimensions.push(ir_physical_dimension_to_odx(pd));
+                                }
+                            }
+                            col.units.push(ir_unit_to_odx(unit));
+                        }
+                    }
+                }
+                None => {
                     if !col.data_object_props.iter().any(|d| d.short_name.as_deref() == Some(name.as_str())) {
                         col.data_object_props.push(ir_dop_to_odx(dop));
                     }
@@ -1096,6 +1126,39 @@ fn ir_dtc_to_odx(dtc: &Dtc) -> OdxDtc {
 
 // --- StateChart ---
 
+fn ir_unit_to_odx(unit: &Unit) -> OdxUnit {
+    OdxUnit {
+        id: Some(format!("UNIT_{}", unit.short_name)),
+        short_name: Some(unit.short_name.clone()),
+        display_name: if unit.display_name.is_empty() {
+            None
+        } else {
+            Some(unit.display_name.clone())
+        },
+        factor_si_to_unit: unit.factor_si_to_unit,
+        offset_si_to_unit: unit.offset_si_to_unit,
+        physical_dimension_ref: unit.physical_dimension.as_ref().map(|pd| OdxRef {
+            id_ref: Some(format!("PD_{}", pd.short_name)),
+            docref: None,
+            doctype: None,
+        }),
+    }
+}
+
+fn ir_physical_dimension_to_odx(pd: &PhysicalDimension) -> OdxPhysicalDimension {
+    OdxPhysicalDimension {
+        id: Some(format!("PD_{}", pd.short_name)),
+        short_name: Some(pd.short_name.clone()),
+        length_exp: pd.length_exp,
+        mass_exp: pd.mass_exp,
+        time_exp: pd.time_exp,
+        current_exp: pd.current_exp,
+        temperature_exp: pd.temperature_exp,
+        molar_amount_exp: pd.molar_amount_exp,
+        luminous_intensity_exp: pd.luminous_intensity_exp,
+    }
+}
+
 fn ir_state_chart_to_odx(sc: &StateChart) -> OdxStateChart {
     OdxStateChart {
         id: None,
@@ -1116,7 +1179,7 @@ fn ir_state_chart_to_odx(sc: &StateChart) -> OdxStateChart {
                     .states
                     .iter()
                     .map(|s| OdxState {
-                        id: None,
+                        id: Some(format!("S_{}", s.short_name)),
                         short_name: Some(s.short_name.clone()),
                         long_name: s.long_name.as_ref().map(|ln| ln.value.clone()),
                     })
@@ -1131,7 +1194,7 @@ fn ir_state_chart_to_odx(sc: &StateChart) -> OdxStateChart {
                     .state_transitions
                     .iter()
                     .map(|t| OdxStateTransition {
-                        id: None,
+                        id: Some(format!("ST_{}", t.short_name)),
                         short_name: Some(t.short_name.clone()),
                         source_snref: Some(OdxSnRef {
                             short_name: Some(t.source_short_name_ref.clone()),

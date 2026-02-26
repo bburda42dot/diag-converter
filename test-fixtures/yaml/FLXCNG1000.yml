@@ -41,6 +41,37 @@ ecu:
       functional_address: 0xFFFF
 
 # -----------------------------------------------------------------------------
+# COMPARAMS (Communication Parameters)
+# Based on: comparams.py - add_comparams()
+# -----------------------------------------------------------------------------
+comparams:
+  specs:
+    CP_DoIPLogicalGatewayAddress:
+      protocols:
+        UDS_Ethernet_DoIP:
+          value: "4096"
+        UDS_Ethernet_DoIP_DOBT:
+          value: "4096"
+    CP_DoIPLogicalFunctionalAddress:
+      protocols:
+        UDS_Ethernet_DoIP:
+          value: "65535"
+        UDS_Ethernet_DoIP_DOBT:
+          value: "65535"
+    CP_UniqueRespIdTable:
+      protocols:
+        UDS_Ethernet_DoIP:
+          complex_entries:
+            - value: "4096"
+            - value: "0"
+            - value: "FLXCNG1000"
+        UDS_Ethernet_DoIP_DOBT:
+          complex_entries:
+            - value: "4096"
+            - value: "0"
+            - value: "FLXCNG1000"
+
+# -----------------------------------------------------------------------------
 # SESSIONS
 # Same sessions as FLXC1000
 # -----------------------------------------------------------------------------
@@ -232,6 +263,19 @@ identification:
             expected_value: 0x001010
 
 # -----------------------------------------------------------------------------
+# FUNCTIONAL CLASSES
+# Based on: metadata.py - add_functional_classes()
+# -----------------------------------------------------------------------------
+functional_classes:
+  - Session
+  - EcuReset
+  - CommCtrl
+  - Ident
+  - StandardDataTransfer
+  - SecurityAccess
+  - Authentication
+
+# -----------------------------------------------------------------------------
 # SERVICES
 # Same services as FLXC1000, but no boot-specific security services
 # -----------------------------------------------------------------------------
@@ -296,6 +340,7 @@ services:
 
   communicationControl:
     enabled: true
+    temporal_sync: true
 
   testerPresent:
     enabled: true

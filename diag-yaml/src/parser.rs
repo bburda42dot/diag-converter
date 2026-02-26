@@ -17,6 +17,14 @@ pub enum YamlParseError {
     InvalidValue(String),
 }
 
+/// Serialize a serde_yaml::Value to a canonical JSON string with sorted keys.
+/// This ensures that round-tripping through YAML doesn't change key order.
+fn canonical_json(val: &serde_yaml::Value) -> String {
+    // serde_json::Value uses BTreeMap for objects, so keys are sorted.
+    let json_val: serde_json::Value = serde_json::to_value(val).unwrap_or_default();
+    serde_json::to_string(&json_val).unwrap_or_default()
+}
+
 /// Parse a YAML string into a DiagDatabase IR.
 pub fn parse_yaml(yaml: &str) -> Result<DiagDatabase, YamlParseError> {
     let doc: YamlDocument = serde_yaml::from_str(yaml)?;
@@ -183,7 +191,7 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         }
     }
     if let Some(annotations) = &doc.annotations {
-        let ann_json = serde_json::to_string(annotations).unwrap_or_default();
+        let ann_json = canonical_json(annotations);
         layer_sdg_vec.push(Sdg {
             caption_sn: "yaml_annotations".into(),
             sds: vec![SdOrSdg::Sd(Sd {
@@ -195,7 +203,7 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         });
     }
     if let Some(x_oem) = &doc.x_oem {
-        let xoem_json = serde_json::to_string(x_oem).unwrap_or_default();
+        let xoem_json = canonical_json(x_oem);
         layer_sdg_vec.push(Sdg {
             caption_sn: "yaml_x_oem".into(),
             sds: vec![SdOrSdg::Sd(Sd {
@@ -237,6 +245,16 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         }
     }
 
+    // Build functional classes from YAML
+    let funct_classes: Vec<FunctClass> = doc.functional_classes.as_ref()
+        .map(|classes| classes.iter().map(|name| FunctClass {
+            short_name: name.clone(),
+        }).collect())
+        .unwrap_or_default();
+
+    // Build com_param_refs from YAML comparams section
+    let com_param_refs = parse_comparams(&doc);
+
     // Build the main variant containing all services
     let variant = Variant {
         diag_layer: DiagLayer {
@@ -245,8 +263,8 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
                 value: m.description.clone(),
                 ti: String::new(),
             }),
-            funct_classes: vec![],
-            com_param_refs: vec![],
+            funct_classes,
+            com_param_refs,
             diag_services,
             single_ecu_jobs,
             state_charts,
@@ -528,7 +546,7 @@ fn did_to_read_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> DiagS
 
     DiagService {
         diag_comm: DiagComm {
-            short_name: format!("Read_{}", did.name),
+            short_name: format!("{}_Read", did.name),
             long_name: did.description.as_ref().map(|d| LongName {
                 value: d.clone(),
                 ti: String::new(),
@@ -622,7 +640,7 @@ fn did_to_write_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> Diag
 
     DiagService {
         diag_comm: DiagComm {
-            short_name: format!("Write_{}", did.name),
+            short_name: format!("{}_Write", did.name),
             long_name: did.description.as_ref().map(|d| LongName {
                 value: d.clone(),
                 ti: String::new(),
@@ -1473,4 +1491,78 @@ fn parse_detect_to_matching_parameter(detect: &serde_yaml::Value) -> Option<Matc
         }),
         use_physical_addressing: None,
     })
+}
+
+/// Parse YAML `comparams.specs` section into IR `ComParamRef` entries.
+///
+/// Each spec like `CP_DoIPLogicalGatewayAddress` can have multiple protocol
+/// entries (e.g., `UDS_Ethernet_DoIP` and `UDS_Ethernet_DoIP_DOBT`), each
+/// producing one `ComParamRef`.
+fn parse_comparams(doc: &YamlDocument) -> Vec<ComParamRef> {
+    let comparams = match &doc.comparams {
+        Some(c) => c,
+        None => return vec![],
+    };
+    let specs = match &comparams.specs {
+        Some(s) => s,
+        None => return vec![],
+    };
+
+    let mut refs = Vec::new();
+    for (param_name, spec_val) in specs {
+        let protocols = match spec_val.get("protocols").and_then(|p| p.as_mapping()) {
+            Some(m) => m,
+            None => continue,
+        };
+        for (proto_key, proto_val) in protocols {
+            let proto_name = match proto_key.as_str() {
+                Some(s) => s,
+                None => continue,
+            };
+
+            let simple_value = proto_val.get("value")
+                .and_then(|v| v.as_str())
+                .map(|v| SimpleValue { value: v.to_string() });
+
+            let complex_value = proto_val.get("complex_entries")
+                .and_then(|v| v.as_sequence())
+                .map(|seq| ComplexValue {
+                    entries: seq.iter().filter_map(|entry| {
+                        entry.get("value")
+                            .and_then(|v| v.as_str())
+                            .map(|v| SimpleOrComplexValue::Simple(SimpleValue {
+                                value: v.to_string(),
+                            }))
+                    }).collect(),
+                });
+
+            let protocol = Protocol {
+                diag_layer: DiagLayer {
+                    short_name: proto_name.to_string(),
+                    ..Default::default()
+                },
+                com_param_spec: None,
+                prot_stack: None,
+                parent_refs: vec![],
+            };
+
+            refs.push(ComParamRef {
+                simple_value,
+                complex_value,
+                com_param: Some(Box::new(ComParam {
+                    com_param_type: ComParamType::Regular,
+                    short_name: param_name.clone(),
+                    long_name: None,
+                    param_class: String::new(),
+                    cp_type: ComParamStandardisationLevel::Standard,
+                    display_level: None,
+                    cp_usage: ComParamUsage::EcuComm,
+                    specific_data: None,
+                })),
+                protocol: Some(Box::new(protocol)),
+                prot_stack: None,
+            });
+        }
+    }
+    refs
 }

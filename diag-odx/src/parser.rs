@@ -326,14 +326,19 @@ fn map_diag_service(
                         .iter()
                         .filter_map(|r| {
                             let id = r.id_ref.as_deref()?;
+                            let state = index.states.get(id).map(|s| State {
+                                short_name: s.short_name.clone().unwrap_or_default(),
+                                long_name: None,
+                            });
+                            // Normalize value to canonical form so ODX roundtrip is stable
+                            let value = state.as_ref()
+                                .map(|s| format!("S_{}", s.short_name))
+                                .unwrap_or_else(|| id.to_string());
                             Some(PreConditionStateRef {
-                                value: id.to_string(),
+                                value,
                                 in_param_if_short_name: String::new(),
                                 in_param_path_short_name: String::new(),
-                                state: index.states.get(id).map(|s| State {
-                                    short_name: s.short_name.clone().unwrap_or_default(),
-                                    long_name: None,
-                                }),
+                                state,
                             })
                         })
                         .collect()
@@ -347,27 +352,32 @@ fn map_diag_service(
                         .iter()
                         .filter_map(|r| {
                             let id = r.id_ref.as_deref()?;
+                            let state_transition = index
+                                .state_transitions
+                                .get(id)
+                                .map(|st| StateTransition {
+                                    short_name: st
+                                        .short_name
+                                        .clone()
+                                        .unwrap_or_default(),
+                                    source_short_name_ref: st
+                                        .source_snref
+                                        .as_ref()
+                                        .and_then(|s| s.short_name.clone())
+                                        .unwrap_or_default(),
+                                    target_short_name_ref: st
+                                        .target_snref
+                                        .as_ref()
+                                        .and_then(|s| s.short_name.clone())
+                                        .unwrap_or_default(),
+                                });
+                            // Normalize value to canonical form so ODX roundtrip is stable
+                            let value = state_transition.as_ref()
+                                .map(|st| format!("ST_{}", st.short_name))
+                                .unwrap_or_else(|| id.to_string());
                             Some(StateTransitionRef {
-                                value: id.to_string(),
-                                state_transition: index
-                                    .state_transitions
-                                    .get(id)
-                                    .map(|st| StateTransition {
-                                        short_name: st
-                                            .short_name
-                                            .clone()
-                                            .unwrap_or_default(),
-                                        source_short_name_ref: st
-                                            .source_snref
-                                            .as_ref()
-                                            .and_then(|s| s.short_name.clone())
-                                            .unwrap_or_default(),
-                                        target_short_name_ref: st
-                                            .target_snref
-                                            .as_ref()
-                                            .and_then(|s| s.short_name.clone())
-                                            .unwrap_or_default(),
-                                    }),
+                                value,
+                                state_transition,
                             })
                         })
                         .collect()
