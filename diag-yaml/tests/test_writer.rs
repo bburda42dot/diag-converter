@@ -55,6 +55,41 @@ x-oem:
 }
 
 #[test]
+fn test_yaml_roundtrip_preserves_types_section() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+types:
+  VehicleSpeed:
+    base: u16
+    bit_length: 16
+  EngineState:
+    base: u8
+    bit_length: 8
+    enum:
+      OFF: 0
+      RUNNING: 1
+dids:
+  0x0100:
+    name: Speed
+    type: VehicleSpeed
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    let yaml_out = write_yaml(&db).unwrap();
+    let doc: serde_yaml::Value = serde_yaml::from_str(&yaml_out).unwrap();
+    let types = doc["types"].as_mapping().expect("types section should exist in output");
+    assert!(
+        types.contains_key(&serde_yaml::Value::String("VehicleSpeed".into())),
+        "VehicleSpeed type should be in output"
+    );
+    assert!(
+        types.contains_key(&serde_yaml::Value::String("EngineState".into())),
+        "EngineState type should be in output"
+    );
+}
+
+#[test]
 fn test_yaml_roundtrip_minimal() {
     let content = include_str!("../../test-fixtures/yaml/minimal-ecu.yml");
     let original = parse_yaml(content).unwrap();

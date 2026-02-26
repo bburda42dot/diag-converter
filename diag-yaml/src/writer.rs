@@ -50,7 +50,18 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
     // Extract DIDs and routines from services
     let mut dids_map = serde_yaml::Mapping::new();
     let mut routines_map = serde_yaml::Mapping::new();
-    let mut types_map: BTreeMap<String, YamlType> = BTreeMap::new();
+    // Start with type definitions from IR (authoritative source for roundtrip)
+    let mut types_map: BTreeMap<String, YamlType> = db.type_definitions.iter()
+        .map(|td| (td.name.clone(), YamlType {
+            base: td.base.clone(),
+            bit_length: td.bit_length,
+            min_length: td.min_length,
+            max_length: td.max_length,
+            enum_values: td.enum_values_json.as_ref()
+                .and_then(|json| serde_json::from_str::<serde_yaml::Value>(json).ok()),
+            ..Default::default()
+        }))
+        .collect();
 
     if let Some(layer) = layer {
         for svc in &layer.diag_services {

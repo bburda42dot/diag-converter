@@ -440,7 +440,7 @@ pub struct AccessPattern {
 
 // --- Types ---
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct YamlType {
     #[serde(default)]
     pub base: String,
