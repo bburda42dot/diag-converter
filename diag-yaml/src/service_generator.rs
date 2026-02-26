@@ -481,15 +481,30 @@ impl<'a> ServiceGenerator<'a> {
 
 fn yaml_value_to_u8(v: &serde_yaml::Value) -> u8 {
     match v {
-        serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0) as u8,
+        serde_yaml::Value::Number(n) => {
+            let val = n.as_u64().unwrap_or_else(|| {
+                log::warn!("yaml_value_to_u8: non-u64 number {:?}, defaulting to 0", n);
+                0
+            });
+            val as u8
+        }
         serde_yaml::Value::String(s) => {
             if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-                u8::from_str_radix(hex, 16).unwrap_or(0)
+                u8::from_str_radix(hex, 16).unwrap_or_else(|e| {
+                    log::warn!("yaml_value_to_u8: invalid hex '{}': {}, defaulting to 0", s, e);
+                    0
+                })
             } else {
-                s.parse().unwrap_or(0)
+                s.parse().unwrap_or_else(|e| {
+                    log::warn!("yaml_value_to_u8: invalid decimal '{}': {}, defaulting to 0", s, e);
+                    0
+                })
             }
         }
-        _ => 0,
+        other => {
+            log::warn!("yaml_value_to_u8: unexpected YAML type {:?}, defaulting to 0", other);
+            0
+        }
     }
 }
 
