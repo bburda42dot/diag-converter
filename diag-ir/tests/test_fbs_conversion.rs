@@ -552,6 +552,74 @@ fn roundtrip_com_param_ref_with_complex_value() {
 }
 
 #[test]
+fn roundtrip_preserves_diag_comm_refs() {
+    let db = DiagDatabase {
+        ecu_name: "TEST".into(),
+        variants: vec![Variant {
+            is_base_variant: true,
+            diag_layer: DiagLayer {
+                short_name: "Base".into(),
+                diag_services: vec![DiagService {
+                    diag_comm: DiagComm {
+                        short_name: "Svc1".into(),
+                        funct_classes: vec![
+                            FunctClass {
+                                short_name: "Safety".into(),
+                            },
+                            FunctClass {
+                                short_name: "Emission".into(),
+                            },
+                        ],
+                        pre_condition_state_refs: vec![PreConditionStateRef {
+                            value: "S_Default".into(),
+                            in_param_if_short_name: String::new(),
+                            in_param_path_short_name: String::new(),
+                            state: Some(State {
+                                short_name: "Default".into(),
+                                long_name: None,
+                            }),
+                        }],
+                        state_transition_refs: vec![StateTransitionRef {
+                            value: "ST_1".into(),
+                            state_transition: Some(StateTransition {
+                                short_name: "DefaultToExtended".into(),
+                                source_short_name_ref: "Default".into(),
+                                target_short_name_ref: "Extended".into(),
+                            }),
+                        }],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let fbs = ir_to_flatbuffers(&db);
+    let db2 = flatbuffers_to_ir(&fbs).unwrap();
+    let svc = &db2.variants[0].diag_layer.diag_services[0];
+
+    assert_eq!(svc.diag_comm.funct_classes.len(), 2);
+    assert_eq!(svc.diag_comm.funct_classes[0].short_name, "Safety");
+    assert_eq!(svc.diag_comm.funct_classes[1].short_name, "Emission");
+    assert_eq!(svc.diag_comm.pre_condition_state_refs.len(), 1);
+    assert_eq!(
+        svc.diag_comm.pre_condition_state_refs[0].value,
+        "S_Default"
+    );
+    assert_eq!(svc.diag_comm.state_transition_refs.len(), 1);
+    assert_eq!(svc.diag_comm.state_transition_refs[0].value, "ST_1");
+    let st = svc.diag_comm.state_transition_refs[0]
+        .state_transition
+        .as_ref()
+        .unwrap();
+    assert_eq!(st.short_name, "DefaultToExtended");
+}
+
+#[test]
 fn fbs_output_is_not_empty() {
     let db = make_test_database();
     let bytes = ir_to_flatbuffers(&db);
