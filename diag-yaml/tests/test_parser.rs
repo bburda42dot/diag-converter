@@ -146,3 +146,36 @@ ecu:
     assert_eq!(db.revision, "rev42");
     assert_eq!(db.version, "2.0.0", "version should come from meta.version, not meta.revision");
 }
+
+#[test]
+fn test_parse_preserves_type_definitions() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+types:
+  VehicleSpeed:
+    base: u16
+    bit_length: 16
+  EngineState:
+    base: u8
+    bit_length: 8
+    enum:
+      OFF: 0
+      RUNNING: 1
+dids:
+  0xF190:
+    name: VIN
+    type: ascii
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    assert_eq!(db.type_definitions.len(), 2, "types section should be stored in IR");
+    let speed = db.type_definitions.iter().find(|t| t.name == "VehicleSpeed").unwrap();
+    assert_eq!(speed.base, "u16");
+    assert_eq!(speed.bit_length, Some(16));
+    let engine = db.type_definitions.iter().find(|t| t.name == "EngineState").unwrap();
+    assert!(engine.enum_values_json.is_some(), "enum_values_json should be populated");
+    let json_str = engine.enum_values_json.as_ref().unwrap();
+    assert!(json_str.contains("OFF"), "should contain OFF");
+    assert!(json_str.contains("RUNNING"), "should contain RUNNING");
+}

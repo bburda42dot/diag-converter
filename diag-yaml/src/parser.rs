@@ -65,6 +65,20 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
     // Build named type registry for resolving type references in DIDs
     let type_registry = build_type_registry(doc.types.as_ref());
 
+    // Store type definitions in IR for roundtrip
+    let type_definitions: Vec<TypeDefinition> = doc.types.as_ref()
+        .map(|types| types.iter().map(|(name, yt)| TypeDefinition {
+            name: name.clone(),
+            base: yt.base.clone(),
+            bit_length: yt.bit_length,
+            min_length: yt.min_length,
+            max_length: yt.max_length,
+            enum_values_json: yt.enum_values.as_ref()
+                .and_then(|v| serde_json::to_string(v).ok()),
+            description: None,
+        }).collect())
+        .unwrap_or_default();
+
     // Build access pattern lookup for resolving DID/routine access references
     let access_patterns = build_access_pattern_lookup(
         doc.access_patterns.as_ref(),
@@ -270,7 +284,7 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         functional_groups: vec![],
         dtcs,
         memory,
-        type_definitions: vec![],
+        type_definitions,
     })
 }
 
