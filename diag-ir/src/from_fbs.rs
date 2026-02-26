@@ -46,7 +46,7 @@ pub fn flatbuffers_to_ir(fbs_data: &[u8]) -> Result<DiagDatabase, ConversionErro
         variants,
         functional_groups,
         dtcs,
-        memory: None,
+        memory: ecu_data.memory().map(|m| convert_memory_config(&m)),
     })
 }
 
@@ -1312,5 +1312,86 @@ fn convert_com_param_usage(v: dataformat::ComParamUsage) -> ComParamUsage {
         dataformat::ComParamUsage::APPLICATION => ComParamUsage::Application,
         dataformat::ComParamUsage::TESTER => ComParamUsage::Tester,
         _ => ComParamUsage::EcuSoftware,
+    }
+}
+
+fn convert_memory_access(v: dataformat::MemoryAccess) -> MemoryAccess {
+    match v {
+        dataformat::MemoryAccess::Read => MemoryAccess::Read,
+        dataformat::MemoryAccess::Write => MemoryAccess::Write,
+        dataformat::MemoryAccess::ReadWrite => MemoryAccess::ReadWrite,
+        dataformat::MemoryAccess::Execute => MemoryAccess::Execute,
+        _ => MemoryAccess::Read,
+    }
+}
+
+fn convert_data_block_type(v: dataformat::DataBlockType) -> DataBlockType {
+    match v {
+        dataformat::DataBlockType::Download => DataBlockType::Download,
+        dataformat::DataBlockType::Upload => DataBlockType::Upload,
+        _ => DataBlockType::Download,
+    }
+}
+
+fn convert_data_block_format(v: dataformat::DataBlockFormat) -> DataBlockFormat {
+    match v {
+        dataformat::DataBlockFormat::Raw => DataBlockFormat::Raw,
+        dataformat::DataBlockFormat::Encrypted => DataBlockFormat::Encrypted,
+        dataformat::DataBlockFormat::Compressed => DataBlockFormat::Compressed,
+        dataformat::DataBlockFormat::EncryptedCompressed => DataBlockFormat::EncryptedCompressed,
+        _ => DataBlockFormat::Raw,
+    }
+}
+
+fn convert_address_format(af: &dataformat::AddressFormat<'_>) -> AddressFormat {
+    AddressFormat {
+        address_bytes: af.address_bytes(),
+        length_bytes: af.length_bytes(),
+    }
+}
+
+fn convert_memory_region(r: &dataformat::MemoryRegion<'_>) -> MemoryRegion {
+    let session = r.session().map(|v| (0..v.len()).map(|i| v.get(i).to_string()).collect());
+    MemoryRegion {
+        name: s(r.name()),
+        description: r.description().map(|d| d.to_string()),
+        start_address: r.start_address(),
+        size: r.size(),
+        access: convert_memory_access(r.access()),
+        address_format: r.address_format().map(|af| convert_address_format(&af)),
+        security_level: r.security_level().map(|s| s.to_string()),
+        session,
+    }
+}
+
+fn convert_data_block(b: &dataformat::DataBlock<'_>) -> DataBlock {
+    DataBlock {
+        name: s(b.name()),
+        description: b.description().map(|d| d.to_string()),
+        block_type: convert_data_block_type(b.block_type()),
+        memory_address: b.memory_address(),
+        memory_size: b.memory_size(),
+        format: convert_data_block_format(b.format()),
+        max_block_length: if b.max_block_length() == 0 { None } else { Some(b.max_block_length()) },
+        security_level: b.security_level().map(|s| s.to_string()),
+        session: b.session().map(|s| s.to_string()),
+        checksum_type: b.checksum_type().map(|s| s.to_string()),
+    }
+}
+
+fn convert_memory_config(m: &dataformat::MemoryConfig<'_>) -> MemoryConfig {
+    let default_address_format = m.default_address_format()
+        .map(|af| convert_address_format(&af))
+        .unwrap_or(AddressFormat { address_bytes: 4, length_bytes: 4 });
+    let regions = m.regions()
+        .map(|v| (0..v.len()).map(|i| convert_memory_region(&v.get(i))).collect())
+        .unwrap_or_default();
+    let data_blocks = m.data_blocks()
+        .map(|v| (0..v.len()).map(|i| convert_data_block(&v.get(i))).collect())
+        .unwrap_or_default();
+    MemoryConfig {
+        default_address_format,
+        regions,
+        data_blocks,
     }
 }

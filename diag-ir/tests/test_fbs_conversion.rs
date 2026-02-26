@@ -629,3 +629,53 @@ fn fbs_output_is_not_empty() {
         bytes.len()
     );
 }
+
+#[test]
+fn roundtrip_preserves_memory_config() {
+    let db = DiagDatabase {
+        ecu_name: "MEM_TEST".into(),
+        memory: Some(MemoryConfig {
+            default_address_format: AddressFormat {
+                address_bytes: 4,
+                length_bytes: 4,
+            },
+            regions: vec![MemoryRegion {
+                name: "Flash".into(),
+                description: Some("Main flash".into()),
+                start_address: 0x0800_0000,
+                size: 0x0010_0000,
+                access: MemoryAccess::ReadWrite,
+                address_format: None,
+                security_level: Some("Level1".into()),
+                session: Some(vec!["programming".into()]),
+            }],
+            data_blocks: vec![DataBlock {
+                name: "AppBlock".into(),
+                description: None,
+                block_type: DataBlockType::Download,
+                memory_address: 0x0800_0000,
+                memory_size: 0x0008_0000,
+                format: DataBlockFormat::Compressed,
+                max_block_length: Some(4096),
+                security_level: None,
+                session: Some("programming".into()),
+                checksum_type: Some("CRC32".into()),
+            }],
+        }),
+        ..Default::default()
+    };
+
+    let fbs = ir_to_flatbuffers(&db);
+    let db2 = flatbuffers_to_ir(&fbs).unwrap();
+    let mem = db2.memory.expect("memory should survive FBS roundtrip");
+    assert_eq!(mem.default_address_format.address_bytes, 4);
+    assert_eq!(mem.regions.len(), 1);
+    assert_eq!(mem.regions[0].name, "Flash");
+    assert_eq!(mem.regions[0].start_address, 0x0800_0000);
+    assert_eq!(mem.regions[0].access, MemoryAccess::ReadWrite);
+    assert_eq!(mem.regions[0].security_level.as_deref(), Some("Level1"));
+    assert_eq!(mem.data_blocks.len(), 1);
+    assert_eq!(mem.data_blocks[0].name, "AppBlock");
+    assert_eq!(mem.data_blocks[0].format, DataBlockFormat::Compressed);
+    assert_eq!(mem.data_blocks[0].checksum_type.as_deref(), Some("CRC32"));
+}
