@@ -306,7 +306,7 @@ fn ir_diag_layer_to_odx_no_dtcs(diag_layer: &DiagLayer) -> DiagLayerVariant {
                     .funct_classes
                     .iter()
                     .map(|fc| crate::odx_model::FunctClass {
-                        id: None,
+                        id: Some(format!("FC_{}", fc.short_name)),
                         short_name: Some(fc.short_name.clone()),
                         long_name: None,
                     })
@@ -477,13 +477,58 @@ fn ir_diag_service_to_odx(svc: &DiagService, svc_id: &str, idx: usize) -> OdxDia
         short_name: Some(svc.diag_comm.short_name.clone()),
         long_name: svc.diag_comm.long_name.as_ref().map(|ln| ln.value.clone()),
         sdgs: ir_sdgs_to_odx(&svc.diag_comm.sdgs),
-        funct_class_refs: None,
+        funct_class_refs: if svc.diag_comm.funct_classes.is_empty() {
+            None
+        } else {
+            Some(FunctClassRefsWrapper {
+                items: svc
+                    .diag_comm
+                    .funct_classes
+                    .iter()
+                    .map(|fc| OdxRef {
+                        id_ref: Some(format!("FC_{}", fc.short_name)),
+                        docref: None,
+                        doctype: None,
+                    })
+                    .collect(),
+            })
+        },
         audience: svc.diag_comm.audience.as_ref().map(ir_audience_to_odx),
         request_ref,
         pos_response_refs,
         neg_response_refs,
-        pre_condition_state_refs: None,
-        state_transition_refs: None,
+        pre_condition_state_refs: if svc.diag_comm.pre_condition_state_refs.is_empty() {
+            None
+        } else {
+            Some(PreConditionStateRefsWrapper {
+                items: svc
+                    .diag_comm
+                    .pre_condition_state_refs
+                    .iter()
+                    .map(|pcsr| OdxRef {
+                        id_ref: Some(pcsr.value.clone()),
+                        docref: None,
+                        doctype: None,
+                    })
+                    .collect(),
+            })
+        },
+        state_transition_refs: if svc.diag_comm.state_transition_refs.is_empty() {
+            None
+        } else {
+            Some(StateTransitionRefsWrapper {
+                items: svc
+                    .diag_comm
+                    .state_transition_refs
+                    .iter()
+                    .map(|str_ref| OdxRef {
+                        id_ref: Some(str_ref.value.clone()),
+                        docref: None,
+                        doctype: None,
+                    })
+                    .collect(),
+            })
+        },
         comparam_refs: None,
     }
 }

@@ -191,6 +191,75 @@ fn test_odx_roundtrip_preserves_audience_refs() {
 }
 
 #[test]
+fn test_odx_roundtrip_preserves_funct_class_refs() {
+    let xml = include_str!("../../test-fixtures/odx/minimal.odx");
+    let db = parse_odx(xml).unwrap();
+    let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let svc = base
+        .diag_layer
+        .diag_services
+        .iter()
+        .find(|s| s.diag_comm.short_name == "Read_VehicleSpeed")
+        .unwrap();
+    assert!(
+        !svc.diag_comm.funct_classes.is_empty(),
+        "precondition: parser should populate funct_classes"
+    );
+
+    let odx_xml = write_odx(&db).unwrap();
+    let db2 = parse_odx(&odx_xml).expect("should re-parse written ODX");
+    let base2 = db2.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let svc2 = base2
+        .diag_layer
+        .diag_services
+        .iter()
+        .find(|s| s.diag_comm.short_name == "Read_VehicleSpeed")
+        .unwrap();
+
+    let fc_names: Vec<&str> = svc2
+        .diag_comm
+        .funct_classes
+        .iter()
+        .map(|fc| fc.short_name.as_str())
+        .collect();
+    assert!(
+        fc_names.contains(&"Safety"),
+        "funct_classes should survive ODX roundtrip"
+    );
+    assert!(
+        fc_names.contains(&"Emission"),
+        "funct_classes should survive ODX roundtrip"
+    );
+}
+
+#[test]
+fn test_odx_roundtrip_preserves_state_refs() {
+    let xml = include_str!("../../test-fixtures/odx/minimal.odx");
+    let db = parse_odx(xml).unwrap();
+    let odx_xml = write_odx(&db).unwrap();
+    let db2 = parse_odx(&odx_xml).expect("should re-parse written ODX");
+
+    let base2 = db2.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let svc2 = base2
+        .diag_layer
+        .diag_services
+        .iter()
+        .find(|s| s.diag_comm.short_name == "Read_VehicleSpeed")
+        .unwrap();
+
+    assert_eq!(
+        svc2.diag_comm.pre_condition_state_refs.len(),
+        1,
+        "pre_condition_state_refs should survive ODX roundtrip"
+    );
+    assert_eq!(
+        svc2.diag_comm.state_transition_refs.len(),
+        1,
+        "state_transition_refs should survive ODX roundtrip"
+    );
+}
+
+#[test]
 fn test_odx_writer_handles_all_param_types() {
     // Roundtrip preserves param xsi_type for all supported variants
     let xml = include_str!("../../test-fixtures/odx/minimal.odx");
