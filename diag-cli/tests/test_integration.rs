@@ -228,3 +228,41 @@ memory:
     assert_eq!(mem.data_blocks.len(), 1);
     assert_eq!(mem.data_blocks[0].name, "app");
 }
+
+// YAML -> IR -> FBS -> IR: type definitions survive roundtrip
+#[test]
+fn test_yaml_mdd_roundtrip_preserves_type_definitions() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TYPES_ECU"
+types:
+  VehicleSpeed:
+    base: u16
+    bit_length: 16
+  EngineState:
+    base: u8
+    bit_length: 8
+    enum:
+      OFF: 0
+      RUNNING: 1
+dids:
+  0x0100:
+    name: Speed
+    type: VehicleSpeed
+"#;
+    let db1 = parse_yaml(yaml).unwrap();
+    assert_eq!(db1.type_definitions.len(), 2, "precondition: parser should produce 2 type defs");
+
+    let fbs = ir_to_flatbuffers(&db1);
+    let db2 = flatbuffers_to_ir(&fbs).unwrap();
+    assert_eq!(db2.type_definitions.len(), 2,
+        "type definitions count should survive MDD roundtrip");
+
+    for td in &db1.type_definitions {
+        let found = db2.type_definitions.iter().find(|t| t.name == td.name);
+        assert!(found.is_some(), "type '{}' should survive MDD roundtrip", td.name);
+        assert_eq!(found.unwrap().base, td.base,
+            "type '{}' base should match", td.name);
+    }
+}
