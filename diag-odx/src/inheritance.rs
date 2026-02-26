@@ -26,9 +26,9 @@ pub struct MergedLayer<'a> {
 }
 
 impl<'a> MergedLayer<'a> {
-    /// Merge a layer with content inherited from its parents.
-    pub fn merge(layer: &'a DiagLayerVariant, index: &'a OdxIndex<'a>) -> Self {
-        let mut merged = MergedLayer {
+    /// Create an empty MergedLayer with no inherited or own content.
+    fn empty(layer: &'a DiagLayerVariant) -> Self {
+        Self {
             layer,
             diag_services: Vec::new(),
             single_ecu_jobs: Vec::new(),
@@ -39,7 +39,39 @@ impl<'a> MergedLayer<'a> {
             data_object_props: Vec::new(),
             dtc_dops: Vec::new(),
             structures: Vec::new(),
-        };
+        }
+    }
+
+    /// Merge a layer with content inherited from its parents.
+    pub fn merge(layer: &'a DiagLayerVariant, index: &'a OdxIndex<'a>) -> Self {
+        let mut visited = HashSet::new();
+        Self::merge_inner(layer, index, &mut visited)
+    }
+
+    fn merge_inner(
+        layer: &'a DiagLayerVariant,
+        index: &'a OdxIndex<'a>,
+        visited: &mut HashSet<String>,
+    ) -> Self {
+        // Cycle detection: use the layer's @ID attribute for identity (same key as
+        // index.layers). Fall back to short_name if no ID is present.
+        let layer_id = layer
+            .id
+            .as_deref()
+            .or(layer.short_name.as_deref())
+            .unwrap_or("")
+            .to_string();
+        if !visited.insert(layer_id.clone()) {
+            log::warn!(
+                "Circular parent reference detected at layer '{}', stopping inheritance",
+                layer_id
+            );
+            let mut merged = Self::empty(layer);
+            merged.add_own_content(layer);
+            return merged;
+        }
+
+        let mut merged = Self::empty(layer);
 
         // Collect NOT-INHERITED short names from all parent refs
         let mut excluded_diag_comms = HashSet::new();
@@ -80,7 +112,8 @@ impl<'a> MergedLayer<'a> {
                 // Resolve parent layer and inherit its content
                 if let Some(parent_id) = &pref.id_ref {
                     if let Some(parent_layer) = index.layers.get(parent_id.as_str()) {
-                        let parent_merged = MergedLayer::merge(parent_layer, index);
+                        let parent_merged =
+                            MergedLayer::merge_inner(parent_layer, index, visited);
                         merged.inherit_from(
                             &parent_merged,
                             &excluded_diag_comms,
