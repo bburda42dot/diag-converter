@@ -680,3 +680,38 @@ fn roundtrip_preserves_memory_config() {
     assert_eq!(mem.data_blocks[0].format, DataBlockFormat::Compressed);
     assert_eq!(mem.data_blocks[0].checksum_type.as_deref(), Some("CRC32"));
 }
+
+#[test]
+fn roundtrip_preserves_type_definitions() {
+    let enum_json = r#"{"OFF":0,"ON":1}"#;
+
+    let db = DiagDatabase {
+        ecu_name: "TYPES_TEST".into(),
+        type_definitions: vec![
+            TypeDefinition {
+                name: "VehicleSpeed".into(),
+                base: "u16".into(),
+                bit_length: Some(16),
+                ..Default::default()
+            },
+            TypeDefinition {
+                name: "EngineState".into(),
+                base: "u8".into(),
+                bit_length: Some(8),
+                enum_values_json: Some(enum_json.to_string()),
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+
+    let fbs = ir_to_flatbuffers(&db);
+    let db2 = flatbuffers_to_ir(&fbs).unwrap();
+    assert_eq!(db2.type_definitions.len(), 2);
+    assert_eq!(db2.type_definitions[0].name, "VehicleSpeed");
+    assert_eq!(db2.type_definitions[0].bit_length, Some(16));
+    assert_eq!(db2.type_definitions[1].name, "EngineState");
+    let enums_json = db2.type_definitions[1].enum_values_json.as_ref().unwrap();
+    assert!(enums_json.contains("OFF"), "enum_values_json should contain OFF");
+    assert!(enums_json.contains("ON"), "enum_values_json should contain ON");
+}

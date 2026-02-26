@@ -30,6 +30,9 @@ pub fn ir_to_flatbuffers(db: &DiagDatabase) -> Vec<u8> {
 
     let memory = db.memory.as_ref().map(|m| build_memory_config(&mut builder, m));
 
+    let type_defs: Vec<_> = db.type_definitions.iter().map(|td| build_type_definition(&mut builder, td)).collect();
+    let type_definitions = builder.create_vector(&type_defs);
+
     let ecu_data = dataformat::EcuData::create(&mut builder, &dataformat::EcuDataArgs {
         version: Some(version),
         ecu_name: Some(ecu_name),
@@ -40,6 +43,7 @@ pub fn ir_to_flatbuffers(db: &DiagDatabase) -> Vec<u8> {
         functional_groups: Some(functional_groups),
         dtcs: Some(dtcs),
         memory,
+        type_definitions: Some(type_definitions),
     });
 
     dataformat::finish_ecu_data_buffer(&mut builder, ecu_data);
@@ -1268,5 +1272,21 @@ fn build_memory_config<'a>(builder: &mut FlatBufferBuilder<'a>, m: &MemoryConfig
         default_address_format: Some(default_address_format),
         regions: Some(regions),
         data_blocks: Some(data_blocks),
+    })
+}
+
+fn build_type_definition<'a>(builder: &mut FlatBufferBuilder<'a>, td: &TypeDefinition) -> flatbuffers::WIPOffset<dataformat::TypeDefinition<'a>> {
+    let name = builder.create_string(&td.name);
+    let base = builder.create_string(&td.base);
+    let enum_values_json = td.enum_values_json.as_ref().map(|s| builder.create_string(s));
+    let description = td.description.as_ref().map(|s| builder.create_string(s));
+    dataformat::TypeDefinition::create(builder, &dataformat::TypeDefinitionArgs {
+        name: Some(name),
+        base: Some(base),
+        bit_length: td.bit_length.unwrap_or(0),
+        min_length: td.min_length.unwrap_or(0),
+        max_length: td.max_length.unwrap_or(0),
+        enum_values_json,
+        description,
     })
 }

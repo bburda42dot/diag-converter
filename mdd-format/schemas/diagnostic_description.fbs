@@ -894,6 +894,16 @@ table MemoryConfig {
     data_blocks: [DataBlock];
 }
 
+table TypeDefinition {
+    name: string;
+    base: string;
+    bit_length: uint;
+    min_length: uint;
+    max_length: uint;
+    enum_values_json: string;
+    description: string;
+}
+
 table EcuData {
     version: string;
     ecu_name: string;
@@ -904,6 +914,7 @@ table EcuData {
     functional_groups: [FunctionalGroup];
     dtcs: [DTC];
     memory: MemoryConfig;
+    type_definitions: [TypeDefinition];
 }
 
 table KeyValue {

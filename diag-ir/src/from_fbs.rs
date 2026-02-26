@@ -47,7 +47,9 @@ pub fn flatbuffers_to_ir(fbs_data: &[u8]) -> Result<DiagDatabase, ConversionErro
         functional_groups,
         dtcs,
         memory: ecu_data.memory().map(|m| convert_memory_config(&m)),
-        type_definitions: vec![],
+        type_definitions: ecu_data.type_definitions()
+            .map(|v| (0..v.len()).map(|i| convert_type_definition(&v.get(i))).collect())
+            .unwrap_or_default(),
     })
 }
 
@@ -1394,5 +1396,17 @@ fn convert_memory_config(m: &dataformat::MemoryConfig<'_>) -> MemoryConfig {
         default_address_format,
         regions,
         data_blocks,
+    }
+}
+
+fn convert_type_definition(td: &dataformat::TypeDefinition<'_>) -> TypeDefinition {
+    TypeDefinition {
+        name: s(td.name()),
+        base: s(td.base()),
+        bit_length: if td.bit_length() == 0 { None } else { Some(td.bit_length()) },
+        min_length: if td.min_length() == 0 { None } else { Some(td.min_length()) },
+        max_length: if td.max_length() == 0 { None } else { Some(td.max_length()) },
+        enum_values_json: td.enum_values_json().map(|s| s.to_string()),
+        description: td.description().map(|s| s.to_string()),
     }
 }
