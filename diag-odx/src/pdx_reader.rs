@@ -44,10 +44,26 @@ pub fn read_pdx_from_reader<R: Read + std::io::Seek>(reader: R) -> Result<DiagDa
         entry.read_to_string(&mut xml)?;
 
         log::info!("Parsing ODX from PDX entry: {}", name);
-        let db = parse_odx(&xml).map_err(|e| PdxReadError::OdxParse {
-            file: name.clone(),
-            source: e,
-        })?;
+        let db = match parse_odx(&xml) {
+            Ok(db) => db,
+            Err(crate::parser::OdxParseError::MissingElement(ref elem))
+                if elem == "DIAG-LAYER-CONTAINER" =>
+            {
+                // Non-DLC ODX files (COMPARAM-SPEC, COMPARAM-SUBSET, etc.) lack
+                // DIAG-LAYER-CONTAINER. Skip them instead of failing the entire import.
+                log::info!(
+                    "Skipping non-DLC ODX entry '{}' (no DIAG-LAYER-CONTAINER)",
+                    name
+                );
+                continue;
+            }
+            Err(e) => {
+                return Err(PdxReadError::OdxParse {
+                    file: name.clone(),
+                    source: e,
+                });
+            }
+        };
 
         merged = Some(match merged {
             None => db,

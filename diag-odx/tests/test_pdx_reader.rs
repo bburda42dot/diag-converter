@@ -65,3 +65,21 @@ fn test_pdx_with_multiple_odx_merges() {
     let unique: std::collections::HashSet<&&str> = names.iter().collect();
     assert_eq!(names.len(), unique.len(), "no duplicate variants");
 }
+
+#[test]
+fn test_pdx_with_comparam_spec_skipped() {
+    let comparam_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ODX version="2.2.0" model-version="2.2.0">
+  <COMPARAM-SPEC><SHORT-NAME>CP_Spec</SHORT-NAME></COMPARAM-SPEC>
+</ODX>"#;
+
+    let bytes = create_pdx_bytes(&[
+        ("comparam.odx", comparam_xml),
+        ("ECU.odx", minimal_odx()),
+    ]);
+    let result = read_pdx_from_reader(Cursor::new(bytes));
+    assert!(result.is_ok(), "PDX with COMPARAM-SPEC should not fail: {:?}", result.err());
+
+    let db = result.unwrap();
+    assert!(!db.variants.is_empty(), "should have at least one variant from ECU.odx");
+}
