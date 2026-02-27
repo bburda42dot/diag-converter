@@ -42,12 +42,31 @@ rust_test(
     crate = ":mdd_format",
 )
 
+# Library with test-utils feature for integration tests
+rust_library(
+    name = "mdd_format_test_utils",
+    srcs = glob(["src/**/*.rs"]),
+    crate_features = ["test-utils"],
+    crate_name = "mdd_format",
+    deps = [
+        ":build_script",
+        "@crates//:flatbuffers",
+        "@crates//:flate2",
+        "@crates//:log",
+        "@crates//:prost",
+        "@crates//:sha2",
+        "@crates//:thiserror",
+        "@crates//:xz2",
+        "@crates//:zstd",
+    ],
+)
+
 # Integration tests
 [rust_test(
     name = test_file.replace("tests/", "").replace(".rs", ""),
     srcs = [test_file],
     deps = [
-        ":mdd_format",
+        ":mdd_format_test_utils",
         "@crates//:pretty_assertions",
         "@crates//:prost",
         "@crates//:sha2",

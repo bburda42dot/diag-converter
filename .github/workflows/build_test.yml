@@ -75,7 +75,7 @@ jobs:
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake protobuf-compiler
       - name: Miri test
-        run: cargo +nightly miri test --workspace --exclude mdd-format
+        run: cargo +nightly miri test --workspace --exclude mdd-format --exclude diag-converter
 
   coverage:
     name: Code Coverage
