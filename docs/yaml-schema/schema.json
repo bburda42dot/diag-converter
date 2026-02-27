@@ -2586,46 +2586,12 @@
         },
         "comparams": {
             "type": "object",
-            "description": "Communication parameters - protocol-scoped transport parameters beyond basic timing (ODX COMPARAM concept)",
-            "additionalProperties": false,
-            "properties": {
-                "specs": {
-                    "type": "object",
-                    "description": "Parameter specifications (typed definitions with constraints and defaults). Keys are parameter names.",
-                    "additionalProperties": {
-                        "$ref": "#/$defs/comparam_spec"
-                    }
-                },
-                "doip": {
-                    "$ref": "#/$defs/comparam_set",
-                    "description": "DoIP-specific communication parameters"
-                },
-                "can": {
-                    "$ref": "#/$defs/comparam_set",
-                    "description": "CAN-specific communication parameters"
-                },
-                "uds": {
-                    "$ref": "#/$defs/comparam_set",
-                    "description": "UDS protocol parameters"
-                },
-                "iso15765": {
-                    "$ref": "#/$defs/comparam_set",
-                    "description": "ISO 15765 (CAN transport) parameters"
-                },
-                "global": {
-                    "$ref": "#/$defs/comparam_set",
-                    "description": "Global/default communication parameters (apply to all protocols unless overridden)"
-                }
-            }
-        },
-        "comparam_set": {
-            "type": "object",
-            "description": "A set of communication parameters (key-value with optional typing/units)",
+            "description": "Communication parameters. Keys are parameter names, values are either scalars (short form) or objects with metadata and per-protocol values.",
             "additionalProperties": {
-                "$ref": "#/$defs/comparam_value"
+                "$ref": "#/$defs/comparam_entry"
             }
         },
-        "comparam_value": {
+        "comparam_entry": {
             "oneOf": [
                 {
                     "type": "string"
@@ -2638,32 +2604,32 @@
                 },
                 {
                     "type": "object",
-                    "description": "Typed communication parameter with optional unit and default",
+                    "description": "Communication parameter with optional metadata and per-protocol values",
                     "additionalProperties": false,
-                    "required": [
-                        "value"
-                    ],
                     "properties": {
-                        "value": {
-                            "oneOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "number"
-                                },
-                                {
-                                    "type": "boolean"
-                                }
-                            ]
-                        },
-                        "type": {
+                        "cptype": {
                             "type": "string",
-                            "description": "Data type hint (e.g., 'uint16', 'float')"
+                            "description": "Parameter data type",
+                            "enum": [
+                                "uint8",
+                                "uint16",
+                                "uint32",
+                                "int8",
+                                "int16",
+                                "int32",
+                                "float",
+                                "string",
+                                "boolean",
+                                "bytes",
+                                "complex"
+                            ]
                         },
                         "unit": {
                             "type": "string",
-                            "description": "Unit of measurement (e.g., 'ms', 'bytes')"
+                            "description": "Unit of measurement (e.g., 'ms', 'bytes', 'bps')"
+                        },
+                        "description": {
+                            "type": "string"
                         },
                         "default": {
                             "oneOf": [
@@ -2677,14 +2643,60 @@
                                     "type": "boolean"
                                 }
                             ],
-                            "description": "Default value if not explicitly set"
+                            "description": "Default value"
                         },
-                        "description": {
-                            "type": "string"
+                        "min": {
+                            "type": "number",
+                            "description": "Minimum allowed value"
+                        },
+                        "max": {
+                            "type": "number",
+                            "description": "Maximum allowed value"
+                        },
+                        "allowed_values": {
+                            "type": "array",
+                            "description": "Enumeration of allowed values",
+                            "items": {
+                                "oneOf": [
+                                    {
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "number"
+                                    }
+                                ]
+                            }
+                        },
+                        "values": {
+                            "$ref": "#/$defs/comparam_values"
                         }
                     }
                 }
             ]
+        },
+        "comparam_values": {
+            "type": "object",
+            "description": "Protocol-scoped values. Keys are protocol/scope names (global, doip, can, uds, iso15765, or specific protocol identifiers like UDS_Ethernet_DoIP).",
+            "additionalProperties": {
+                "oneOf": [
+                    {
+                        "type": "string"
+                    },
+                    {
+                        "type": "number"
+                    },
+                    {
+                        "type": "boolean"
+                    },
+                    {
+                        "type": "array",
+                        "description": "Complex value (ordered list of simple values)",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                ]
+            }
         },
         "protocols": {
             "type": "object",
@@ -3443,90 +3455,6 @@
                     "minItems": 2,
                     "maxItems": 2,
                     "description": "[min, max] valid range for physical values"
-                }
-            }
-        },
-        "comparam_spec": {
-            "type": "object",
-            "description": "Communication parameter specification with type, constraints and default",
-            "additionalProperties": false,
-            "required": [
-                "cptype"
-            ],
-            "properties": {
-                "cptype": {
-                    "type": "string",
-                    "description": "Parameter data type",
-                    "enum": [
-                        "uint8",
-                        "uint16",
-                        "uint32",
-                        "int8",
-                        "int16",
-                        "int32",
-                        "float",
-                        "string",
-                        "boolean",
-                        "bytes"
-                    ]
-                },
-                "unit": {
-                    "type": "string",
-                    "description": "Unit of measurement (e.g., 'ms', 'bytes', 'bps')"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "default_value": {
-                    "oneOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "number"
-                        },
-                        {
-                            "type": "boolean"
-                        }
-                    ]
-                },
-                "min": {
-                    "type": "number",
-                    "description": "Minimum allowed value"
-                },
-                "max": {
-                    "type": "number",
-                    "description": "Maximum allowed value"
-                },
-                "allowed_values": {
-                    "type": "array",
-                    "description": "Enumeration of allowed values",
-                    "items": {
-                        "oneOf": [
-                            {
-                                "type": "string"
-                            },
-                            {
-                                "type": "number"
-                            }
-                        ]
-                    }
-                },
-                "override_levels": {
-                    "type": "array",
-                    "description": "Where this param can be overridden. Order = resolution priority (first wins).",
-                    "items": {
-                        "type": "string",
-                        "enum": [
-                            "service",
-                            "did",
-                            "routine",
-                            "variant",
-                            "ecu",
-                            "protocol",
-                            "global"
-                        ]
-                    }
                 }
             }
         },
