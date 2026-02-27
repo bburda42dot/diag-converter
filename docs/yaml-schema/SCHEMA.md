@@ -804,50 +804,53 @@ structure:
 
 ---
 
-### 11b. Communication Parameter Specs
+### 11b. Communication Parameters
 
-Define typed comparam specifications with constraints and override rules:
+Communication parameters use a flat per-parameter format. Each key is a parameter name, each value is either a scalar (short form) or an object with metadata and per-protocol values:
 
 ```yaml
 comparams:
-  specs:
-    P2_Client:
-      cptype: uint16
-      unit: "ms"
-      description: "Client-side P2 timeout"
-      default_value: 50
-      min: 10
-      max: 5000
-      override_levels: [service, variant, ecu, protocol, global]
+  # Full form - with metadata and per-protocol values
+  P2_Client:
+    cptype: uint16
+    unit: ms
+    description: "Client-side P2 timeout"
+    default: 50
+    min: 10
+    max: 5000
+    values:
+      global: 50
+      uds: 50
 
-    CP_MaxNumberOfRespPending:
-      cptype: uint8
-      description: "Max ResponsePending (0x78) before timeout"
-      default_value: 10
-      min: 1
-      max: 255
+  # Minimal form - only per-protocol values
+  CP_DoIPLogicalGatewayAddress:
+    values:
+      UDS_Ethernet_DoIP: "4096"
+      UDS_Ethernet_DoIP_DOBT: "4096"
 
-  global:
-    P2_Client: 50
-    P2_Star_Client: 5000
+  # Complex values (ordered list)
+  CP_UniqueRespIdTable:
+    cptype: complex
+    values:
+      UDS_Ethernet_DoIP: ["4096", "0", "FLXC1000"]
 
-  doip:
-    CP_DoIPActivationType: 0x00
-    CP_DoIPRoutingActivationTimeout: 1000
-
-  uds:
-    CP_MaxNumberOfRespPending: 10
+  # Short form - scalar value, no metadata needed
+  CAN_FD_ENABLED: false
+  MAX_DLC: 8
 ```
 
-**Override Resolution Order:**
+**Parameter fields** (all optional except for the short form scalar):
 
-Parameters can be overridden at multiple levels. Resolution (first match wins):
-1. `service` - Per-service override
-2. `did` / `routine` - Per-DID/routine override
-3. `variant` - Per-variant override
-4. `ecu` - ECU-level value
-5. `protocol` - Protocol-level value (doip/can/uds)
-6. `global` - Global default
+| Field | Type | Description |
+|-------|------|-------------|
+| `cptype` | string | Data type: `uint8`, `uint16`, `uint32`, `int8`, `int16`, `int32`, `float`, `string`, `boolean`, `bytes`, `complex` |
+| `unit` | string | Unit of measurement (e.g., `ms`, `bytes`, `bps`) |
+| `description` | string | Human-readable description |
+| `default` | scalar | Default value |
+| `min` | number | Minimum allowed value |
+| `max` | number | Maximum allowed value |
+| `allowed_values` | array | Enumeration of allowed values |
+| `values` | map | Protocol-scoped values (keys: `global`, `doip`, `can`, `uds`, `iso15765`, or specific protocol identifiers) |
 
 ---
 
@@ -1165,7 +1168,7 @@ identification:
 
 ### `comparams`
 
-Use `comparams` for protocol/transport parameter sets (DoIP/CAN/UDS/ISO-TP). Treat these as configuration inputs to clients/adapters.
+Use `comparams` for protocol/transport parameter sets (DoIP/CAN/UDS/ISO-TP). Each parameter is a single entry with optional metadata and per-protocol values. Use the short form (scalar) for simple parameters without protocol scoping.
 
 ### `ecu_jobs`
 
