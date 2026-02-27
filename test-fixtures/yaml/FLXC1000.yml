@@ -40,36 +40,26 @@ ecu:
       functional_address: 0xFFFF
 
 # -----------------------------------------------------------------------------
-# COMPARAMS (Communication Parameters)
+# COMPARAMS - Communication Parameters
 # Based on: comparams.py - add_comparams()
 # Protocol stacks: UDS_Ethernet_DoIP and UDS_Ethernet_DoIP_DOBT
 # -----------------------------------------------------------------------------
 comparams:
-  specs:
-    CP_DoIPLogicalGatewayAddress:
-      protocols:
-        UDS_Ethernet_DoIP:
-          value: "4096"
-        UDS_Ethernet_DoIP_DOBT:
-          value: "4096"
-    CP_DoIPLogicalFunctionalAddress:
-      protocols:
-        UDS_Ethernet_DoIP:
-          value: "65535"
-        UDS_Ethernet_DoIP_DOBT:
-          value: "65535"
-    CP_UniqueRespIdTable:
-      protocols:
-        UDS_Ethernet_DoIP:
-          complex_entries:
-            - value: "4096"
-            - value: "0"
-            - value: "FLXC1000"
-        UDS_Ethernet_DoIP_DOBT:
-          complex_entries:
-            - value: "4096"
-            - value: "0"
-            - value: "FLXC1000"
+  CP_DoIPLogicalGatewayAddress:
+    values:
+      UDS_Ethernet_DoIP: "4096"
+      UDS_Ethernet_DoIP_DOBT: "4096"
+
+  CP_DoIPLogicalFunctionalAddress:
+    values:
+      UDS_Ethernet_DoIP: "65535"
+      UDS_Ethernet_DoIP_DOBT: "65535"
+
+  CP_UniqueRespIdTable:
+    cptype: complex
+    values:
+      UDS_Ethernet_DoIP: ["4096", "0", "FLXC1000"]
+      UDS_Ethernet_DoIP_DOBT: ["4096", "0", "FLXC1000"]
 
 # -----------------------------------------------------------------------------
 # SESSIONS

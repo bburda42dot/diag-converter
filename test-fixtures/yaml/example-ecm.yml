@@ -113,55 +113,70 @@ sdgs:
 # COMPARAMS - Communication Parameters (ODX COMPARAM concept)
 # -----------------------------------------------------------------------------
 comparams:
-  # Parameter specifications (typed definitions with constraints)
-  specs:
-    TCP_CONNECT_TIMEOUT_MS:
-      cptype: uint32
-      unit: "ms"
-      description: "TCP connection establishment timeout"
-      default_value: 1000
-      min: 100
-      max: 30000
-      override_levels: [ecu, protocol, global]
-    P2_Client:
-      cptype: uint16
-      unit: "ms"
-      description: "Client-side P2 timeout"
-      default_value: 50
-      min: 10
-      max: 5000
-    CP_MaxNumberOfRespPending:
-      cptype: uint8
-      description: "Max ResponsePending (0x78) before timeout"
-      default_value: 10
-      min: 1
-      max: 255
+  P2_Client:
+    cptype: uint16
+    unit: ms
+    description: "Client-side P2 timeout"
+    default: 50
+    min: 10
+    max: 5000
+    values:
+      global: 50
 
-  # Global defaults (apply to all protocols)
-  global:
-    P2_Client: 50
-    P2_Star_Client: 5000
-    CP_MaxNumberOfRespPending: 10
+  P2_Star_Client:
+    default: 5000
+    values:
+      global: 5000
 
-  doip:
-    TCP_CONNECT_TIMEOUT_MS:
-      value: 2000
-      type: "uint32"
-      unit: "ms"
-      default: 1000
-      description: "TCP connection establishment timeout"
-    VEHICLE_ANNOUNCEMENT_TIMEOUT_MS: 5000
-    ROUTING_ACTIVATION_TYPE: 0x00
-  can:
-    CAN_FD_ENABLED: false
-    MAX_DLC: 8
-    PADDING_BYTE: 0xAA
-  uds:
-    SUPPRESS_POSITIVE_RESPONSE_SUPPORTED: true
-    MAX_NUMBER_OF_BLOCK_LENGTH: 4094
-  iso15765:
-    BS: 0x00 # Block Size
-    STMIN_MS: 10 # Separation Time minimum
+  CP_MaxNumberOfRespPending:
+    cptype: uint8
+    description: "Max ResponsePending (0x78) before timeout"
+    default: 10
+    min: 1
+    max: 255
+    values:
+      global: 10
+      uds: 10
+
+  TCP_CONNECT_TIMEOUT_MS:
+    cptype: uint32
+    unit: ms
+    description: "TCP connection establishment timeout"
+    default: 1000
+    min: 100
+    max: 30000
+    values:
+      doip: 2000
+
+  VEHICLE_ANNOUNCEMENT_TIMEOUT_MS:
+    values:
+      doip: 5000
+
+  ROUTING_ACTIVATION_TYPE:
+    values:
+      doip: 0x00
+
+  CAN_FD_ENABLED: false
+  MAX_DLC: 8
+  PADDING_BYTE: 0xAA
+
+  SUPPRESS_POSITIVE_RESPONSE_SUPPORTED:
+    values:
+      uds: true
+
+  MAX_NUMBER_OF_BLOCK_LENGTH:
+    values:
+      uds: 4094
+
+  BS:
+    description: "Block Size"
+    values:
+      iso15765: 0x00
+
+  STMIN_MS:
+    description: "Separation Time minimum"
+    values:
+      iso15765: 10
 
 # -----------------------------------------------------------------------------
 # SESSIONS
