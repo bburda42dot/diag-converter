@@ -649,14 +649,67 @@ fn test_comparams_roundtrip() {
         "Roundtripped should have comparams SDG"
     );
 
-    // Verify YAML output contains comparams content
+    // Verify YAML output contains key comparams in flat format
     assert!(
         yaml_out.contains("comparams"),
-        "YAML output should contain comparams section"
+        "Should contain comparams section"
     );
     assert!(
         yaml_out.contains("P2_Client"),
-        "YAML output should contain P2_Client param"
+        "Should contain P2_Client param"
+    );
+    assert!(
+        yaml_out.contains("CAN_FD_ENABLED"),
+        "Should contain CAN_FD_ENABLED param"
+    );
+
+    // Verify com_param_refs are preserved through roundtrip
+    assert_eq!(
+        base.diag_layer.com_param_refs.len(),
+        base2.diag_layer.com_param_refs.len(),
+        "ComParamRef count must be preserved"
+    );
+}
+
+#[test]
+fn test_comparams_roundtrip_flxc1000() {
+    let content = include_str!("../../test-fixtures/yaml/FLXC1000.yml");
+    let db = parse_yaml(content).unwrap();
+    let yaml_out = write_yaml(&db).unwrap();
+    let db2 = parse_yaml(&yaml_out).unwrap();
+
+    let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let base2 = db2.variants.iter().find(|v| v.is_base_variant).unwrap();
+
+    // FLXC1000 has 3 comparams, each with 2 protocols -> 6 ComParamRefs
+    assert!(
+        !base.diag_layer.com_param_refs.is_empty(),
+        "Should have ComParamRefs"
+    );
+    assert_eq!(
+        base.diag_layer.com_param_refs.len(),
+        base2.diag_layer.com_param_refs.len(),
+        "ComParamRef count must be preserved"
+    );
+
+    // Verify complex value roundtrip
+    let unique_refs: Vec<_> = base
+        .diag_layer
+        .com_param_refs
+        .iter()
+        .filter(|r| {
+            r.com_param
+                .as_ref()
+                .is_some_and(|cp| cp.short_name == "CP_UniqueRespIdTable")
+        })
+        .collect();
+    assert!(
+        !unique_refs.is_empty(),
+        "Should have CP_UniqueRespIdTable refs"
+    );
+    assert!(
+        unique_refs[0].complex_value.is_some(),
+        "CP_UniqueRespIdTable should have complex value"
     );
 }
 
