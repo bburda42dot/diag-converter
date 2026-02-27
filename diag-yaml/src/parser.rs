@@ -1664,84 +1664,116 @@ fn parse_detect_to_matching_parameter(detect: &serde_yaml::Value) -> Option<Matc
     })
 }
 
-/// Parse YAML `comparams.specs` section into IR `ComParamRef` entries.
+/// Parse YAML `comparams` section into IR `ComParamRef` entries.
 ///
-/// Each spec like `CP_DoIPLogicalGatewayAddress` can have multiple protocol
-/// entries (e.g., `UDS_Ethernet_DoIP` and `UDS_Ethernet_DoIP_DOBT`), each
-/// producing one `ComParamRef`.
+/// Flat per-parameter format:
+/// - Short form (scalar): `PARAM_NAME: value` -> one ComParamRef without protocol
+/// - Full form: `PARAM_NAME: { values: { proto: val } }` -> one ComParamRef per protocol
+/// - Full form with default only: `PARAM_NAME: { default: val }` -> one ComParamRef without protocol
 fn parse_comparams(doc: &YamlDocument) -> Vec<ComParamRef> {
     let comparams = match &doc.comparams {
         Some(c) => c,
         None => return vec![],
     };
-    let specs = match &comparams.specs {
-        Some(s) => s,
-        None => return vec![],
-    };
 
     let mut refs = Vec::new();
-    for (param_name, spec_val) in specs {
-        let protocols = match spec_val.get("protocols").and_then(|p| p.as_mapping()) {
-            Some(m) => m,
-            None => continue,
-        };
-        for (proto_key, proto_val) in protocols {
-            let proto_name = match proto_key.as_str() {
-                Some(s) => s,
-                None => continue,
-            };
-
-            let simple_value =
-                proto_val
-                    .get("value")
-                    .and_then(|v| v.as_str())
-                    .map(|v| SimpleValue {
-                        value: v.to_string(),
-                    });
-
-            let complex_value = proto_val
-                .get("complex_entries")
-                .and_then(|v| v.as_sequence())
-                .map(|seq| ComplexValue {
-                    entries: seq
-                        .iter()
-                        .filter_map(|entry| {
-                            entry.get("value").and_then(|v| v.as_str()).map(|v| {
-                                SimpleOrComplexValue::Simple(SimpleValue {
-                                    value: v.to_string(),
-                                })
-                            })
-                        })
-                        .collect(),
+    for (param_name, entry) in comparams {
+        match entry {
+            ComParamEntry::Simple(val) => {
+                let value_str = yaml_value_to_string(val);
+                refs.push(ComParamRef {
+                    simple_value: Some(SimpleValue { value: value_str }),
+                    complex_value: None,
+                    com_param: Some(Box::new(ComParam {
+                        com_param_type: ComParamType::Regular,
+                        short_name: param_name.clone(),
+                        long_name: None,
+                        param_class: String::new(),
+                        cp_type: ComParamStandardisationLevel::Standard,
+                        display_level: None,
+                        cp_usage: ComParamUsage::EcuComm,
+                        specific_data: None,
+                    })),
+                    protocol: None,
+                    prot_stack: None,
                 });
+            }
+            ComParamEntry::Full(full) => {
+                if let Some(values) = &full.values {
+                    for (proto_name, val) in values {
+                        let (simple_value, complex_value) = parse_comparam_value(val);
 
-            let protocol = Protocol {
-                diag_layer: DiagLayer {
-                    short_name: proto_name.to_string(),
-                    ..Default::default()
-                },
-                com_param_spec: None,
-                prot_stack: None,
-                parent_refs: vec![],
-            };
+                        let protocol = Protocol {
+                            diag_layer: DiagLayer {
+                                short_name: proto_name.clone(),
+                                ..Default::default()
+                            },
+                            com_param_spec: None,
+                            prot_stack: None,
+                            parent_refs: vec![],
+                        };
 
-            refs.push(ComParamRef {
-                simple_value,
-                complex_value,
-                com_param: Some(Box::new(ComParam {
-                    com_param_type: ComParamType::Regular,
-                    short_name: param_name.clone(),
-                    long_name: None,
-                    param_class: String::new(),
-                    cp_type: ComParamStandardisationLevel::Standard,
-                    display_level: None,
-                    cp_usage: ComParamUsage::EcuComm,
-                    specific_data: None,
-                })),
-                protocol: Some(Box::new(protocol)),
-                prot_stack: None,
-            });
+                        refs.push(ComParamRef {
+                            simple_value,
+                            complex_value,
+                            com_param: Some(Box::new(ComParam {
+                                com_param_type: ComParamType::Regular,
+                                short_name: param_name.clone(),
+                                long_name: None,
+                                param_class: String::new(),
+                                cp_type: ComParamStandardisationLevel::Standard,
+                                display_level: None,
+                                cp_usage: ComParamUsage::EcuComm,
+                                specific_data: None,
+                            })),
+                            protocol: Some(Box::new(protocol)),
+                            prot_stack: None,
+                        });
+                    }
+                } else if let Some(default_val) = &full.default {
+                    let value_str = yaml_value_to_string(default_val);
+                    refs.push(ComParamRef {
+                        simple_value: Some(SimpleValue { value: value_str }),
+                        complex_value: None,
+                        com_param: Some(Box::new(ComParam {
+                            com_param_type: ComParamType::Regular,
+                            short_name: param_name.clone(),
+                            long_name: None,
+                            param_class: String::new(),
+                            cp_type: ComParamStandardisationLevel::Standard,
+                            display_level: None,
+                            cp_usage: ComParamUsage::EcuComm,
+                            specific_data: None,
+                        })),
+                        protocol: None,
+                        prot_stack: None,
+                    });
+                }
+            }
         }
     }
     refs
+}
+
+/// Parse a comparam value into (simple_value, complex_value).
+/// Scalars become SimpleValue, arrays become ComplexValue.
+fn parse_comparam_value(val: &serde_yaml::Value) -> (Option<SimpleValue>, Option<ComplexValue>) {
+    if let Some(seq) = val.as_sequence() {
+        let entries = seq
+            .iter()
+            .map(|entry| {
+                SimpleOrComplexValue::Simple(SimpleValue {
+                    value: yaml_value_to_string(entry),
+                })
+            })
+            .collect();
+        (None, Some(ComplexValue { entries }))
+    } else {
+        (
+            Some(SimpleValue {
+                value: yaml_value_to_string(val),
+            }),
+            None,
+        )
+    }
 }

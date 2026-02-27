@@ -167,14 +167,39 @@ pub struct YamlSdValue {
 
 // --- ComParams ---
 
+/// Communication parameters - flat map of parameter name -> entry.
+pub type YamlComParams = BTreeMap<String, ComParamEntry>;
+
+/// A single communication parameter entry.
+/// Short form: scalar value (no metadata).
+/// Full form: object with optional metadata and per-protocol values.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct YamlComParams {
-    #[serde(default)]
-    pub specs: Option<BTreeMap<String, serde_yaml::Value>>,
-    #[serde(default)]
-    pub global: Option<BTreeMap<String, serde_yaml::Value>>,
-    #[serde(flatten)]
-    pub protocol_params: BTreeMap<String, serde_yaml::Value>,
+#[serde(untagged)]
+pub enum ComParamEntry {
+    /// Full form with metadata and/or per-protocol values
+    Full(ComParamFull),
+    /// Short form: just a scalar value
+    Simple(serde_yaml::Value),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComParamFull {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cptype: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<serde_yaml::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_values: Option<Vec<serde_yaml::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub values: Option<BTreeMap<String, serde_yaml::Value>>,
 }
 
 // --- Sessions ---
@@ -711,4 +736,79 @@ fn default_download() -> String {
 }
 fn default_raw() -> String {
     "raw".into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_comparam_entry_short_form() {
+        let yaml = "false";
+        let entry: ComParamEntry = serde_yaml::from_str(yaml).unwrap();
+        assert!(matches!(entry, ComParamEntry::Simple(_)));
+    }
+
+    #[test]
+    fn test_comparam_entry_full_form() {
+        let yaml = r#"
+cptype: uint16
+unit: ms
+default: 50
+values:
+  global: 50
+  uds: 50
+"#;
+        let entry: ComParamEntry = serde_yaml::from_str(yaml).unwrap();
+        match entry {
+            ComParamEntry::Full(f) => {
+                assert_eq!(f.cptype.as_deref(), Some("uint16"));
+                assert_eq!(f.unit.as_deref(), Some("ms"));
+                let vals = f.values.unwrap();
+                assert_eq!(vals.len(), 2);
+            }
+            _ => panic!("Expected Full variant"),
+        }
+    }
+
+    #[test]
+    fn test_comparam_entry_complex_values() {
+        let yaml = r#"
+cptype: complex
+values:
+  UDS_Ethernet_DoIP: ["4096", "0", "FLXC1000"]
+"#;
+        let entry: ComParamEntry = serde_yaml::from_str(yaml).unwrap();
+        match entry {
+            ComParamEntry::Full(f) => {
+                let vals = f.values.unwrap();
+                let v = vals.get("UDS_Ethernet_DoIP").unwrap();
+                assert!(v.is_sequence());
+            }
+            _ => panic!("Expected Full variant"),
+        }
+    }
+
+    #[test]
+    fn test_yaml_comparams_map() {
+        let yaml = r#"
+CAN_FD_ENABLED: false
+MAX_DLC: 8
+P2_Client:
+  cptype: uint16
+  default: 50
+  values:
+    global: 50
+"#;
+        let map: YamlComParams = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(map.len(), 3);
+        assert!(matches!(
+            map.get("CAN_FD_ENABLED"),
+            Some(ComParamEntry::Simple(_))
+        ));
+        assert!(matches!(
+            map.get("P2_Client"),
+            Some(ComParamEntry::Full(_))
+        ));
+    }
 }
