@@ -6,6 +6,7 @@
 use crate::service_extractor;
 use crate::yaml_model::*;
 use diag_ir::*;
+use serde::Deserialize;
 use std::collections::BTreeMap;
 
 #[derive(Debug, thiserror::Error)]
@@ -567,19 +568,204 @@ fn extract_dtc_config(layer: &DiagLayer) -> Option<DtcConfig> {
     None
 }
 
+/// Reserved top-level keys in the legacy comparams format.
+/// If any of these appear as parameter names after deserialization,
+/// the data is in legacy format and needs conversion.
+const LEGACY_COMPARAMS_KEYS: &[&str] = &["specs", "global", "doip", "can", "uds", "iso15765"];
+
 /// Extract comparams section from DiagLayer SDG metadata.
+///
+/// Detects legacy format by checking for reserved keys (`specs`, `global`, etc.)
+/// after deserialization. Both formats deserialize into `BTreeMap<String, ComParamEntry>`,
+/// but legacy data will have protocol section names as parameter keys.
 fn extract_comparams(layer: &DiagLayer) -> Option<YamlComParams> {
     let sdgs = layer.sdgs.as_ref()?;
     for sdg in &sdgs.sdgs {
         if sdg.caption_sn == "comparams" {
             if let Some(SdOrSdg::Sd(sd)) = sdg.sds.first() {
-                if let Ok(cp) = serde_yaml::from_str::<YamlComParams>(&sd.value) {
-                    return Some(cp);
+                if let Ok(parsed) = serde_yaml::from_str::<YamlComParams>(&sd.value) {
+                    if parsed
+                        .keys()
+                        .any(|k| LEGACY_COMPARAMS_KEYS.contains(&k.as_str()))
+                    {
+                        // Legacy format detected - convert via dedicated struct
+                        if let Ok(legacy) =
+                            serde_yaml::from_str::<LegacyYamlComParams>(&sd.value)
+                        {
+                            return Some(convert_legacy_comparams(legacy));
+                        }
+                    }
+                    return Some(parsed);
                 }
             }
         }
     }
     None
+}
+
+/// Legacy comparams format for backward compatibility.
+#[derive(Debug, Clone, Deserialize)]
+struct LegacyYamlComParams {
+    #[serde(default)]
+    specs: Option<BTreeMap<String, serde_yaml::Value>>,
+    #[serde(default)]
+    global: Option<BTreeMap<String, serde_yaml::Value>>,
+    #[serde(flatten)]
+    protocol_params: BTreeMap<String, serde_yaml::Value>,
+}
+
+/// Convert legacy comparams format to new flat format.
+fn convert_legacy_comparams(legacy: LegacyYamlComParams) -> YamlComParams {
+    let mut result = BTreeMap::new();
+
+    // Collect all parameter values grouped by protocol
+    let mut param_values: BTreeMap<String, BTreeMap<String, serde_yaml::Value>> = BTreeMap::new();
+
+    // Process global section
+    if let Some(global) = &legacy.global {
+        for (name, val) in global {
+            param_values
+                .entry(name.clone())
+                .or_default()
+                .insert("global".into(), val.clone());
+        }
+    }
+
+    // Process protocol sections (doip, can, uds, iso15765, etc.)
+    for (proto, params) in &legacy.protocol_params {
+        if let Some(map) = params.as_mapping() {
+            for (key, val) in map {
+                if let Some(name) = key.as_str() {
+                    param_values
+                        .entry(name.to_string())
+                        .or_default()
+                        .insert(proto.clone(), extract_legacy_value(val));
+                }
+            }
+        }
+    }
+
+    // Process specs section (metadata)
+    if let Some(specs) = &legacy.specs {
+        for (name, spec_val) in specs {
+            // Check if spec uses legacy protocols format
+            if let Some(protocols) = spec_val.get("protocols").and_then(|p| p.as_mapping()) {
+                let mut values = BTreeMap::new();
+                for (proto_key, proto_val) in protocols {
+                    if let Some(proto_name) = proto_key.as_str() {
+                        if let Some(v) = proto_val.get("value").and_then(|v| v.as_str()) {
+                            values.insert(
+                                proto_name.to_string(),
+                                serde_yaml::Value::String(v.to_string()),
+                            );
+                        } else if let Some(seq) =
+                            proto_val.get("complex_entries").and_then(|v| v.as_sequence())
+                        {
+                            let arr: Vec<serde_yaml::Value> = seq
+                                .iter()
+                                .filter_map(|e| {
+                                    e.get("value").and_then(|v| v.as_str()).map(|s| {
+                                        serde_yaml::Value::String(s.to_string())
+                                    })
+                                })
+                                .collect();
+                            values.insert(
+                                proto_name.to_string(),
+                                serde_yaml::Value::Sequence(arr),
+                            );
+                        }
+                    }
+                }
+                if !values.is_empty() {
+                    result.insert(
+                        name.clone(),
+                        ComParamEntry::Full(ComParamFull {
+                            cptype: None,
+                            unit: None,
+                            description: None,
+                            default: None,
+                            min: None,
+                            max: None,
+                            allowed_values: None,
+                            values: Some(values),
+                        }),
+                    );
+                }
+            } else {
+                // Spec with metadata (cptype, min, max, etc.) - merge with collected values
+                let values_map = param_values.remove(name);
+                let cptype = spec_val
+                    .get("cptype")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let unit = spec_val
+                    .get("unit")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let description = spec_val
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let default = spec_val.get("default_value").cloned();
+                let min = spec_val.get("min").and_then(|v| v.as_f64());
+                let max = spec_val.get("max").and_then(|v| v.as_f64());
+
+                result.insert(
+                    name.clone(),
+                    ComParamEntry::Full(ComParamFull {
+                        cptype,
+                        unit,
+                        description,
+                        default,
+                        min,
+                        max,
+                        allowed_values: None,
+                        values: values_map,
+                    }),
+                );
+            }
+        }
+    }
+
+    // Add remaining params that were only in protocol sections (not in specs)
+    for (name, values) in param_values {
+        if !result.contains_key(&name) {
+            if values.len() == 1 && values.contains_key("global") {
+                // Single global value -> short form
+                result.insert(
+                    name,
+                    ComParamEntry::Simple(values.into_values().next().unwrap()),
+                );
+            } else {
+                result.insert(
+                    name,
+                    ComParamEntry::Full(ComParamFull {
+                        cptype: None,
+                        unit: None,
+                        description: None,
+                        default: None,
+                        min: None,
+                        max: None,
+                        allowed_values: None,
+                        values: Some(values),
+                    }),
+                );
+            }
+        }
+    }
+
+    result
+}
+
+/// Extract the actual value from a legacy comparam_value (which could be a plain scalar
+/// or an object like `{value: 2000, type: "uint32", unit: "ms"}`).
+fn extract_legacy_value(val: &serde_yaml::Value) -> serde_yaml::Value {
+    if let Some(map) = val.as_mapping() {
+        if let Some(v) = map.get(&serde_yaml::Value::String("value".into())) {
+            return v.clone();
+        }
+    }
+    val.clone()
 }
 
 fn extract_access_patterns(variant: &Variant) -> Option<BTreeMap<String, AccessPattern>> {
