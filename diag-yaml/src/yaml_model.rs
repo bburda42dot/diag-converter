@@ -767,7 +767,7 @@ values:
                 let vals = f.values.unwrap();
                 assert_eq!(vals.len(), 2);
             }
-            _ => panic!("Expected Full variant"),
+            ComParamEntry::Simple(_) => panic!("Expected Full variant"),
         }
     }
 
@@ -785,7 +785,7 @@ values:
                 let v = vals.get("UDS_Ethernet_DoIP").unwrap();
                 assert!(v.is_sequence());
             }
-            _ => panic!("Expected Full variant"),
+            ComParamEntry::Simple(_) => panic!("Expected Full variant"),
         }
     }
 
@@ -806,9 +806,6 @@ P2_Client:
             map.get("CAN_FD_ENABLED"),
             Some(ComParamEntry::Simple(_))
         ));
-        assert!(matches!(
-            map.get("P2_Client"),
-            Some(ComParamEntry::Full(_))
-        ));
+        assert!(matches!(map.get("P2_Client"), Some(ComParamEntry::Full(_))));
     }
 }

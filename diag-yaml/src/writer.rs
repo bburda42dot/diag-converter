@@ -589,10 +589,8 @@ fn extract_comparams(layer: &DiagLayer) -> Option<YamlComParams> {
                         .any(|k| LEGACY_COMPARAMS_KEYS.contains(&k.as_str()))
                     {
                         // Legacy format detected - convert via dedicated struct
-                        if let Ok(legacy) =
-                            serde_yaml::from_str::<LegacyYamlComParams>(&sd.value)
-                        {
-                            return Some(convert_legacy_comparams(legacy));
+                        if let Ok(legacy) = serde_yaml::from_str::<LegacyYamlComParams>(&sd.value) {
+                            return Some(convert_legacy_comparams(&legacy));
                         }
                     }
                     return Some(parsed);
@@ -615,7 +613,7 @@ struct LegacyYamlComParams {
 }
 
 /// Convert legacy comparams format to new flat format.
-fn convert_legacy_comparams(legacy: LegacyYamlComParams) -> YamlComParams {
+fn convert_legacy_comparams(legacy: &LegacyYamlComParams) -> YamlComParams {
     let mut result = BTreeMap::new();
 
     // Collect all parameter values grouped by protocol
@@ -658,21 +656,19 @@ fn convert_legacy_comparams(legacy: LegacyYamlComParams) -> YamlComParams {
                                 proto_name.to_string(),
                                 serde_yaml::Value::String(v.to_string()),
                             );
-                        } else if let Some(seq) =
-                            proto_val.get("complex_entries").and_then(|v| v.as_sequence())
+                        } else if let Some(seq) = proto_val
+                            .get("complex_entries")
+                            .and_then(|v| v.as_sequence())
                         {
                             let arr: Vec<serde_yaml::Value> = seq
                                 .iter()
                                 .filter_map(|e| {
-                                    e.get("value").and_then(|v| v.as_str()).map(|s| {
-                                        serde_yaml::Value::String(s.to_string())
-                                    })
+                                    e.get("value")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| serde_yaml::Value::String(s.to_string()))
                                 })
                                 .collect();
-                            values.insert(
-                                proto_name.to_string(),
-                                serde_yaml::Value::Sequence(arr),
-                            );
+                            values.insert(proto_name.to_string(), serde_yaml::Value::Sequence(arr));
                         }
                     }
                 }
@@ -707,8 +703,8 @@ fn convert_legacy_comparams(legacy: LegacyYamlComParams) -> YamlComParams {
                     .and_then(|v| v.as_str())
                     .map(String::from);
                 let default = spec_val.get("default_value").cloned();
-                let min = spec_val.get("min").and_then(|v| v.as_f64());
-                let max = spec_val.get("max").and_then(|v| v.as_f64());
+                let min = spec_val.get("min").and_then(serde_yaml::Value::as_f64);
+                let max = spec_val.get("max").and_then(serde_yaml::Value::as_f64);
 
                 result.insert(
                     name.clone(),
@@ -729,29 +725,23 @@ fn convert_legacy_comparams(legacy: LegacyYamlComParams) -> YamlComParams {
 
     // Add remaining params that were only in protocol sections (not in specs)
     for (name, values) in param_values {
-        if !result.contains_key(&name) {
+        result.entry(name).or_insert_with(|| {
             if values.len() == 1 && values.contains_key("global") {
                 // Single global value -> short form
-                result.insert(
-                    name,
-                    ComParamEntry::Simple(values.into_values().next().unwrap()),
-                );
+                ComParamEntry::Simple(values.into_values().next().unwrap())
             } else {
-                result.insert(
-                    name,
-                    ComParamEntry::Full(ComParamFull {
-                        cptype: None,
-                        unit: None,
-                        description: None,
-                        default: None,
-                        min: None,
-                        max: None,
-                        allowed_values: None,
-                        values: Some(values),
-                    }),
-                );
+                ComParamEntry::Full(ComParamFull {
+                    cptype: None,
+                    unit: None,
+                    description: None,
+                    default: None,
+                    min: None,
+                    max: None,
+                    allowed_values: None,
+                    values: Some(values),
+                })
             }
-        }
+        });
     }
 
     result
@@ -761,7 +751,7 @@ fn convert_legacy_comparams(legacy: LegacyYamlComParams) -> YamlComParams {
 /// or an object like `{value: 2000, type: "uint32", unit: "ms"}`).
 fn extract_legacy_value(val: &serde_yaml::Value) -> serde_yaml::Value {
     if let Some(map) = val.as_mapping() {
-        if let Some(v) = map.get(&serde_yaml::Value::String("value".into())) {
+        if let Some(v) = map.get(serde_yaml::Value::String("value".into())) {
             return v.clone();
         }
     }
