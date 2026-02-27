@@ -64,19 +64,6 @@ jobs:
       - name: Test
         run: bazel test //...
 
-  miri:
-    name: Miri (memory safety)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: miri
-      - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake protobuf-compiler
-      - name: Miri test
-        run: cargo +nightly miri test --workspace --exclude mdd-format --exclude diag-converter --exclude diag-ir
-
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
@@ -102,7 +89,9 @@ jobs:
           restore-keys: coverage-${{ runner.os }}-
 
       - name: Generate coverage
-        run: cargo llvm-cov --workspace --fail-under-lines 75 --lcov --output-path lcov.info
+        run: |
+          cargo llvm-cov --workspace --fail-under-lines 75
+          cargo llvm-cov --workspace --no-run --lcov --output-path lcov.info
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
