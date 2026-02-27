@@ -1,10 +1,11 @@
 // Generated Protobuf types
+#[allow(unsafe_code, clippy::all)]
 pub mod proto_generated {
     include!(concat!(env!("OUT_DIR"), "/fileformat.rs"));
 }
 
 // Generated FlatBuffers types
-#[allow(unused_imports, clippy::all, dead_code, non_snake_case)]
+#[allow(unsafe_code, unused_imports, clippy::all, dead_code, non_snake_case)]
 pub mod fbs_generated {
     include!(concat!(
         env!("OUT_DIR"),

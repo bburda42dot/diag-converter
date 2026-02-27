@@ -335,10 +335,7 @@ fn roundtrip_diag_coded_type_variants() {
                         is_executable: true,
                         is_final: false,
                     },
-                    request: Some(Request {
-                        params,
-                        sdgs: None,
-                    }),
+                    request: Some(Request { params, sdgs: None }),
                     pos_responses: vec![],
                     neg_responses: vec![],
                     is_cyclic: false,
@@ -371,11 +368,13 @@ fn test_complex_value_deserialization() {
     // Test the IR-level ComplexValue type directly
     let cv = ComplexValue {
         entries: vec![
-            SimpleOrComplexValue::Simple(SimpleValue { value: "outer_val".into() }),
+            SimpleOrComplexValue::Simple(SimpleValue {
+                value: "outer_val".into(),
+            }),
             SimpleOrComplexValue::Complex(Box::new(ComplexValue {
-                entries: vec![
-                    SimpleOrComplexValue::Simple(SimpleValue { value: "inner_val".into() }),
-                ],
+                entries: vec![SimpleOrComplexValue::Simple(SimpleValue {
+                    value: "inner_val".into(),
+                })],
             })),
         ],
     };
@@ -384,17 +383,19 @@ fn test_complex_value_deserialization() {
     assert_eq!(cv.entries.len(), 2);
     match &cv.entries[0] {
         SimpleOrComplexValue::Simple(sv) => assert_eq!(sv.value, "outer_val"),
-        _ => panic!("expected Simple at index 0"),
+        SimpleOrComplexValue::Complex(_) => panic!("expected Simple at index 0"),
     }
     match &cv.entries[1] {
         SimpleOrComplexValue::Complex(nested) => {
             assert_eq!(nested.entries.len(), 1);
             match &nested.entries[0] {
                 SimpleOrComplexValue::Simple(sv) => assert_eq!(sv.value, "inner_val"),
-                _ => panic!("expected Simple in nested ComplexValue"),
+                SimpleOrComplexValue::Complex(_) => {
+                    panic!("expected Simple in nested ComplexValue")
+                }
             }
         }
-        _ => panic!("expected Complex at index 1"),
+        SimpleOrComplexValue::Simple(_) => panic!("expected Complex at index 1"),
     }
 }
 
@@ -402,12 +403,11 @@ fn test_complex_value_deserialization() {
 /// in ComParamRef entries (not as empty SimpleValues).
 #[test]
 fn test_complex_value_from_reference_mdd() {
-    let mdd_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../test-fixtures/mdd/FLXC1000.mdd");
-    let (_meta, fbs_data) = mdd_format::reader::read_mdd_file(&mdd_path)
-        .expect("Failed to read reference MDD");
-    let db = flatbuffers_to_ir(&fbs_data)
-        .expect("Failed to deserialize FBS");
+    let mdd_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../test-fixtures/mdd/FLXC1000.mdd");
+    let (_meta, fbs_data) =
+        mdd_format::reader::read_mdd_file(&mdd_path).expect("Failed to read reference MDD");
+    let db = flatbuffers_to_ir(&fbs_data).expect("Failed to deserialize FBS");
 
     // Collect all ComplexValues from ComParamRefs across all variants
     let mut complex_value_count = 0;
@@ -504,7 +504,9 @@ fn roundtrip_com_param_ref_with_complex_value() {
                 short_name: "V1".into(),
                 com_param_refs: vec![
                     ComParamRef {
-                        simple_value: Some(SimpleValue { value: "115200".into() }),
+                        simple_value: Some(SimpleValue {
+                            value: "115200".into(),
+                        }),
                         complex_value: None,
                         com_param: Some(Box::new(ComParam {
                             com_param_type: ComParamType::Regular,
@@ -526,11 +528,13 @@ fn roundtrip_com_param_ref_with_complex_value() {
                         simple_value: None,
                         complex_value: Some(ComplexValue {
                             entries: vec![
-                                SimpleOrComplexValue::Simple(SimpleValue { value: "val1".into() }),
+                                SimpleOrComplexValue::Simple(SimpleValue {
+                                    value: "val1".into(),
+                                }),
                                 SimpleOrComplexValue::Complex(Box::new(ComplexValue {
-                                    entries: vec![
-                                        SimpleOrComplexValue::Simple(SimpleValue { value: "nested".into() }),
-                                    ],
+                                    entries: vec![SimpleOrComplexValue::Simple(SimpleValue {
+                                        value: "nested".into(),
+                                    })],
                                 })),
                             ],
                         }),
@@ -607,10 +611,7 @@ fn roundtrip_preserves_diag_comm_refs() {
     assert_eq!(svc.diag_comm.funct_classes[0].short_name, "Safety");
     assert_eq!(svc.diag_comm.funct_classes[1].short_name, "Emission");
     assert_eq!(svc.diag_comm.pre_condition_state_refs.len(), 1);
-    assert_eq!(
-        svc.diag_comm.pre_condition_state_refs[0].value,
-        "S_Default"
-    );
+    assert_eq!(svc.diag_comm.pre_condition_state_refs[0].value, "S_Default");
     assert_eq!(svc.diag_comm.state_transition_refs.len(), 1);
     assert_eq!(svc.diag_comm.state_transition_refs[0].value, "ST_1");
     let st = svc.diag_comm.state_transition_refs[0]
@@ -712,6 +713,12 @@ fn roundtrip_preserves_type_definitions() {
     assert_eq!(db2.type_definitions[0].bit_length, Some(16));
     assert_eq!(db2.type_definitions[1].name, "EngineState");
     let enums_json = db2.type_definitions[1].enum_values_json.as_ref().unwrap();
-    assert!(enums_json.contains("OFF"), "enum_values_json should contain OFF");
-    assert!(enums_json.contains("ON"), "enum_values_json should contain ON");
+    assert!(
+        enums_json.contains("OFF"),
+        "enum_values_json should contain OFF"
+    );
+    assert!(
+        enums_json.contains("ON"),
+        "enum_values_json should contain ON"
+    );
 }

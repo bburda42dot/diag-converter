@@ -3,8 +3,8 @@
 This document maps common **ODX concepts** (as seen in typical ODX content, `odxtools`, and what `odx-converter` persists) to the **OpenSOVD CDA Diagnostic Description** YAML/JSON schema in this folder.
 
 - YAML/JSON normative schema: [schema.json](schema.json)
-- Example document: [example-ecm.yml](example-ecm.yml)
-- Semantic validator: [validate.py](validate.py)
+- Example document: [example-ecm.yml](../../test-fixtures/yaml/example-ecm.yml)
+- Semantic validator: `diag-yaml` crate (`semantic_validator` module)
 
 ## Notes
 
@@ -57,7 +57,7 @@ This document maps common **ODX concepts** (as seen in typical ODX content, `odx
 
 ## What validation enforces (beyond JSON Schema)
 
-The helper in [validate.py](validate.py) adds semantic checks that JSON Schema doesn’t naturally express, including:
+The `diag-yaml` semantic validator adds checks that JSON Schema doesn’t naturally express, including:
 
 - Session/security/auth role references in `state_model`, `access_patterns`, `probe_context`.
 - `variants.detection_order`/`fallback` referencing existing variant names.

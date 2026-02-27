@@ -32,6 +32,7 @@ pub fn parse_yaml(yaml: &str) -> Result<DiagDatabase, YamlParseError> {
 }
 
 /// Transform a parsed YAML document into the canonical IR.
+#[allow(clippy::unnecessary_wraps)]
 fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
     let ecu = doc.ecu.as_ref();
     let ecu_name = ecu.map(|e| e.name.clone()).unwrap_or_default();
@@ -74,17 +75,26 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
     let type_registry = build_type_registry(doc.types.as_ref());
 
     // Store type definitions in IR for roundtrip
-    let type_definitions: Vec<TypeDefinition> = doc.types.as_ref()
-        .map(|types| types.iter().map(|(name, yt)| TypeDefinition {
-            name: name.clone(),
-            base: yt.base.clone(),
-            bit_length: yt.bit_length,
-            min_length: yt.min_length,
-            max_length: yt.max_length,
-            enum_values_json: yt.enum_values.as_ref()
-                .and_then(|v| serde_json::to_string(v).ok()),
-            description: None,
-        }).collect())
+    let type_definitions: Vec<TypeDefinition> = doc
+        .types
+        .as_ref()
+        .map(|types| {
+            types
+                .iter()
+                .map(|(name, yt)| TypeDefinition {
+                    name: name.clone(),
+                    base: yt.base.clone(),
+                    bit_length: yt.bit_length,
+                    min_length: yt.min_length,
+                    max_length: yt.max_length,
+                    enum_values_json: yt
+                        .enum_values
+                        .as_ref()
+                        .and_then(|v| serde_json::to_string(v).ok()),
+                    description: None,
+                })
+                .collect()
+        })
         .unwrap_or_default();
 
     // Build access pattern lookup for resolving DID/routine access references
@@ -140,7 +150,7 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
     // Build ECU jobs from ecu_jobs section
     let mut single_ecu_jobs = Vec::new();
     if let Some(jobs) = &doc.ecu_jobs {
-        for (_key, job) in jobs {
+        for job in jobs.values() {
             single_ecu_jobs.push(ecu_job_to_ir(job, &type_registry));
         }
     }
@@ -214,7 +224,13 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
             si: String::new(),
         });
     }
-    let sdgs = if layer_sdg_vec.is_empty() { None } else { Some(Sdgs { sdgs: layer_sdg_vec }) };
+    let sdgs = if layer_sdg_vec.is_empty() {
+        None
+    } else {
+        Some(Sdgs {
+            sdgs: layer_sdg_vec,
+        })
+    };
 
     // Build DTCs
     let dtcs = if let Some(serde_yaml::Value::Mapping(dtc_map)) = &doc.dtcs {
@@ -234,7 +250,10 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
     // Build state charts from sessions, state_model, and security
     let mut state_charts = Vec::new();
     if let Some(sessions) = &doc.sessions {
-        state_charts.push(parse_sessions_to_state_chart(sessions, doc.state_model.as_ref()));
+        state_charts.push(parse_sessions_to_state_chart(
+            sessions,
+            doc.state_model.as_ref(),
+        ));
     }
     if let Some(security) = &doc.security {
         state_charts.push(parse_security_to_state_chart(security));
@@ -246,14 +265,21 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
     }
 
     // Build functional classes from YAML
-    let funct_classes: Vec<FunctClass> = doc.functional_classes.as_ref()
-        .map(|classes| classes.iter().map(|name| FunctClass {
-            short_name: name.clone(),
-        }).collect())
+    let funct_classes: Vec<FunctClass> = doc
+        .functional_classes
+        .as_ref()
+        .map(|classes| {
+            classes
+                .iter()
+                .map(|name| FunctClass {
+                    short_name: name.clone(),
+                })
+                .collect()
+        })
         .unwrap_or_default();
 
     // Build com_param_refs from YAML comparams section
-    let com_param_refs = parse_comparams(&doc);
+    let com_param_refs = parse_comparams(doc);
 
     // Build the main variant containing all services
     let variant = Variant {
@@ -335,11 +361,7 @@ fn resolve_did_type<'a>(
 fn yaml_type_to_dop(name: &str, yaml_type: &YamlType) -> Dop {
     let (base_data_type, phys_data_type) = base_type_to_data_type(&yaml_type.base);
 
-    let is_high_low = yaml_type
-        .endian
-        .as_deref()
-        .map(|e| e == "big")
-        .unwrap_or(true);
+    let is_high_low = yaml_type.endian.as_deref().is_none_or(|e| e == "big");
 
     let bit_length = yaml_type
         .bit_length
@@ -347,7 +369,7 @@ fn yaml_type_to_dop(name: &str, yaml_type: &YamlType) -> Dop {
         .or_else(|| default_bit_length(&yaml_type.base));
 
     // Build CompuMethod from scale/offset or enum
-    let compu_method = build_compu_method(yaml_type);
+    let compu_method = Some(build_compu_method(yaml_type));
 
     let diag_coded_type = DiagCodedType {
         type_name: if yaml_type.min_length.is_some() || yaml_type.max_length.is_some() {
@@ -355,7 +377,7 @@ fn yaml_type_to_dop(name: &str, yaml_type: &YamlType) -> Dop {
         } else {
             DiagCodedTypeName::StandardLengthType
         },
-        base_type_encoding: if yaml_type.base.starts_with('s') || yaml_type.base.starts_with("i") {
+        base_type_encoding: if yaml_type.base.starts_with('s') || yaml_type.base.starts_with('i') {
             "signed".into()
         } else {
             "unsigned".into()
@@ -433,7 +455,7 @@ fn yaml_type_to_dop(name: &str, yaml_type: &YamlType) -> Dop {
     }
 }
 
-fn build_compu_method(yaml_type: &YamlType) -> Option<CompuMethod> {
+fn build_compu_method(yaml_type: &YamlType) -> CompuMethod {
     // Text table / enum
     if let Some(serde_yaml::Value::Mapping(enum_values)) = &yaml_type.enum_values {
         let scales: Vec<CompuScale> = enum_values
@@ -463,7 +485,7 @@ fn build_compu_method(yaml_type: &YamlType) -> Option<CompuMethod> {
                 }
             })
             .collect();
-        return Some(CompuMethod {
+        return CompuMethod {
             category: CompuCategory::TextTable,
             internal_to_phys: Some(CompuInternalToPhys {
                 compu_scales: scales,
@@ -471,14 +493,14 @@ fn build_compu_method(yaml_type: &YamlType) -> Option<CompuMethod> {
                 compu_default_value: None,
             }),
             phys_to_internal: None,
-        });
+        };
     }
 
     // Linear scale/offset
     if yaml_type.scale.is_some() || yaml_type.offset.is_some() {
         let scale = yaml_type.scale.unwrap_or(1.0);
         let offset = yaml_type.offset.unwrap_or(0.0);
-        return Some(CompuMethod {
+        return CompuMethod {
             category: CompuCategory::Linear,
             internal_to_phys: Some(CompuInternalToPhys {
                 compu_scales: vec![CompuScale {
@@ -496,29 +518,29 @@ fn build_compu_method(yaml_type: &YamlType) -> Option<CompuMethod> {
                 compu_default_value: None,
             }),
             phys_to_internal: None,
-        });
+        };
     }
 
     // Identical (no conversion)
-    Some(CompuMethod {
+    CompuMethod {
         category: CompuCategory::Identical,
         internal_to_phys: None,
         phys_to_internal: None,
-    })
+    }
 }
 
 /// Create a ReadDataByIdentifier (0x22) service from a DID definition.
 fn did_to_read_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> DiagService {
     let yaml_type = resolve_did_type(&did.did_type, registry);
-    let dop = yaml_type
-        .as_ref()
-        .map(|t| yaml_type_to_dop(&did.name, t))
-        .unwrap_or_else(|| Dop {
+    let dop = yaml_type.as_ref().map_or_else(
+        || Dop {
             dop_type: DopType::Regular,
             short_name: did.name.clone(),
             sdgs: None,
             specific_data: None,
-        });
+        },
+        |t| yaml_type_to_dop(&did.name, t),
+    );
 
     // Preserve DID-specific YAML fields in an SDG for roundtrip
     let mut did_extra = serde_json::Map::new();
@@ -663,15 +685,15 @@ fn did_to_read_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> DiagS
 /// Create a WriteDataByIdentifier (0x2E) service from a DID definition.
 fn did_to_write_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> DiagService {
     let yaml_type = resolve_did_type(&did.did_type, registry);
-    let dop = yaml_type
-        .as_ref()
-        .map(|t| yaml_type_to_dop(&did.name, t))
-        .unwrap_or_else(|| Dop {
+    let dop = yaml_type.as_ref().map_or_else(
+        || Dop {
             dop_type: DopType::Regular,
             short_name: did.name.clone(),
             sdgs: None,
             specific_data: None,
-        });
+        },
+        |t| yaml_type_to_dop(&did.name, t),
+    );
 
     DiagService {
         diag_comm: DiagComm {
@@ -825,23 +847,20 @@ fn routine_to_service(rid: u32, routine: &Routine, _registry: &TypeRegistry) -> 
                 for input in inputs {
                     let yaml_type: Option<YamlType> =
                         serde_yaml::from_value(input.param_type.clone()).ok();
-                    let dop = yaml_type
-                        .as_ref()
-                        .map(|t| yaml_type_to_dop(&input.name, t))
-                        .unwrap_or_else(|| Dop {
+                    let dop = yaml_type.as_ref().map_or_else(
+                        || Dop {
                             dop_type: DopType::Regular,
                             short_name: input.name.clone(),
                             sdgs: None,
                             specific_data: None,
-                        });
+                        },
+                        |t| yaml_type_to_dop(&input.name, t),
+                    );
                     request_params.push(Param {
                         id,
                         param_type: ParamType::Value,
                         short_name: input.name.clone(),
-                        semantic: input
-                            .semantic
-                            .clone()
-                            .unwrap_or_else(|| "DATA".into()),
+                        semantic: input.semantic.clone().unwrap_or_else(|| "DATA".into()),
                         sdgs: None,
                         physical_default_value: String::new(),
                         byte_position: None,
@@ -863,19 +882,19 @@ fn routine_to_service(rid: u32, routine: &Routine, _registry: &TypeRegistry) -> 
         if let Some(result) = params.get("result") {
             if let Some(outputs) = &result.output {
                 let mut resp_params = Vec::new();
-                let mut id = 0u32;
-                for output in outputs {
+                for (id, output) in outputs.iter().enumerate() {
                     let yaml_type: Option<YamlType> =
                         serde_yaml::from_value(output.param_type.clone()).ok();
-                    let dop = yaml_type
-                        .as_ref()
-                        .map(|t| yaml_type_to_dop(&output.name, t))
-                        .unwrap_or_else(|| Dop {
+                    let dop = yaml_type.as_ref().map_or_else(
+                        || Dop {
                             dop_type: DopType::Regular,
                             short_name: output.name.clone(),
                             sdgs: None,
                             specific_data: None,
-                        });
+                        },
+                        |t| yaml_type_to_dop(&output.name, t),
+                    );
+                    let id = id as u32;
                     resp_params.push(Param {
                         id,
                         param_type: ParamType::Value,
@@ -890,7 +909,6 @@ fn routine_to_service(rid: u32, routine: &Routine, _registry: &TypeRegistry) -> 
                             dop: Box::new(dop),
                         }),
                     });
-                    id += 1;
                 }
                 if !resp_params.is_empty() {
                     pos_responses.push(Response {
@@ -958,7 +976,7 @@ fn ecu_job_to_ir(job: &EcuJob, _registry: &TypeRegistry) -> SingleEcuJob {
                             physical_default_value: p
                                 .default_value
                                 .as_ref()
-                                .map(|v| yaml_value_to_string(v))
+                                .map(yaml_value_to_string)
                                 .unwrap_or_default(),
                             dop_base,
                             semantic: p.semantic.clone().unwrap_or_default(),
@@ -1011,10 +1029,7 @@ fn ecu_job_to_ir(job: &EcuJob, _registry: &TypeRegistry) -> SingleEcuJob {
 /// Convert YAML SDGs to IR SDGs.
 fn convert_sdgs(sdg_map: &BTreeMap<String, YamlSdg>) -> Sdgs {
     Sdgs {
-        sdgs: sdg_map
-            .iter()
-            .map(|(_key, yaml_sdg)| convert_single_sdg(yaml_sdg))
-            .collect(),
+        sdgs: sdg_map.values().map(convert_single_sdg).collect(),
     }
 }
 
@@ -1056,9 +1071,16 @@ fn convert_dtc(trouble_code: u32, yaml_dtc: &YamlDtc) -> Dtc {
         if !snaps.is_empty() {
             sdg_entries.push(Sdg {
                 caption_sn: "dtc_snapshots".into(),
-                sds: snaps.iter().map(|s| SdOrSdg::Sd(Sd {
-                    value: s.clone(), si: String::new(), ti: String::new(),
-                })).collect(),
+                sds: snaps
+                    .iter()
+                    .map(|s| {
+                        SdOrSdg::Sd(Sd {
+                            value: s.clone(),
+                            si: String::new(),
+                            ti: String::new(),
+                        })
+                    })
+                    .collect(),
                 si: String::new(),
             });
         }
@@ -1067,9 +1089,16 @@ fn convert_dtc(trouble_code: u32, yaml_dtc: &YamlDtc) -> Dtc {
         if !ext.is_empty() {
             sdg_entries.push(Sdg {
                 caption_sn: "dtc_extended_data".into(),
-                sds: ext.iter().map(|s| SdOrSdg::Sd(Sd {
-                    value: s.clone(), si: String::new(), ti: String::new(),
-                })).collect(),
+                sds: ext
+                    .iter()
+                    .map(|s| {
+                        SdOrSdg::Sd(Sd {
+                            value: s.clone(),
+                            si: String::new(),
+                            ti: String::new(),
+                        })
+                    })
+                    .collect(),
                 si: String::new(),
             });
         }
@@ -1084,7 +1113,11 @@ fn convert_dtc(trouble_code: u32, yaml_dtc: &YamlDtc) -> Dtc {
             ti: String::new(),
         }),
         level: yaml_dtc.severity,
-        sdgs: if sdg_entries.is_empty() { None } else { Some(Sdgs { sdgs: sdg_entries }) },
+        sdgs: if sdg_entries.is_empty() {
+            None
+        } else {
+            Some(Sdgs { sdgs: sdg_entries })
+        },
         is_temporary: false,
     }
 }
@@ -1123,7 +1156,10 @@ fn base_type_to_data_type(base: &str) -> (DataType, PhysicalTypeDataType) {
         "f64" => (DataType::AFloat64, PhysicalTypeDataType::AFloat64),
         "ascii" => (DataType::AAsciiString, PhysicalTypeDataType::AAsciiString),
         "utf8" => (DataType::AUtf8String, PhysicalTypeDataType::AAsciiString),
-        "unicode" => (DataType::AUnicode2String, PhysicalTypeDataType::AAsciiString),
+        "unicode" => (
+            DataType::AUnicode2String,
+            PhysicalTypeDataType::AAsciiString,
+        ),
         "bytes" => (DataType::ABytefield, PhysicalTypeDataType::ABytefield),
         "struct" => (DataType::ABytefield, PhysicalTypeDataType::ABytefield),
         _ => (DataType::AUint32, PhysicalTypeDataType::AUint32),
@@ -1171,61 +1207,88 @@ fn uint16_coded_type() -> DiagCodedType {
 // --- Memory config ---
 
 fn parse_memory_config(mc: &YamlMemoryConfig) -> MemoryConfig {
-    let default_address_format = mc.default_address_format.as_ref()
-        .map(|af| AddressFormat { address_bytes: af.address_bytes, length_bytes: af.length_bytes })
+    let default_address_format = mc
+        .default_address_format
+        .as_ref()
+        .map(|af| AddressFormat {
+            address_bytes: af.address_bytes,
+            length_bytes: af.length_bytes,
+        })
         .unwrap_or_default();
 
-    let regions = mc.regions.as_ref().map(|regs| {
-        regs.values().map(|r| {
-            let session = r.session.as_ref().and_then(|s| match s {
-                serde_yaml::Value::String(s) => Some(vec![s.clone()]),
-                serde_yaml::Value::Sequence(seq) => Some(seq.iter().filter_map(|v| v.as_str().map(String::from)).collect()),
-                _ => None,
-            });
-            MemoryRegion {
-                name: r.name.clone(),
-                description: r.description.clone(),
-                start_address: r.start,
-                size: r.end.saturating_sub(r.start),
-                access: match r.access.as_str() {
-                    "write" => MemoryAccess::Write,
-                    "read_write" => MemoryAccess::ReadWrite,
-                    "execute" => MemoryAccess::Execute,
-                    _ => MemoryAccess::Read,
-                },
-                address_format: r.address_format.as_ref().map(|af| AddressFormat {
-                    address_bytes: af.address_bytes, length_bytes: af.length_bytes,
-                }),
-                security_level: r.security_level.clone(),
-                session,
-            }
-        }).collect()
-    }).unwrap_or_default();
+    let regions = mc
+        .regions
+        .as_ref()
+        .map(|regs| {
+            regs.values()
+                .map(|r| {
+                    let session = r.session.as_ref().and_then(|s| match s {
+                        serde_yaml::Value::String(s) => Some(vec![s.clone()]),
+                        serde_yaml::Value::Sequence(seq) => Some(
+                            seq.iter()
+                                .filter_map(|v| v.as_str().map(String::from))
+                                .collect(),
+                        ),
+                        _ => None,
+                    });
+                    MemoryRegion {
+                        name: r.name.clone(),
+                        description: r.description.clone(),
+                        start_address: r.start,
+                        size: r.end.saturating_sub(r.start),
+                        access: match r.access.as_str() {
+                            "write" => MemoryAccess::Write,
+                            "read_write" => MemoryAccess::ReadWrite,
+                            "execute" => MemoryAccess::Execute,
+                            _ => MemoryAccess::Read,
+                        },
+                        address_format: r.address_format.as_ref().map(|af| AddressFormat {
+                            address_bytes: af.address_bytes,
+                            length_bytes: af.length_bytes,
+                        }),
+                        security_level: r.security_level.clone(),
+                        session,
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
-    let data_blocks = mc.data_blocks.as_ref().map(|blocks| {
-        blocks.values().map(|b| DataBlock {
-            name: b.name.clone(),
-            description: b.description.clone(),
-            block_type: match b.block_type.as_str() {
-                "upload" => DataBlockType::Upload,
-                _ => DataBlockType::Download,
-            },
-            memory_address: b.memory_address,
-            memory_size: b.memory_size,
-            format: match b.format.as_str() {
-                "encrypted" => DataBlockFormat::Encrypted,
-                "compressed" => DataBlockFormat::Compressed,
-                "encrypted_compressed" => DataBlockFormat::EncryptedCompressed,
-                _ => DataBlockFormat::Raw,
-            },
-            max_block_length: b.max_block_length,
-            security_level: b.security_level.clone(),
-            session: b.session.clone(),
-            checksum_type: b.checksum_type.clone(),
-        }).collect()
-    }).unwrap_or_default();
+    let data_blocks = mc
+        .data_blocks
+        .as_ref()
+        .map(|blocks| {
+            blocks
+                .values()
+                .map(|b| DataBlock {
+                    name: b.name.clone(),
+                    description: b.description.clone(),
+                    block_type: match b.block_type.as_str() {
+                        "upload" => DataBlockType::Upload,
+                        _ => DataBlockType::Download,
+                    },
+                    memory_address: b.memory_address,
+                    memory_size: b.memory_size,
+                    format: match b.format.as_str() {
+                        "encrypted" => DataBlockFormat::Encrypted,
+                        "compressed" => DataBlockFormat::Compressed,
+                        "encrypted_compressed" => DataBlockFormat::EncryptedCompressed,
+                        _ => DataBlockFormat::Raw,
+                    },
+                    max_block_length: b.max_block_length,
+                    security_level: b.security_level.clone(),
+                    session: b.session.clone(),
+                    checksum_type: b.checksum_type.clone(),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
-    MemoryConfig { default_address_format, regions, data_blocks }
+    MemoryConfig {
+        default_address_format,
+        regions,
+        data_blocks,
+    }
 }
 
 // --- Sessions and security -> state chart ---
@@ -1248,34 +1311,39 @@ fn parse_sessions_to_state_chart(
     sessions: &BTreeMap<String, Session>,
     state_model: Option<&StateModel>,
 ) -> StateChart {
-    let states: Vec<State> = sessions.iter().map(|(key, session)| {
-        let id = yaml_value_to_u64(&session.id);
-        State {
-            short_name: key.clone(),
-            long_name: Some(LongName {
-                value: id.to_string(),
-                ti: session.alias.clone().unwrap_or_default(),
-            }),
-        }
-    }).collect();
+    let states: Vec<State> = sessions
+        .iter()
+        .map(|(key, session)| {
+            let id = yaml_value_to_u64(&session.id);
+            State {
+                short_name: key.clone(),
+                long_name: Some(LongName {
+                    value: id.to_string(),
+                    ti: session.alias.clone().unwrap_or_default(),
+                }),
+            }
+        })
+        .collect();
 
     // Determine start state from state_model or default to "default"
     let start_state = state_model
         .and_then(|sm| sm.initial_state.as_ref())
-        .map(|is| is.session.clone())
-        .unwrap_or_else(|| "default".into());
+        .map_or_else(|| "default".into(), |is| is.session.clone());
 
     // Build transitions from state_model.session_transitions
     let state_transitions = state_model
         .and_then(|sm| sm.session_transitions.as_ref())
         .map(|transitions| {
-            transitions.iter().flat_map(|(from, targets)| {
-                targets.iter().map(move |to| StateTransition {
-                    short_name: format!("{from}_to_{to}"),
-                    source_short_name_ref: from.clone(),
-                    target_short_name_ref: to.clone(),
+            transitions
+                .iter()
+                .flat_map(|(from, targets)| {
+                    targets.iter().map(move |to| StateTransition {
+                        short_name: format!("{from}_to_{to}"),
+                        source_short_name_ref: from.clone(),
+                        target_short_name_ref: to.clone(),
+                    })
                 })
-            }).collect()
+                .collect()
         })
         .unwrap_or_default();
 
@@ -1288,18 +1356,17 @@ fn parse_sessions_to_state_chart(
     }
 }
 
-fn parse_security_to_state_chart(
-    security: &BTreeMap<String, SecurityLevel>,
-) -> StateChart {
-    let states: Vec<State> = security.iter().map(|(key, level)| {
-        State {
+fn parse_security_to_state_chart(security: &BTreeMap<String, SecurityLevel>) -> StateChart {
+    let states: Vec<State> = security
+        .iter()
+        .map(|(key, level)| State {
             short_name: key.clone(),
             long_name: Some(LongName {
                 value: level.level.to_string(),
                 ti: String::new(),
             }),
-        }
-    }).collect();
+        })
+        .collect();
 
     StateChart {
         short_name: "SecurityAccessStates".into(),
@@ -1310,25 +1377,24 @@ fn parse_security_to_state_chart(
     }
 }
 
-fn parse_authentication_to_state_chart(
-    auth: &Authentication,
-) -> Option<StateChart> {
+fn parse_authentication_to_state_chart(auth: &Authentication) -> Option<StateChart> {
     let roles = auth.roles.as_ref()?;
     if roles.is_empty() {
         return None;
     }
-    let states: Vec<State> = roles.iter().map(|(key, role_val)| {
-        let id = role_val.get("id")
-            .map(|v| yaml_value_to_u64(v))
-            .unwrap_or(0);
-        State {
-            short_name: key.clone(),
-            long_name: Some(LongName {
-                value: id.to_string(),
-                ti: String::new(),
-            }),
-        }
-    }).collect();
+    let states: Vec<State> = roles
+        .iter()
+        .map(|(key, role_val)| {
+            let id = role_val.get("id").map_or(0, yaml_value_to_u64);
+            State {
+                short_name: key.clone(),
+                long_name: Some(LongName {
+                    value: id.to_string(),
+                    ti: String::new(),
+                }),
+            }
+        })
+        .collect();
 
     Some(StateChart {
         short_name: "AuthenticationStates".into(),
@@ -1350,7 +1416,9 @@ fn parse_variant_definition(
     let variant_patterns = if let Some(detect) = &vdef.detect {
         let mp = parse_detect_to_matching_parameter(detect);
         if let Some(mp) = mp {
-            vec![VariantPattern { matching_parameters: vec![mp] }]
+            vec![VariantPattern {
+                matching_parameters: vec![mp],
+            }]
         } else {
             vec![]
         }
@@ -1421,10 +1489,16 @@ fn build_access_pattern_lookup(
         .flat_map(|s| s.iter())
         .map(|(name, session)| {
             let id = yaml_value_to_u64(&session.id);
-            (name.as_str(), State {
-                short_name: name.clone(),
-                long_name: Some(LongName { value: id.to_string(), ti: session.alias.clone().unwrap_or_default() }),
-            })
+            (
+                name.as_str(),
+                State {
+                    short_name: name.clone(),
+                    long_name: Some(LongName {
+                        value: id.to_string(),
+                        ti: session.alias.clone().unwrap_or_default(),
+                    }),
+                },
+            )
         })
         .collect();
 
@@ -1432,10 +1506,16 @@ fn build_access_pattern_lookup(
         .into_iter()
         .flat_map(|s| s.iter())
         .map(|(name, level)| {
-            (name.as_str(), State {
-                short_name: name.clone(),
-                long_name: Some(LongName { value: level.level.to_string(), ti: String::new() }),
-            })
+            (
+                name.as_str(),
+                State {
+                    short_name: name.clone(),
+                    long_name: Some(LongName {
+                        value: level.level.to_string(),
+                        ti: String::new(),
+                    }),
+                },
+            )
         })
         .collect();
 
@@ -1444,79 +1524,88 @@ fn build_access_pattern_lookup(
         .into_iter()
         .flat_map(|roles| roles.iter())
         .map(|(name, role_val)| {
-            let id = role_val.get("id").map(|v| yaml_value_to_u64(v)).unwrap_or(0);
-            (name.as_str(), State {
-                short_name: name.clone(),
-                long_name: Some(LongName { value: id.to_string(), ti: String::new() }),
-            })
+            let id = role_val.get("id").map_or(0, yaml_value_to_u64);
+            (
+                name.as_str(),
+                State {
+                    short_name: name.clone(),
+                    long_name: Some(LongName {
+                        value: id.to_string(),
+                        ti: String::new(),
+                    }),
+                },
+            )
         })
         .collect();
 
-    patterns.iter().map(|(pattern_name, pattern)| {
-        let mut refs = Vec::new();
+    patterns
+        .iter()
+        .map(|(pattern_name, pattern)| {
+            let mut refs = Vec::new();
 
-        // Session refs
-        match &pattern.sessions {
-            serde_yaml::Value::String(s) if s == "any" || s == "none" => {}
-            serde_yaml::Value::Sequence(seq) => {
-                for item in seq {
-                    if let Some(name) = item.as_str() {
-                        if let Some(state) = session_states.get(name) {
-                            refs.push(PreConditionStateRef {
-                                value: "SessionStates".into(),
-                                in_param_if_short_name: String::new(),
-                                in_param_path_short_name: name.to_string(),
-                                state: Some(state.clone()),
-                            });
+            // Session refs
+            match &pattern.sessions {
+                serde_yaml::Value::String(s) if s == "any" || s == "none" => {}
+                serde_yaml::Value::Sequence(seq) => {
+                    for item in seq {
+                        if let Some(name) = item.as_str() {
+                            if let Some(state) = session_states.get(name) {
+                                refs.push(PreConditionStateRef {
+                                    value: "SessionStates".into(),
+                                    in_param_if_short_name: String::new(),
+                                    in_param_path_short_name: name.to_string(),
+                                    state: Some(state.clone()),
+                                });
+                            }
                         }
                     }
                 }
+                _ => {}
             }
-            _ => {}
-        }
 
-        // Security refs
-        match &pattern.security {
-            serde_yaml::Value::String(s) if s == "none" => {}
-            serde_yaml::Value::Sequence(seq) => {
-                for item in seq {
-                    if let Some(name) = item.as_str() {
-                        if let Some(state) = security_states.get(name) {
-                            refs.push(PreConditionStateRef {
-                                value: "SecurityAccessStates".into(),
-                                in_param_if_short_name: String::new(),
-                                in_param_path_short_name: name.to_string(),
-                                state: Some(state.clone()),
-                            });
+            // Security refs
+            match &pattern.security {
+                serde_yaml::Value::String(s) if s == "none" => {}
+                serde_yaml::Value::Sequence(seq) => {
+                    for item in seq {
+                        if let Some(name) = item.as_str() {
+                            if let Some(state) = security_states.get(name) {
+                                refs.push(PreConditionStateRef {
+                                    value: "SecurityAccessStates".into(),
+                                    in_param_if_short_name: String::new(),
+                                    in_param_path_short_name: name.to_string(),
+                                    state: Some(state.clone()),
+                                });
+                            }
                         }
                     }
                 }
+                _ => {}
             }
-            _ => {}
-        }
 
-        // Authentication refs
-        match &pattern.authentication {
-            serde_yaml::Value::String(s) if s == "none" => {}
-            serde_yaml::Value::Sequence(seq) => {
-                for item in seq {
-                    if let Some(name) = item.as_str() {
-                        if let Some(state) = auth_states.get(name) {
-                            refs.push(PreConditionStateRef {
-                                value: "AuthenticationStates".into(),
-                                in_param_if_short_name: String::new(),
-                                in_param_path_short_name: name.to_string(),
-                                state: Some(state.clone()),
-                            });
+            // Authentication refs
+            match &pattern.authentication {
+                serde_yaml::Value::String(s) if s == "none" => {}
+                serde_yaml::Value::Sequence(seq) => {
+                    for item in seq {
+                        if let Some(name) = item.as_str() {
+                            if let Some(state) = auth_states.get(name) {
+                                refs.push(PreConditionStateRef {
+                                    value: "AuthenticationStates".into(),
+                                    in_param_if_short_name: String::new(),
+                                    in_param_path_short_name: name.to_string(),
+                                    state: Some(state.clone()),
+                                });
+                            }
                         }
                     }
                 }
+                _ => {}
             }
-            _ => {}
-        }
 
-        (pattern_name.clone(), refs)
-    }).collect()
+            (pattern_name.clone(), refs)
+        })
+        .collect()
 }
 
 /// Look up access pattern for a service and attach pre-condition state refs + SDG metadata.
@@ -1529,7 +1618,7 @@ fn apply_access_pattern(
         return;
     }
     if let Some(refs) = patterns.get(pattern_name) {
-        diag_comm.pre_condition_state_refs = refs.clone();
+        diag_comm.pre_condition_state_refs.clone_from(refs);
         // Store the pattern name in SDGs so the writer can reconstruct it
         let sdg = Sdg {
             caption_sn: "access_pattern".into(),
@@ -1602,20 +1691,28 @@ fn parse_comparams(doc: &YamlDocument) -> Vec<ComParamRef> {
                 None => continue,
             };
 
-            let simple_value = proto_val.get("value")
-                .and_then(|v| v.as_str())
-                .map(|v| SimpleValue { value: v.to_string() });
+            let simple_value =
+                proto_val
+                    .get("value")
+                    .and_then(|v| v.as_str())
+                    .map(|v| SimpleValue {
+                        value: v.to_string(),
+                    });
 
-            let complex_value = proto_val.get("complex_entries")
+            let complex_value = proto_val
+                .get("complex_entries")
                 .and_then(|v| v.as_sequence())
                 .map(|seq| ComplexValue {
-                    entries: seq.iter().filter_map(|entry| {
-                        entry.get("value")
-                            .and_then(|v| v.as_str())
-                            .map(|v| SimpleOrComplexValue::Simple(SimpleValue {
-                                value: v.to_string(),
-                            }))
-                    }).collect(),
+                    entries: seq
+                        .iter()
+                        .filter_map(|entry| {
+                            entry.get("value").and_then(|v| v.as_str()).map(|v| {
+                                SimpleOrComplexValue::Simple(SimpleValue {
+                                    value: v.to_string(),
+                                })
+                            })
+                        })
+                        .collect(),
                 });
 
             let protocol = Protocol {

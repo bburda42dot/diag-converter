@@ -34,10 +34,9 @@ fn get_flatbuffers_info() -> Result<(String, String), Box<dyn std::error::Error>
         .ok_or("flatbuffers patch not found in [patch.crates-io]")?;
 
     match flatbuffers.detail() {
-        Some(detail) if detail.git.is_some() && detail.rev.is_some() => Ok((
-            detail.git.clone().unwrap(),
-            detail.rev.clone().unwrap(),
-        )),
+        Some(detail) if detail.git.is_some() && detail.rev.is_some() => {
+            Ok((detail.git.clone().unwrap(), detail.rev.clone().unwrap()))
+        }
         _ => Err("flatbuffers git/rev not found in patch".into()),
     }
 }

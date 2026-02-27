@@ -59,9 +59,7 @@ fn validate_session_id_uniqueness(doc: &YamlDocument, issues: &mut Vec<SemanticI
             issues.push(SemanticIssue {
                 severity: Severity::Error,
                 path: format!("sessions/{name}"),
-                message: format!(
-                    "duplicate session ID {id_str} (already used by '{prev}')"
-                ),
+                message: format!("duplicate session ID {id_str} (already used by '{prev}')"),
             });
         } else {
             seen.insert(id_str, name.clone());
@@ -102,7 +100,7 @@ fn validate_access_pattern_session_refs(doc: &YamlDocument, issues: &mut Vec<Sem
     let session_names: HashSet<&str> = doc
         .sessions
         .as_ref()
-        .map(|s| s.keys().map(|k| k.as_str()).collect())
+        .map(|s| s.keys().map(std::string::String::as_str).collect())
         .unwrap_or_default();
 
     for (pat_name, pattern) in patterns {
@@ -114,9 +112,7 @@ fn validate_access_pattern_session_refs(doc: &YamlDocument, issues: &mut Vec<Sem
                         issues.push(SemanticIssue {
                             severity: Severity::Error,
                             path: format!("access_patterns/{pat_name}/sessions"),
-                            message: format!(
-                                "references undefined session '{ref_name}'"
-                            ),
+                            message: format!("references undefined session '{ref_name}'"),
                         });
                     }
                 }
@@ -134,7 +130,7 @@ fn validate_access_pattern_security_refs(doc: &YamlDocument, issues: &mut Vec<Se
     let security_names: HashSet<&str> = doc
         .security
         .as_ref()
-        .map(|s| s.keys().map(|k| k.as_str()).collect())
+        .map(|s| s.keys().map(std::string::String::as_str).collect())
         .unwrap_or_default();
 
     for (pat_name, pattern) in patterns {
@@ -146,9 +142,7 @@ fn validate_access_pattern_security_refs(doc: &YamlDocument, issues: &mut Vec<Se
                         issues.push(SemanticIssue {
                             severity: Severity::Error,
                             path: format!("access_patterns/{pat_name}/security"),
-                            message: format!(
-                                "references undefined security level '{ref_name}'"
-                            ),
+                            message: format!("references undefined security level '{ref_name}'"),
                         });
                     }
                 }
@@ -170,7 +164,7 @@ fn validate_state_model_session_refs(doc: &YamlDocument, issues: &mut Vec<Semant
     let session_names: HashSet<&str> = doc
         .sessions
         .as_ref()
-        .map(|s| s.keys().map(|k| k.as_str()).collect())
+        .map(|s| s.keys().map(std::string::String::as_str).collect())
         .unwrap_or_default();
 
     for (from, targets) in transitions {
@@ -186,9 +180,7 @@ fn validate_state_model_session_refs(doc: &YamlDocument, issues: &mut Vec<Semant
                 issues.push(SemanticIssue {
                     severity: Severity::Warning,
                     path: format!("state_model/session_transitions/{from}"),
-                    message: format!(
-                        "transition target '{target}' is not a defined session"
-                    ),
+                    message: format!("transition target '{target}' is not a defined session"),
                 });
             }
         }

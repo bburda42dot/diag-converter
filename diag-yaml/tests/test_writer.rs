@@ -46,7 +46,10 @@ x-oem:
     let db = parse_yaml(yaml).unwrap();
     let yaml_out = write_yaml(&db).unwrap();
     let doc: serde_yaml::Value = serde_yaml::from_str(&yaml_out).unwrap();
-    assert!(doc["annotations"].is_mapping(), "annotations should roundtrip");
+    assert!(
+        doc["annotations"].is_mapping(),
+        "annotations should roundtrip"
+    );
     assert_eq!(
         doc["annotations"]["note"].as_str(),
         Some("This is a test annotation")
@@ -78,13 +81,15 @@ dids:
     let db = parse_yaml(yaml).unwrap();
     let yaml_out = write_yaml(&db).unwrap();
     let doc: serde_yaml::Value = serde_yaml::from_str(&yaml_out).unwrap();
-    let types = doc["types"].as_mapping().expect("types section should exist in output");
+    let types = doc["types"]
+        .as_mapping()
+        .expect("types section should exist in output");
     assert!(
-        types.contains_key(&serde_yaml::Value::String("VehicleSpeed".into())),
+        types.contains_key(serde_yaml::Value::String("VehicleSpeed".into())),
         "VehicleSpeed type should be in output"
     );
     assert!(
-        types.contains_key(&serde_yaml::Value::String("EngineState".into())),
+        types.contains_key(serde_yaml::Value::String("EngineState".into())),
         "EngineState type should be in output"
     );
 }
@@ -133,10 +138,7 @@ fn test_yaml_roundtrip_ecm_preserves_service_count() {
 
     // The reparsed version should have at least the same number of services
     // (DIDs generate read/write services, routines generate services)
-    assert!(
-        reparsed_services > 0,
-        "reparsed should have services"
-    );
+    assert!(reparsed_services > 0, "reparsed should have services");
     // Note: exact count may differ because writer may not re-emit all services
     // but key data should be preserved
     assert_eq!(original.ecu_name, reparsed.ecu_name);
@@ -174,10 +176,15 @@ fn test_writable_did_roundtrip() {
 
     // Verify the IR has at least one Write_ service (proving the DID is writable)
     let layer = &db.variants[0].diag_layer;
-    let write_services: Vec<_> = layer.diag_services.iter()
+    let write_services: Vec<_> = layer
+        .diag_services
+        .iter()
         .filter(|s| s.diag_comm.short_name.ends_with("_Write"))
         .collect();
-    assert!(!write_services.is_empty(), "example-ecm.yml should have writable DIDs generating _Write services");
+    assert!(
+        !write_services.is_empty(),
+        "example-ecm.yml should have writable DIDs generating _Write services"
+    );
 
     // Write to YAML and re-parse
     let yaml_output = write_yaml(&db).unwrap();
@@ -185,7 +192,9 @@ fn test_writable_did_roundtrip() {
 
     // The reparsed IR must still have Write_ services for writable DIDs
     let reparsed_layer = &reparsed.variants[0].diag_layer;
-    let reparsed_write_services: Vec<_> = reparsed_layer.diag_services.iter()
+    let reparsed_write_services: Vec<_> = reparsed_layer
+        .diag_services
+        .iter()
         .filter(|s| s.diag_comm.short_name.ends_with("_Write"))
         .collect();
     assert_eq!(
@@ -250,10 +259,17 @@ memory:
     assert_eq!(flash.size, 0x000FFFFF);
     assert_eq!(flash.access, diag_ir::MemoryAccess::ReadWrite);
     assert_eq!(flash.security_level.as_deref(), Some("level_1"));
-    assert_eq!(flash.session.as_deref(), Some(&["programming".to_string()][..]));
+    assert_eq!(
+        flash.session.as_deref(),
+        Some(&["programming".to_string()][..])
+    );
 
     // Check multi-session region
-    let cal = mem.regions.iter().find(|r| r.name == "Calibration").unwrap();
+    let cal = mem
+        .regions
+        .iter()
+        .find(|r| r.name == "Calibration")
+        .unwrap();
     assert_eq!(cal.session.as_ref().unwrap().len(), 2);
 
     // Check data block
@@ -265,7 +281,10 @@ memory:
     // Roundtrip: write back to YAML and re-parse
     let yaml_out = write_yaml(&db).unwrap();
     let db2 = parse_yaml(&yaml_out).unwrap();
-    let mem2 = db2.memory.as_ref().expect("memory config should survive roundtrip");
+    let mem2 = db2
+        .memory
+        .as_ref()
+        .expect("memory config should survive roundtrip");
 
     assert_eq!(mem.default_address_format, mem2.default_address_format);
     assert_eq!(mem.regions.len(), mem2.regions.len());
@@ -317,14 +336,26 @@ security:
     let layer = &db.variants[0].diag_layer;
 
     // Verify state charts were built
-    assert_eq!(layer.state_charts.len(), 2, "should have session + security state charts");
+    assert_eq!(
+        layer.state_charts.len(),
+        2,
+        "should have session + security state charts"
+    );
 
-    let session_sc = layer.state_charts.iter().find(|sc| sc.semantic == "SESSION").unwrap();
+    let session_sc = layer
+        .state_charts
+        .iter()
+        .find(|sc| sc.semantic == "SESSION")
+        .unwrap();
     assert_eq!(session_sc.states.len(), 3);
     assert_eq!(session_sc.start_state_short_name_ref, "default");
     assert_eq!(session_sc.state_transitions.len(), 3); // default->extended, default->programming, extended->default
 
-    let security_sc = layer.state_charts.iter().find(|sc| sc.semantic == "SECURITY").unwrap();
+    let security_sc = layer
+        .state_charts
+        .iter()
+        .find(|sc| sc.semantic == "SECURITY")
+        .unwrap();
     assert_eq!(security_sc.states.len(), 2);
 
     // Roundtrip
@@ -334,21 +365,43 @@ security:
 
     assert_eq!(layer2.state_charts.len(), 2);
 
-    let session_sc2 = layer2.state_charts.iter().find(|sc| sc.semantic == "SESSION").unwrap();
+    let session_sc2 = layer2
+        .state_charts
+        .iter()
+        .find(|sc| sc.semantic == "SESSION")
+        .unwrap();
     assert_eq!(session_sc.states.len(), session_sc2.states.len());
-    assert_eq!(session_sc.start_state_short_name_ref, session_sc2.start_state_short_name_ref);
-    assert_eq!(session_sc.state_transitions.len(), session_sc2.state_transitions.len());
+    assert_eq!(
+        session_sc.start_state_short_name_ref,
+        session_sc2.start_state_short_name_ref
+    );
+    assert_eq!(
+        session_sc.state_transitions.len(),
+        session_sc2.state_transitions.len()
+    );
 
     // Verify session IDs survived
-    let ext_state = session_sc2.states.iter().find(|s| s.short_name == "extended").unwrap();
+    let ext_state = session_sc2
+        .states
+        .iter()
+        .find(|s| s.short_name == "extended")
+        .unwrap();
     assert_eq!(ext_state.long_name.as_ref().unwrap().value, "3");
     assert_eq!(ext_state.long_name.as_ref().unwrap().ti, "EXTDS");
 
-    let security_sc2 = layer2.state_charts.iter().find(|sc| sc.semantic == "SECURITY").unwrap();
+    let security_sc2 = layer2
+        .state_charts
+        .iter()
+        .find(|sc| sc.semantic == "SECURITY")
+        .unwrap();
     assert_eq!(security_sc.states.len(), security_sc2.states.len());
 
     // Verify security levels survived
-    let lvl1 = security_sc2.states.iter().find(|s| s.short_name == "level_1").unwrap();
+    let lvl1 = security_sc2
+        .states
+        .iter()
+        .find(|s| s.short_name == "level_1")
+        .unwrap();
     assert_eq!(lvl1.long_name.as_ref().unwrap().value, "1");
 }
 
@@ -375,15 +428,25 @@ authentication:
     let db = parse_yaml(yaml).unwrap();
     let layer = &db.variants[0].diag_layer;
 
-    let auth_sc = layer.state_charts.iter()
+    let auth_sc = layer
+        .state_charts
+        .iter()
         .find(|sc| sc.semantic == "AUTHENTICATION")
         .expect("should have authentication state chart");
     assert_eq!(auth_sc.states.len(), 3);
 
     // Verify role IDs
-    let tester = auth_sc.states.iter().find(|s| s.short_name == "tester").unwrap();
+    let tester = auth_sc
+        .states
+        .iter()
+        .find(|s| s.short_name == "tester")
+        .unwrap();
     assert_eq!(tester.long_name.as_ref().unwrap().value, "0");
-    let oem = auth_sc.states.iter().find(|s| s.short_name == "oem").unwrap();
+    let oem = auth_sc
+        .states
+        .iter()
+        .find(|s| s.short_name == "oem")
+        .unwrap();
     assert_eq!(oem.long_name.as_ref().unwrap().value, "2");
 
     // Roundtrip
@@ -391,12 +454,18 @@ authentication:
     let db2 = parse_yaml(&yaml_out).unwrap();
     let layer2 = &db2.variants[0].diag_layer;
 
-    let auth_sc2 = layer2.state_charts.iter()
+    let auth_sc2 = layer2
+        .state_charts
+        .iter()
         .find(|sc| sc.semantic == "AUTHENTICATION")
         .expect("authentication state chart must survive roundtrip");
     assert_eq!(auth_sc.states.len(), auth_sc2.states.len());
 
-    let factory2 = auth_sc2.states.iter().find(|s| s.short_name == "factory").unwrap();
+    let factory2 = auth_sc2
+        .states
+        .iter()
+        .find(|s| s.short_name == "factory")
+        .unwrap();
     assert_eq!(factory2.long_name.as_ref().unwrap().value, "1");
 }
 
@@ -407,7 +476,11 @@ fn test_variants_roundtrip() {
 
     // FLXC1000.yml defines 2 variant definitions: Boot_Variant and App_0101
     // Plus the base variant = 3 total
-    assert!(db.variants.len() >= 3, "should have base + 2 variant definitions, got {}", db.variants.len());
+    assert!(
+        db.variants.len() >= 3,
+        "should have base + 2 variant definitions, got {}",
+        db.variants.len()
+    );
 
     let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
     assert!(!base.diag_layer.short_name.is_empty());
@@ -416,8 +489,14 @@ fn test_variants_roundtrip() {
     assert_eq!(non_base.len(), 2);
 
     // Verify Boot_Variant has matching parameter
-    let boot = non_base.iter().find(|v| v.diag_layer.short_name == "Boot_Variant").unwrap();
-    assert!(!boot.variant_patterns.is_empty(), "Boot_Variant should have variant patterns");
+    let boot = non_base
+        .iter()
+        .find(|v| v.diag_layer.short_name == "Boot_Variant")
+        .unwrap();
+    assert!(
+        !boot.variant_patterns.is_empty(),
+        "Boot_Variant should have variant patterns"
+    );
     let mp = &boot.variant_patterns[0].matching_parameters[0];
     assert_eq!(mp.diag_service.diag_comm.short_name, "Identification_Read");
     assert_eq!(mp.out_param.short_name, "Identification");
@@ -431,12 +510,22 @@ fn test_variants_roundtrip() {
     let db2 = parse_yaml(&yaml_out).unwrap();
 
     let non_base2: Vec<_> = db2.variants.iter().filter(|v| !v.is_base_variant).collect();
-    assert_eq!(non_base.len(), non_base2.len(), "variant definition count must be preserved");
+    assert_eq!(
+        non_base.len(),
+        non_base2.len(),
+        "variant definition count must be preserved"
+    );
 
-    let boot2 = non_base2.iter().find(|v| v.diag_layer.short_name == "Boot_Variant").unwrap();
+    let boot2 = non_base2
+        .iter()
+        .find(|v| v.diag_layer.short_name == "Boot_Variant")
+        .unwrap();
     let mp2 = &boot2.variant_patterns[0].matching_parameters[0];
     assert_eq!(mp.expected_value, mp2.expected_value);
-    assert_eq!(mp.diag_service.diag_comm.short_name, mp2.diag_service.diag_comm.short_name);
+    assert_eq!(
+        mp.diag_service.diag_comm.short_name,
+        mp2.diag_service.diag_comm.short_name
+    );
 }
 
 #[test]
@@ -448,7 +537,10 @@ fn test_access_patterns_roundtrip() {
     let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
 
     // Find a service with "extended_write" access (DID with access: extended_write)
-    let write_svc = base.diag_layer.diag_services.iter()
+    let write_svc = base
+        .diag_layer
+        .diag_services
+        .iter()
         .find(|s| s.diag_comm.short_name.ends_with("_Write"))
         .expect("should have at least one Write DID service");
 
@@ -458,10 +550,16 @@ fn test_access_patterns_roundtrip() {
     );
 
     // Verify the session/security refs match the access pattern
-    let session_refs: Vec<_> = write_svc.diag_comm.pre_condition_state_refs.iter()
+    let session_refs: Vec<_> = write_svc
+        .diag_comm
+        .pre_condition_state_refs
+        .iter()
         .filter(|r| r.value == "SessionStates")
         .collect();
-    let security_refs: Vec<_> = write_svc.diag_comm.pre_condition_state_refs.iter()
+    let security_refs: Vec<_> = write_svc
+        .diag_comm
+        .pre_condition_state_refs
+        .iter()
         .filter(|r| r.value == "SecurityAccessStates")
         .collect();
     // extended_write pattern: sessions: [extended], security: [level_01]
@@ -476,7 +574,10 @@ fn test_access_patterns_roundtrip() {
 
     // Verify access patterns are preserved
     let base2 = db2.variants.iter().find(|v| v.is_base_variant).unwrap();
-    let write_svc2 = base2.diag_layer.diag_services.iter()
+    let write_svc2 = base2
+        .diag_layer
+        .diag_services
+        .iter()
         .find(|s| s.diag_comm.short_name.ends_with("_Write"))
         .expect("should still have Write service after roundtrip");
 
@@ -499,16 +600,27 @@ fn test_identification_roundtrip() {
     let base2 = db2.variants.iter().find(|v| v.is_base_variant).unwrap();
 
     let has_ident_sdg = |layer: &diag_ir::DiagLayer| -> bool {
-        layer.sdgs.as_ref().map_or(false, |sdgs| {
-            sdgs.sdgs.iter().any(|sdg| sdg.caption_sn == "identification")
+        layer.sdgs.as_ref().is_some_and(|sdgs| {
+            sdgs.sdgs
+                .iter()
+                .any(|sdg| sdg.caption_sn == "identification")
         })
     };
 
-    assert!(has_ident_sdg(&base.diag_layer), "Original should have identification SDG");
-    assert!(has_ident_sdg(&base2.diag_layer), "Roundtripped should have identification SDG");
+    assert!(
+        has_ident_sdg(&base.diag_layer),
+        "Original should have identification SDG"
+    );
+    assert!(
+        has_ident_sdg(&base2.diag_layer),
+        "Roundtripped should have identification SDG"
+    );
 
     // Check that the YAML output contains identification content
-    assert!(yaml_out.contains("expected_idents"), "YAML output should contain identification section");
+    assert!(
+        yaml_out.contains("expected_idents"),
+        "YAML output should contain identification section"
+    );
 }
 
 #[test]
@@ -519,20 +631,33 @@ fn test_comparams_roundtrip() {
     let db2 = parse_yaml(&yaml_out).unwrap();
 
     let has_comparams_sdg = |layer: &diag_ir::DiagLayer| -> bool {
-        layer.sdgs.as_ref().map_or(false, |sdgs| {
-            sdgs.sdgs.iter().any(|sdg| sdg.caption_sn == "comparams")
-        })
+        layer
+            .sdgs
+            .as_ref()
+            .is_some_and(|sdgs| sdgs.sdgs.iter().any(|sdg| sdg.caption_sn == "comparams"))
     };
 
     let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
     let base2 = db2.variants.iter().find(|v| v.is_base_variant).unwrap();
 
-    assert!(has_comparams_sdg(&base.diag_layer), "Original should have comparams SDG");
-    assert!(has_comparams_sdg(&base2.diag_layer), "Roundtripped should have comparams SDG");
+    assert!(
+        has_comparams_sdg(&base.diag_layer),
+        "Original should have comparams SDG"
+    );
+    assert!(
+        has_comparams_sdg(&base2.diag_layer),
+        "Roundtripped should have comparams SDG"
+    );
 
     // Verify YAML output contains comparams content
-    assert!(yaml_out.contains("comparams"), "YAML output should contain comparams section");
-    assert!(yaml_out.contains("P2_Client"), "YAML output should contain P2_Client param");
+    assert!(
+        yaml_out.contains("comparams"),
+        "YAML output should contain comparams section"
+    );
+    assert!(
+        yaml_out.contains("P2_Client"),
+        "YAML output should contain P2_Client param"
+    );
 }
 
 #[test]
@@ -541,10 +666,17 @@ fn test_dtc_config_roundtrip() {
     let db = parse_yaml(content).unwrap();
 
     // Verify DTCs have snapshot/extended_data references in SDGs
-    let dtc = db.dtcs.iter().find(|d| d.short_name == "CrankshaftPositionCorrelation").unwrap();
+    let dtc = db
+        .dtcs
+        .iter()
+        .find(|d| d.short_name == "CrankshaftPositionCorrelation")
+        .unwrap();
     let sdgs = dtc.sdgs.as_ref().expect("DTC should have SDGs");
     let has_snap = sdgs.sdgs.iter().any(|s| s.caption_sn == "dtc_snapshots");
-    let has_ext = sdgs.sdgs.iter().any(|s| s.caption_sn == "dtc_extended_data");
+    let has_ext = sdgs
+        .sdgs
+        .iter()
+        .any(|s| s.caption_sn == "dtc_extended_data");
     assert!(has_snap, "DTC should have snapshot references");
     assert!(has_ext, "DTC should have extended_data references");
 
@@ -553,15 +685,36 @@ fn test_dtc_config_roundtrip() {
     let db2 = parse_yaml(&yaml_out).unwrap();
 
     // Verify DTC snapshot/extended_data survive
-    let dtc2 = db2.dtcs.iter().find(|d| d.short_name == "CrankshaftPositionCorrelation").unwrap();
-    let sdgs2 = dtc2.sdgs.as_ref().expect("Roundtripped DTC should have SDGs");
+    let dtc2 = db2
+        .dtcs
+        .iter()
+        .find(|d| d.short_name == "CrankshaftPositionCorrelation")
+        .unwrap();
+    let sdgs2 = dtc2
+        .sdgs
+        .as_ref()
+        .expect("Roundtripped DTC should have SDGs");
     assert!(sdgs2.sdgs.iter().any(|s| s.caption_sn == "dtc_snapshots"));
-    assert!(sdgs2.sdgs.iter().any(|s| s.caption_sn == "dtc_extended_data"));
+    assert!(
+        sdgs2
+            .sdgs
+            .iter()
+            .any(|s| s.caption_sn == "dtc_extended_data")
+    );
 
     // Verify dtc_config is in the YAML output
-    assert!(yaml_out.contains("dtc_config"), "YAML output should contain dtc_config");
-    assert!(yaml_out.contains("snapshots"), "dtc_config should contain snapshots");
-    assert!(yaml_out.contains("extended_data"), "dtc_config should contain extended_data");
+    assert!(
+        yaml_out.contains("dtc_config"),
+        "YAML output should contain dtc_config"
+    );
+    assert!(
+        yaml_out.contains("snapshots"),
+        "dtc_config should contain snapshots"
+    );
+    assert!(
+        yaml_out.contains("extended_data"),
+        "dtc_config should contain extended_data"
+    );
 }
 
 #[test]
@@ -571,13 +724,27 @@ fn test_yaml_roundtrip_flxc1000_preserves_all_services() {
     let yaml_output = write_yaml(&original).unwrap();
     let reparsed = parse_yaml(&yaml_output).unwrap();
 
-    let orig_base = original.variants.iter().find(|v| v.is_base_variant).unwrap();
-    let reparse_base = reparsed.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let orig_base = original
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
+    let reparse_base = reparsed
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
 
-    let orig_svc_names: Vec<&str> = orig_base.diag_layer.diag_services.iter()
+    let orig_svc_names: Vec<&str> = orig_base
+        .diag_layer
+        .diag_services
+        .iter()
         .map(|s| s.diag_comm.short_name.as_str())
         .collect();
-    let reparse_svc_names: Vec<&str> = reparse_base.diag_layer.diag_services.iter()
+    let reparse_svc_names: Vec<&str> = reparse_base
+        .diag_layer
+        .diag_services
+        .iter()
         .map(|s| s.diag_comm.short_name.as_str())
         .collect();
 
@@ -595,8 +762,16 @@ fn test_yaml_roundtrip_flxc1000_service_names_preserved() {
     let yaml_output = write_yaml(&original).unwrap();
     let reparsed = parse_yaml(&yaml_output).unwrap();
 
-    let orig_base = original.variants.iter().find(|v| v.is_base_variant).unwrap();
-    let reparse_base = reparsed.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let orig_base = original
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
+    let reparse_base = reparsed
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
 
     let orig_names: std::collections::BTreeSet<&str> = orig_base
         .diag_layer
@@ -630,10 +805,7 @@ fn test_write_yaml_contains_services_section() {
         yaml_output.contains("diagnosticSessionControl"),
         "should contain diagnosticSessionControl"
     );
-    assert!(
-        yaml_output.contains("ecuReset"),
-        "should contain ecuReset"
-    );
+    assert!(yaml_output.contains("ecuReset"), "should contain ecuReset");
     assert!(
         yaml_output.contains("securityAccess"),
         "should contain securityAccess"

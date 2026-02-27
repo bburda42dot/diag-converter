@@ -36,10 +36,7 @@ fn is_visible(audience_field: &Option<Audience>, target: &str) -> bool {
 
     // If enabled list is non-empty, target must be in it
     if !aud.enabled_audiences.is_empty()
-        && !aud
-            .enabled_audiences
-            .iter()
-            .any(|a| a.short_name == target)
+        && !aud.enabled_audiences.iter().any(|a| a.short_name == target)
     {
         return false;
     }
@@ -143,7 +140,11 @@ mod tests {
             .iter()
             .map(|s| s.diag_comm.short_name.as_str())
             .collect();
-        assert_eq!(names, vec!["PublicFG"], "DevOnlyFG should be filtered from functional groups");
+        assert_eq!(
+            names,
+            vec!["PublicFG"],
+            "DevOnlyFG should be filtered from functional groups"
+        );
     }
 
     #[test]

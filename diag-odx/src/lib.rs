@@ -5,6 +5,6 @@ pub mod pdx_reader;
 pub mod ref_resolver;
 pub mod writer;
 
-pub use parser::{parse_odx, parse_odx_lenient, OdxParseError};
-pub use pdx_reader::{read_pdx_file, PdxReadError};
-pub use writer::{write_odx, OdxWriteError};
+pub use parser::{OdxParseError, parse_odx, parse_odx_lenient};
+pub use pdx_reader::{PdxReadError, read_pdx_file};
+pub use writer::{OdxWriteError, write_odx};

@@ -15,7 +15,11 @@ pub struct ServiceGenerator<'a> {
 
 impl<'a> ServiceGenerator<'a> {
     pub fn new(services: &'a YamlServices) -> Self {
-        Self { services, sessions: None, security: None }
+        Self {
+            services,
+            sessions: None,
+            security: None,
+        }
     }
 
     pub fn with_sessions(mut self, sessions: Option<&'a BTreeMap<String, Session>>) -> Self {
@@ -68,23 +72,25 @@ impl<'a> ServiceGenerator<'a> {
             _ => return vec![],
         };
 
-        sessions.iter().map(|(name, session)| {
-            let id = yaml_value_to_u8(&session.id);
-            let label = session.alias.as_deref()
-                .unwrap_or(name);
-            build_service(
-                &format!("{label}_Start"),
-                "SESSION",
-                vec![
-                    coded_const_param("SID", 0, 8, "0x10"),
-                    coded_const_param("SubFunction", 1, 8, &format!("0x{id:02X}")),
-                ],
-                vec![
-                    coded_const_param("SID", 0, 8, "0x50"),
-                    matching_request_param("SubFunction_Echo", 1, 1),
-                ],
-            )
-        }).collect()
+        sessions
+            .iter()
+            .map(|(name, session)| {
+                let id = yaml_value_to_u8(&session.id);
+                let label = session.alias.as_deref().unwrap_or(name);
+                build_service(
+                    &format!("{label}_Start"),
+                    "SESSION",
+                    vec![
+                        coded_const_param("SID", 0, 8, "0x10"),
+                        coded_const_param("SubFunction", 1, 8, &format!("0x{id:02X}")),
+                    ],
+                    vec![
+                        coded_const_param("SID", 0, 8, "0x50"),
+                        matching_request_param("SubFunction_Echo", 1, 1),
+                    ],
+                )
+            })
+            .collect()
     }
 
     fn session_services_from_subfunctions(&self, subfuncs: &serde_yaml::Value) -> Vec<DiagService> {
@@ -99,8 +105,9 @@ impl<'a> ServiceGenerator<'a> {
 
         match subfuncs {
             // Map form: {default: 0x01, programming: 0x02, extended: 0x03}
-            serde_yaml::Value::Mapping(map) => {
-                map.iter().filter_map(|(k, v)| {
+            serde_yaml::Value::Mapping(map) => map
+                .iter()
+                .filter_map(|(k, v)| {
                     let name = k.as_str()?;
                     let id = yaml_value_to_u8(v);
                     let label = display_name(name);
@@ -116,11 +123,12 @@ impl<'a> ServiceGenerator<'a> {
                             matching_request_param("SubFunction_Echo", 1, 1),
                         ],
                     ))
-                }).collect()
-            }
+                })
+                .collect(),
             // Sequence form: [0x01, 0x02, 0x03]
-            serde_yaml::Value::Sequence(seq) => {
-                seq.iter().map(|v| {
+            serde_yaml::Value::Sequence(seq) => seq
+                .iter()
+                .map(|v| {
                     let id = yaml_value_to_u8(v);
                     build_service(
                         &format!("0x{id:02X}_Start"),
@@ -134,8 +142,8 @@ impl<'a> ServiceGenerator<'a> {
                             matching_request_param("SubFunction_Echo", 1, 1),
                         ],
                     )
-                }).collect()
-            }
+                })
+                .collect(),
             _ => vec![],
         }
     }
@@ -156,7 +164,7 @@ impl<'a> ServiceGenerator<'a> {
         };
 
         let mut services = Vec::new();
-        for (_name, level) in security {
+        for level in security.values() {
             let seed_byte = yaml_value_to_u8(&level.seed_request);
             let key_byte = yaml_value_to_u8(&level.key_send);
             let level_num = level.level;
@@ -202,31 +210,15 @@ impl<'a> ServiceGenerator<'a> {
         };
 
         if let Some(serde_yaml::Value::Mapping(subfuncs)) = &entry.subfunctions {
-            subfuncs.iter().filter_map(|(k, v)| {
-                let name = k.as_str()?;
-                let subfunc = yaml_value_to_u8(v);
-                // Convert camelCase to PascalCase (e.g., hardReset -> HardReset)
-                let pascal = to_pascal_case(name);
-                Some(build_service(
-                    &pascal,
-                    "ECU-RESET",
-                    vec![
-                        coded_const_param("SID", 0, 8, "0x11"),
-                        coded_const_param("SubFunction", 1, 8, &format!("0x{subfunc:02X}")),
-                    ],
-                    vec![
-                        coded_const_param("SID", 0, 8, "0x51"),
-                        matching_request_param("SubFunction_Echo", 1, 1),
-                    ],
-                ))
-            }).collect()
-        } else {
-            // Default reset types if no subfunctions specified
-            [("HardReset", 0x01u8), ("KeyOffOnReset", 0x02), ("SoftReset", 0x03)]
+            subfuncs
                 .iter()
-                .map(|(name, subfunc)| {
-                    build_service(
-                        name,
+                .filter_map(|(k, v)| {
+                    let name = k.as_str()?;
+                    let subfunc = yaml_value_to_u8(v);
+                    // Convert camelCase to PascalCase (e.g., hardReset -> HardReset)
+                    let pascal = to_pascal_case(name);
+                    Some(build_service(
+                        &pascal,
                         "ECU-RESET",
                         vec![
                             coded_const_param("SID", 0, 8, "0x11"),
@@ -236,9 +228,32 @@ impl<'a> ServiceGenerator<'a> {
                             coded_const_param("SID", 0, 8, "0x51"),
                             matching_request_param("SubFunction_Echo", 1, 1),
                         ],
-                    )
+                    ))
                 })
                 .collect()
+        } else {
+            // Default reset types if no subfunctions specified
+            [
+                ("HardReset", 0x01u8),
+                ("KeyOffOnReset", 0x02),
+                ("SoftReset", 0x03),
+            ]
+            .iter()
+            .map(|(name, subfunc)| {
+                build_service(
+                    name,
+                    "ECU-RESET",
+                    vec![
+                        coded_const_param("SID", 0, 8, "0x11"),
+                        coded_const_param("SubFunction", 1, 8, &format!("0x{subfunc:02X}")),
+                    ],
+                    vec![
+                        coded_const_param("SID", 0, 8, "0x51"),
+                        matching_request_param("SubFunction_Echo", 1, 1),
+                    ],
+                )
+            })
+            .collect()
         }
     }
 
@@ -258,35 +273,38 @@ impl<'a> ServiceGenerator<'a> {
             _ => return vec![],
         };
 
-        subfuncs.iter().filter_map(|(k, v)| {
-            let name = k.as_str()?;
-            let subfunc = yaml_value_to_u8(v);
-            let pascal = to_pascal_case(name);
-            // Response params depend on subfunction:
-            // 0x08 (Configuration): [SID, SubFunc_Echo, AuthenticationReturnParameter]
-            // All others: [SID, SubFunc_Echo]
-            let response_params = if subfunc == 0x08 {
-                vec![
-                    coded_const_param("SID", 0, 8, "0x69"),
-                    matching_request_param("SubFunction_Echo", 1, 1),
-                    value_param("AuthenticationReturnParameter", 2, 8),
-                ]
-            } else {
-                vec![
-                    coded_const_param("SID", 0, 8, "0x69"),
-                    matching_request_param("SubFunction_Echo", 1, 1),
-                ]
-            };
-            Some(build_service(
-                &format!("Authentication_{pascal}"),
-                "AUTHENTICATION",
-                vec![
-                    coded_const_param("SID", 0, 8, "0x29"),
-                    coded_const_param("SubFunction", 1, 8, &format!("0x{subfunc:02X}")),
-                ],
-                response_params,
-            ))
-        }).collect()
+        subfuncs
+            .iter()
+            .filter_map(|(k, v)| {
+                let name = k.as_str()?;
+                let subfunc = yaml_value_to_u8(v);
+                let pascal = to_pascal_case(name);
+                // Response params depend on subfunction:
+                // 0x08 (Configuration): [SID, SubFunc_Echo, AuthenticationReturnParameter]
+                // All others: [SID, SubFunc_Echo]
+                let response_params = if subfunc == 0x08 {
+                    vec![
+                        coded_const_param("SID", 0, 8, "0x69"),
+                        matching_request_param("SubFunction_Echo", 1, 1),
+                        value_param("AuthenticationReturnParameter", 2, 8),
+                    ]
+                } else {
+                    vec![
+                        coded_const_param("SID", 0, 8, "0x69"),
+                        matching_request_param("SubFunction_Echo", 1, 1),
+                    ]
+                };
+                Some(build_service(
+                    &format!("Authentication_{pascal}"),
+                    "AUTHENTICATION",
+                    vec![
+                        coded_const_param("SID", 0, 8, "0x29"),
+                        coded_const_param("SubFunction", 1, 8, &format!("0x{subfunc:02X}")),
+                    ],
+                    response_params,
+                ))
+            })
+            .collect()
     }
 
     /// CommunicationControl (0x28): one service per configured subfunction.
@@ -300,25 +318,28 @@ impl<'a> ServiceGenerator<'a> {
         };
 
         let mut services: Vec<DiagService> = match &entry.subfunctions {
-            Some(serde_yaml::Value::Mapping(map)) => {
-                map.iter().filter_map(|(k, v)| {
+            Some(serde_yaml::Value::Mapping(map)) => map
+                .iter()
+                .filter_map(|(k, v)| {
                     let name = k.as_str()?;
                     let subfunc = yaml_value_to_u8(v);
                     Some(comm_control_service(name, subfunc))
-                }).collect()
-            }
-            Some(serde_yaml::Value::Sequence(seq)) => {
-                seq.iter().map(|v| {
+                })
+                .collect(),
+            Some(serde_yaml::Value::Sequence(seq)) => seq
+                .iter()
+                .map(|v| {
                     let subfunc = yaml_value_to_u8(v);
                     let name = comm_control_name(subfunc);
                     comm_control_service(&name, subfunc)
-                }).collect()
-            }
+                })
+                .collect(),
             _ => {
                 // Default subtypes
-                DEFAULT_COMM_CONTROL_SUBTYPES.iter().map(|(name, subfunc)| {
-                    comm_control_service(name, *subfunc)
-                }).collect()
+                DEFAULT_COMM_CONTROL_SUBTYPES
+                    .iter()
+                    .map(|(name, subfunc)| comm_control_service(name, *subfunc))
+                    .collect()
             }
         };
 
@@ -385,12 +406,8 @@ impl<'a> ServiceGenerator<'a> {
             build_service(
                 "TransferExit",
                 "DOWNLOAD",
-                vec![
-                    coded_const_param("SID", 0, 8, "0x37"),
-                ],
-                vec![
-                    coded_const_param("SID", 0, 8, "0x77"),
-                ],
+                vec![coded_const_param("SID", 0, 8, "0x37")],
+                vec![coded_const_param("SID", 0, 8, "0x77")],
             ),
         ]
     }
@@ -434,12 +451,8 @@ impl<'a> ServiceGenerator<'a> {
             build_service(
                 "RequestTransferExit_Upload",
                 "UPLOAD",
-                vec![
-                    coded_const_param("SID", 0, 8, "0x37"),
-                ],
-                vec![
-                    coded_const_param("SID", 0, 8, "0x77"),
-                ],
+                vec![coded_const_param("SID", 0, 8, "0x37")],
+                vec![coded_const_param("SID", 0, 8, "0x77")],
             ),
         ]
     }
@@ -472,20 +485,23 @@ impl<'a> ServiceGenerator<'a> {
             Some(e) if e.enabled => {}
             _ => return vec![],
         }
-        [("on", 0x01u8), ("off", 0x02u8)].iter().map(|(name, subfunc)| {
-            build_service(
-                &format!("ControlDTCSetting_{name}"),
-                "CONTROL-DTC-SETTING",
-                vec![
-                    coded_const_param("SID", 0, 8, "0x85"),
-                    coded_const_param("SubFunction", 1, 8, &format!("0x{subfunc:02X}")),
-                ],
-                vec![
-                    coded_const_param("SID", 0, 8, "0xC5"),
-                    matching_request_param("SubFunction_Echo", 1, 1),
-                ],
-            )
-        }).collect()
+        [("on", 0x01u8), ("off", 0x02u8)]
+            .iter()
+            .map(|(name, subfunc)| {
+                build_service(
+                    &format!("ControlDTCSetting_{name}"),
+                    "CONTROL-DTC-SETTING",
+                    vec![
+                        coded_const_param("SID", 0, 8, "0x85"),
+                        coded_const_param("SubFunction", 1, 8, &format!("0x{subfunc:02X}")),
+                    ],
+                    vec![
+                        coded_const_param("SID", 0, 8, "0xC5"),
+                        matching_request_param("SubFunction_Echo", 1, 1),
+                    ],
+                )
+            })
+            .collect()
     }
 
     /// ClearDiagnosticInformation (0x14)
@@ -501,9 +517,7 @@ impl<'a> ServiceGenerator<'a> {
                 coded_const_param("SID", 0, 8, "0x14"),
                 value_param("DTCGroupOfDTC", 1, 24),
             ],
-            vec![
-                coded_const_param("SID", 0, 8, "0x54"),
-            ],
+            vec![coded_const_param("SID", 0, 8, "0x54")],
         )]
     }
 
@@ -551,18 +565,29 @@ fn yaml_value_to_u8(v: &serde_yaml::Value) -> u8 {
         serde_yaml::Value::String(s) => {
             if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
                 u8::from_str_radix(hex, 16).unwrap_or_else(|e| {
-                    log::warn!("yaml_value_to_u8: invalid hex '{}': {}, defaulting to 0", s, e);
+                    log::warn!(
+                        "yaml_value_to_u8: invalid hex '{}': {}, defaulting to 0",
+                        s,
+                        e
+                    );
                     0
                 })
             } else {
                 s.parse().unwrap_or_else(|e| {
-                    log::warn!("yaml_value_to_u8: invalid decimal '{}': {}, defaulting to 0", s, e);
+                    log::warn!(
+                        "yaml_value_to_u8: invalid decimal '{}': {}, defaulting to 0",
+                        s,
+                        e
+                    );
                     0
                 })
             }
         }
         other => {
-            log::warn!("yaml_value_to_u8: unexpected YAML type {:?}, defaulting to 0", other);
+            log::warn!(
+                "yaml_value_to_u8: unexpected YAML type {:?}, defaulting to 0",
+                other
+            );
             0
         }
     }
@@ -652,6 +677,7 @@ fn value_param(name: &str, byte_pos: u32, bit_size: u32) -> Param {
     }
 }
 
+#[allow(clippy::cast_possible_wrap)]
 fn matching_request_param(name: &str, byte_pos: u32, byte_length: u32) -> Param {
     Param {
         short_name: name.to_string(),
@@ -679,8 +705,10 @@ fn comm_control_name(subfunc: u8) -> String {
     DEFAULT_COMM_CONTROL_SUBTYPES
         .iter()
         .find(|(_, v)| *v == subfunc)
-        .map(|(name, _)| name.to_string())
-        .unwrap_or_else(|| format!("0x{subfunc:02X}"))
+        .map_or_else(
+            || format!("0x{subfunc:02X}"),
+            |(name, _)| (*name).to_string(),
+        )
 }
 
 fn comm_control_service(name: &str, subfunc: u8) -> DiagService {
@@ -712,7 +740,10 @@ mod tests {
     }
 
     fn enabled_entry() -> ServiceEntry {
-        ServiceEntry { enabled: true, ..Default::default() }
+        ServiceEntry {
+            enabled: true,
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -747,7 +778,10 @@ mod tests {
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_clear_diagnostic_information();
         assert_eq!(services.len(), 1);
-        assert_eq!(services[0].diag_comm.short_name, "ClearDiagnosticInformation");
+        assert_eq!(
+            services[0].diag_comm.short_name,
+            "ClearDiagnosticInformation"
+        );
     }
 
     #[test]
@@ -779,8 +813,16 @@ mod tests {
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_diagnostic_session_control();
         assert_eq!(services.len(), 2);
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "default_Start"));
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "extended_Start"));
+        assert!(
+            services
+                .iter()
+                .any(|s| s.diag_comm.short_name == "default_Start")
+        );
+        assert!(
+            services
+                .iter()
+                .any(|s| s.diag_comm.short_name == "extended_Start")
+        );
     }
 
     #[test]
@@ -805,14 +847,24 @@ mod tests {
             s.diagnostic_session_control = Some(enabled_entry());
         });
         let mut sessions = BTreeMap::new();
-        sessions.insert("default".into(), Session {
-            id: serde_yaml::Value::Number(1.into()),
-            alias: None, requires_unlock: None, timing: None,
-        });
-        sessions.insert("programming".into(), Session {
-            id: serde_yaml::Value::Number(2.into()),
-            alias: None, requires_unlock: None, timing: None,
-        });
+        sessions.insert(
+            "default".into(),
+            Session {
+                id: serde_yaml::Value::Number(1.into()),
+                alias: None,
+                requires_unlock: None,
+                timing: None,
+            },
+        );
+        sessions.insert(
+            "programming".into(),
+            Session {
+                id: serde_yaml::Value::Number(2.into()),
+                alias: None,
+                requires_unlock: None,
+                timing: None,
+            },
+        );
         let generator = ServiceGenerator::new(&svc).with_sessions(Some(&sessions));
         let services = generator.generate_diagnostic_session_control();
         assert_eq!(services.len(), 2);
@@ -825,14 +877,20 @@ mod tests {
     fn test_security_access_generation() {
         let svc = services_with(|s| s.security_access = Some(enabled_entry()));
         let mut sec = BTreeMap::new();
-        sec.insert("level_01".into(), SecurityLevel {
-            level: 1,
-            seed_request: serde_yaml::Value::Number(1.into()),
-            key_send: serde_yaml::Value::Number(2.into()),
-            seed_size: 4, key_size: 4,
-            algorithm: String::new(), max_attempts: 0,
-            delay_on_fail_ms: 0, allowed_sessions: vec![],
-        });
+        sec.insert(
+            "level_01".into(),
+            SecurityLevel {
+                level: 1,
+                seed_request: serde_yaml::Value::Number(1.into()),
+                key_send: serde_yaml::Value::Number(2.into()),
+                seed_size: 4,
+                key_size: 4,
+                algorithm: String::new(),
+                max_attempts: 0,
+                delay_on_fail_ms: 0,
+                allowed_sessions: vec![],
+            },
+        );
         let generator = ServiceGenerator::new(&svc).with_security(Some(&sec));
         let services = generator.generate_security_access();
         assert_eq!(services.len(), 2);
@@ -861,8 +919,16 @@ mod tests {
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_ecu_reset();
         assert_eq!(services.len(), 2);
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "HardReset"));
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "SoftReset"));
+        assert!(
+            services
+                .iter()
+                .any(|s| s.diag_comm.short_name == "HardReset")
+        );
+        assert!(
+            services
+                .iter()
+                .any(|s| s.diag_comm.short_name == "SoftReset")
+        );
     }
 
     #[test]
@@ -879,16 +945,30 @@ mod tests {
             let mut entry = enabled_entry();
             let mut map = serde_yaml::Mapping::new();
             map.insert("deAuthenticate".into(), serde_yaml::Value::Number(0.into()));
-            map.insert("verifyCertificateUnidirectional".into(), serde_yaml::Value::Number(1.into()));
-            map.insert("proofOfOwnership".into(), serde_yaml::Value::Number(3.into()));
+            map.insert(
+                "verifyCertificateUnidirectional".into(),
+                serde_yaml::Value::Number(1.into()),
+            );
+            map.insert(
+                "proofOfOwnership".into(),
+                serde_yaml::Value::Number(3.into()),
+            );
             entry.subfunctions = Some(serde_yaml::Value::Mapping(map));
             s.authentication = Some(entry);
         });
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_authentication();
         assert_eq!(services.len(), 3);
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "Authentication_DeAuthenticate"));
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "Authentication_ProofOfOwnership"));
+        assert!(
+            services
+                .iter()
+                .any(|s| s.diag_comm.short_name == "Authentication_DeAuthenticate")
+        );
+        assert!(
+            services
+                .iter()
+                .any(|s| s.diag_comm.short_name == "Authentication_ProofOfOwnership")
+        );
         // Verify SID
         let req = services[0].request.as_ref().unwrap();
         if let Some(ParamData::CodedConst { coded_value, .. }) = &req.params[0].specific_data {
@@ -917,9 +997,18 @@ mod tests {
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_communication_control();
         assert_eq!(services.len(), 3);
-        assert_eq!(services[0].diag_comm.short_name, "EnableRxAndEnableTx_Control");
-        assert_eq!(services[1].diag_comm.short_name, "EnableRxAndDisableTx_Control");
-        assert_eq!(services[2].diag_comm.short_name, "DisableRxAndDisableTx_Control");
+        assert_eq!(
+            services[0].diag_comm.short_name,
+            "EnableRxAndEnableTx_Control"
+        );
+        assert_eq!(
+            services[1].diag_comm.short_name,
+            "EnableRxAndDisableTx_Control"
+        );
+        assert_eq!(
+            services[2].diag_comm.short_name,
+            "DisableRxAndDisableTx_Control"
+        );
         // Verify SID
         let req = services[0].request.as_ref().unwrap();
         if let Some(ParamData::CodedConst { coded_value, .. }) = &req.params[0].specific_data {
@@ -948,8 +1037,16 @@ mod tests {
         let generator = ServiceGenerator::new(&svc);
         let services = generator.generate_communication_control();
         assert_eq!(services.len(), 2);
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "EnableRxAndTx_Control"));
-        assert!(services.iter().any(|s| s.diag_comm.short_name == "DisableRxAndTx_Control"));
+        assert!(
+            services
+                .iter()
+                .any(|s| s.diag_comm.short_name == "EnableRxAndTx_Control")
+        );
+        assert!(
+            services
+                .iter()
+                .any(|s| s.diag_comm.short_name == "DisableRxAndTx_Control")
+        );
     }
 
     #[test]
@@ -965,7 +1062,11 @@ mod tests {
         let check_sid = |svc: &DiagService, expected: &str| {
             let req = svc.request.as_ref().unwrap();
             if let Some(ParamData::CodedConst { coded_value, .. }) = &req.params[0].specific_data {
-                assert_eq!(coded_value, expected, "SID mismatch for {}", svc.diag_comm.short_name);
+                assert_eq!(
+                    coded_value, expected,
+                    "SID mismatch for {}",
+                    svc.diag_comm.short_name
+                );
             }
         };
         check_sid(&services[0], "0x34");
@@ -981,7 +1082,10 @@ mod tests {
         assert_eq!(services.len(), 3);
         assert_eq!(services[0].diag_comm.short_name, "RequestUpload");
         assert_eq!(services[1].diag_comm.short_name, "TransferData_Upload");
-        assert_eq!(services[2].diag_comm.short_name, "RequestTransferExit_Upload");
+        assert_eq!(
+            services[2].diag_comm.short_name,
+            "RequestTransferExit_Upload"
+        );
     }
 
     #[test]

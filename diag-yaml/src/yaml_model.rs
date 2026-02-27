@@ -59,7 +59,6 @@ pub struct YamlDocument {
     pub functional_classes: Option<Vec<String>>,
 }
 
-
 // --- Meta ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -300,7 +299,7 @@ impl VariantDef {
     pub fn override_services(&self) -> Option<YamlServices> {
         let overrides = self.overrides.as_ref()?;
         let mapping = overrides.as_mapping()?;
-        let services_val = mapping.get(&serde_yaml::Value::String("services".into()))?;
+        let services_val = mapping.get(serde_yaml::Value::String("services".into()))?;
         serde_yaml::from_value(services_val.clone()).ok()
     }
 }
@@ -666,7 +665,9 @@ pub struct YamlAddressFormat {
     pub length_bytes: u8,
 }
 
-fn default_4() -> u8 { 4 }
+fn default_4() -> u8 {
+    4
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct YamlMemoryRegion {
@@ -705,5 +706,9 @@ pub struct YamlDataBlock {
     pub checksum_type: Option<String>,
 }
 
-fn default_download() -> String { "download".into() }
-fn default_raw() -> String { "raw".into() }
+fn default_download() -> String {
+    "download".into()
+}
+fn default_raw() -> String {
+    "raw".into()
+}

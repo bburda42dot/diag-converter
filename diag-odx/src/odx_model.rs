@@ -10,9 +10,16 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename = "ODX")]
 pub struct Odx {
-    #[serde(rename = "@VERSION", alias = "@MODEL-VERSION", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "@VERSION",
+        alias = "@MODEL-VERSION",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub version: Option<String>,
-    #[serde(rename = "DIAG-LAYER-CONTAINER", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "DIAG-LAYER-CONTAINER",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub diag_layer_container: Option<DiagLayerContainer>,
     #[serde(rename = "COMPARAM-SPEC", skip_serializing_if = "Option::is_none")]
     pub comparam_spec: Option<OdxComparamSpec>,
@@ -93,7 +100,10 @@ pub struct DiagLayerVariant {
     // ODX quirk: double-S
     #[serde(rename = "FUNCT-CLASSS", skip_serializing_if = "Option::is_none")]
     pub funct_classs: Option<FunctClasssWrapper>,
-    #[serde(rename = "DIAG-DATA-DICTIONARY-SPEC", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "DIAG-DATA-DICTIONARY-SPEC",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub diag_data_dictionary_spec: Option<DiagDataDictionarySpec>,
     #[serde(rename = "DIAG-COMMS", skip_serializing_if = "Option::is_none")]
     pub diag_comms: Option<DiagCommsWrapper>,
@@ -103,17 +113,26 @@ pub struct DiagLayerVariant {
     pub pos_responses: Option<PosResponsesWrapper>,
     #[serde(rename = "NEG-RESPONSES", skip_serializing_if = "Option::is_none")]
     pub neg_responses: Option<NegResponsesWrapper>,
-    #[serde(rename = "GLOBAL-NEG-RESPONSES", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "GLOBAL-NEG-RESPONSES",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub global_neg_responses: Option<GlobalNegResponsesWrapper>,
     #[serde(rename = "STATE-CHARTS", skip_serializing_if = "Option::is_none")]
     pub state_charts: Option<StateChartsWrapper>,
-    #[serde(rename = "ADDITIONAL-AUDIENCES", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "ADDITIONAL-AUDIENCES",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub additional_audiences: Option<AdditionalAudiencesWrapper>,
     #[serde(rename = "PARENT-REFS", skip_serializing_if = "Option::is_none")]
     pub parent_refs: Option<ParentRefsWrapper>,
     #[serde(rename = "COMPARAM-REFS", skip_serializing_if = "Option::is_none")]
     pub comparam_refs: Option<ComparamRefsWrapper>,
-    #[serde(rename = "ECU-VARIANT-PATTERNS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "ECU-VARIANT-PATTERNS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub ecu_variant_patterns: Option<EcuVariantPatternsWrapper>,
 }
 
@@ -237,9 +256,15 @@ pub struct OdxDiagService {
     pub pos_response_refs: Option<PosResponseRefsWrapper>,
     #[serde(rename = "NEG-RESPONSE-REFS", skip_serializing_if = "Option::is_none")]
     pub neg_response_refs: Option<NegResponseRefsWrapper>,
-    #[serde(rename = "PRE-CONDITION-STATE-REFS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "PRE-CONDITION-STATE-REFS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub pre_condition_state_refs: Option<PreConditionStateRefsWrapper>,
-    #[serde(rename = "STATE-TRANSITION-REFS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "STATE-TRANSITION-REFS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub state_transition_refs: Option<StateTransitionRefsWrapper>,
     #[serde(rename = "COMPARAM-REFS", skip_serializing_if = "Option::is_none")]
     pub comparam_refs: Option<ComparamRefsWrapper>,
@@ -367,7 +392,11 @@ pub struct ParamsWrapper {
 /// We capture all possible fields and dispatch based on type attr.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct OdxParam {
-    #[serde(rename = "@xsi:type", alias = "@type", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "@xsi:type",
+        alias = "@type",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub xsi_type: Option<String>,
     #[serde(rename = "@SEMANTIC", skip_serializing_if = "Option::is_none")]
     pub semantic: Option<String>,
@@ -386,7 +415,10 @@ pub struct OdxParam {
     pub dop_ref: Option<OdxRef>,
     #[serde(rename = "DOP-SNREF", skip_serializing_if = "Option::is_none")]
     pub dop_snref: Option<OdxSnRef>,
-    #[serde(rename = "PHYSICAL-DEFAULT-VALUE", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "PHYSICAL-DEFAULT-VALUE",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub physical_default_value: Option<String>,
     // CODED-CONST
     #[serde(rename = "CODED-VALUE", skip_serializing_if = "Option::is_none")]
@@ -397,7 +429,10 @@ pub struct OdxParam {
     #[serde(rename = "CODED-VALUES", skip_serializing_if = "Option::is_none")]
     pub coded_values: Option<CodedValuesWrapper>,
     // PHYS-CONST
-    #[serde(rename = "PHYS-CONSTANT-VALUE", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "PHYS-CONSTANT-VALUE",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub phys_constant_value: Option<String>,
     // RESERVED
     #[serde(rename = "BIT-LENGTH", skip_serializing_if = "Option::is_none")]
@@ -405,7 +440,11 @@ pub struct OdxParam {
     // MATCHING-REQUEST-PARAM
     #[serde(rename = "REQUEST-BYTE-POS", skip_serializing_if = "Option::is_none")]
     pub request_byte_pos: Option<i32>,
-    #[serde(rename = "MATCH-BYTE-LENGTH", alias = "BYTE-LENGTH", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "MATCH-BYTE-LENGTH",
+        alias = "BYTE-LENGTH",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub match_byte_length: Option<u32>,
     // TABLE-KEY
     #[serde(rename = "TABLE-REF", skip_serializing_if = "Option::is_none")]
@@ -446,7 +485,10 @@ pub struct DiagDataDictionarySpec {
     pub end_of_pdu_fields: Option<EndOfPduFieldsWrapper>,
     #[serde(rename = "STATIC-FIELDS", skip_serializing_if = "Option::is_none")]
     pub static_fields: Option<StaticFieldsWrapper>,
-    #[serde(rename = "DYNAMIC-LENGTH-FIELDS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "DYNAMIC-LENGTH-FIELDS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub dynamic_length_fields: Option<DynamicLengthFieldsWrapper>,
     #[serde(rename = "MUXS", skip_serializing_if = "Option::is_none")]
     pub muxs: Option<MuxsWrapper>,
@@ -553,13 +595,23 @@ pub struct OdxDataObjectProp {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct OdxDiagCodedType {
-    #[serde(rename = "@xsi:type", alias = "@type", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "@xsi:type",
+        alias = "@type",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub xsi_type: Option<String>,
     #[serde(rename = "@BASE-DATA-TYPE", skip_serializing_if = "Option::is_none")]
     pub base_data_type: Option<String>,
-    #[serde(rename = "@IS-HIGHLOW-BYTE-ORDER", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "@IS-HIGHLOW-BYTE-ORDER",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub is_highlow_byte_order: Option<String>,
-    #[serde(rename = "@BASE-TYPE-ENCODING", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "@BASE-TYPE-ENCODING",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub base_type_encoding: Option<String>,
     #[serde(rename = "@IS-CONDENSED", skip_serializing_if = "Option::is_none")]
     pub is_condensed: Option<String>,
@@ -586,9 +638,15 @@ pub struct OdxDiagCodedType {
 pub struct OdxCompuMethod {
     #[serde(rename = "CATEGORY", skip_serializing_if = "Option::is_none")]
     pub category: Option<String>,
-    #[serde(rename = "COMPU-INTERNAL-TO-PHYS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "COMPU-INTERNAL-TO-PHYS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub compu_internal_to_phys: Option<OdxCompuInternalToPhys>,
-    #[serde(rename = "COMPU-PHYS-TO-INTERNAL", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "COMPU-PHYS-TO-INTERNAL",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub compu_phys_to_internal: Option<OdxCompuPhysToInternal>,
 }
 
@@ -598,7 +656,10 @@ pub struct OdxCompuInternalToPhys {
     pub compu_scales: Option<CompuScalesWrapper>,
     #[serde(rename = "PROG-CODE", skip_serializing_if = "Option::is_none")]
     pub prog_code: Option<OdxProgCode>,
-    #[serde(rename = "COMPU-DEFAULT-VALUE", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "COMPU-DEFAULT-VALUE",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub compu_default_value: Option<OdxCompuDefaultValue>,
 }
 
@@ -608,7 +669,10 @@ pub struct OdxCompuPhysToInternal {
     pub compu_scales: Option<CompuScalesWrapper>,
     #[serde(rename = "PROG-CODE", skip_serializing_if = "Option::is_none")]
     pub prog_code: Option<OdxProgCode>,
-    #[serde(rename = "COMPU-DEFAULT-VALUE", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "COMPU-DEFAULT-VALUE",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub compu_default_value: Option<OdxCompuDefaultValue>,
 }
 
@@ -626,11 +690,17 @@ pub struct OdxCompuScale {
     pub lower_limit: Option<OdxLimit>,
     #[serde(rename = "UPPER-LIMIT", skip_serializing_if = "Option::is_none")]
     pub upper_limit: Option<OdxLimit>,
-    #[serde(rename = "COMPU-INVERSE-VALUE", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "COMPU-INVERSE-VALUE",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub compu_inverse_value: Option<OdxCompuValues>,
     #[serde(rename = "COMPU-CONST", skip_serializing_if = "Option::is_none")]
     pub compu_const: Option<OdxCompuValues>,
-    #[serde(rename = "COMPU-RATIONAL-COEFFS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "COMPU-RATIONAL-COEFFS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub compu_rational_coeffs: Option<OdxCompuRationalCoeffs>,
 }
 
@@ -756,7 +826,10 @@ pub struct OdxDtc {
     pub long_name: Option<String>,
     #[serde(rename = "TROUBLE-CODE", skip_serializing_if = "Option::is_none")]
     pub trouble_code: Option<u32>,
-    #[serde(rename = "DISPLAY-TROUBLE-CODE", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "DISPLAY-TROUBLE-CODE",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub display_trouble_code: Option<String>,
     #[serde(rename = "TEXT", skip_serializing_if = "Option::is_none")]
     pub text: Option<OdxText>,
@@ -788,9 +861,15 @@ pub struct OdxEndOfPduField {
     pub id: Option<String>,
     #[serde(rename = "SHORT-NAME", skip_serializing_if = "Option::is_none")]
     pub short_name: Option<String>,
-    #[serde(rename = "MAX-NUMBER-OF-ITEMS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "MAX-NUMBER-OF-ITEMS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub max_number_of_items: Option<u32>,
-    #[serde(rename = "MIN-NUMBER-OF-ITEMS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "MIN-NUMBER-OF-ITEMS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub min_number_of_items: Option<u32>,
 }
 
@@ -800,7 +879,10 @@ pub struct OdxStaticField {
     pub id: Option<String>,
     #[serde(rename = "SHORT-NAME", skip_serializing_if = "Option::is_none")]
     pub short_name: Option<String>,
-    #[serde(rename = "FIXED-NUMBER-OF-ITEMS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "FIXED-NUMBER-OF-ITEMS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub fixed_number_of_items: Option<u32>,
     #[serde(rename = "ITEM-BYTE-SIZE", skip_serializing_if = "Option::is_none")]
     pub item_byte_size: Option<u32>,
@@ -884,7 +966,10 @@ pub struct OdxTableRow {
 pub struct OdxUnitSpec {
     #[serde(rename = "UNITS", skip_serializing_if = "Option::is_none")]
     pub units: Option<UnitsWrapper>,
-    #[serde(rename = "PHYSICAL-DIMENSIONS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "PHYSICAL-DIMENSIONS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub physical_dimensions: Option<PhysicalDimensionsWrapper>,
     #[serde(rename = "UNIT-GROUPS", skip_serializing_if = "Option::is_none")]
     pub unit_groups: Option<UnitGroupsWrapper>,
@@ -910,7 +995,10 @@ pub struct OdxUnit {
     pub factor_si_to_unit: Option<f64>,
     #[serde(rename = "OFFSET-SI-TO-UNIT", skip_serializing_if = "Option::is_none")]
     pub offset_si_to_unit: Option<f64>,
-    #[serde(rename = "PHYSICAL-DIMENSION-REF", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "PHYSICAL-DIMENSION-REF",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub physical_dimension_ref: Option<OdxRef>,
 }
 
@@ -938,7 +1026,10 @@ pub struct OdxPhysicalDimension {
     pub temperature_exp: Option<i32>,
     #[serde(rename = "MOLAR-AMOUNT-EXP", skip_serializing_if = "Option::is_none")]
     pub molar_amount_exp: Option<i32>,
-    #[serde(rename = "LUMINOUS-INTENSITY-EXP", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "LUMINOUS-INTENSITY-EXP",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub luminous_intensity_exp: Option<i32>,
 }
 
@@ -1012,9 +1103,15 @@ pub struct OdxStateTransition {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct OdxAudience {
-    #[serde(rename = "ENABLED-AUDIENCE-REFS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "ENABLED-AUDIENCE-REFS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub enabled_audience_refs: Option<AudienceRefsWrapper>,
-    #[serde(rename = "DISABLED-AUDIENCE-REFS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "DISABLED-AUDIENCE-REFS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub disabled_audience_refs: Option<AudienceRefsWrapper>,
     #[serde(rename = "@IS-SUPPLIER", skip_serializing_if = "Option::is_none")]
     pub is_supplier: Option<String>,
@@ -1054,13 +1151,22 @@ pub struct OdxParentRef {
     pub docref: Option<String>,
     #[serde(rename = "@DOCTYPE", skip_serializing_if = "Option::is_none")]
     pub doctype: Option<String>,
-    #[serde(rename = "NOT-INHERITED-DIAG-COMMS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "NOT-INHERITED-DIAG-COMMS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub not_inherited_diag_comms: Option<NotInheritedDiagCommsWrapper>,
     #[serde(rename = "NOT-INHERITED-DOPS", skip_serializing_if = "Option::is_none")]
     pub not_inherited_dops: Option<NotInheritedDopsWrapper>,
-    #[serde(rename = "NOT-INHERITED-TABLES", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "NOT-INHERITED-TABLES",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub not_inherited_tables: Option<NotInheritedTablesWrapper>,
-    #[serde(rename = "NOT-INHERITED-GLOBAL-NEG-RESPONSES", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "NOT-INHERITED-GLOBAL-NEG-RESPONSES",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub not_inherited_global_neg_responses: Option<NotInheritedGlobalNegResponsesWrapper>,
 }
 
@@ -1090,7 +1196,13 @@ pub struct NotInheritedGlobalNegResponsesWrapper {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NotInheritedSnRef {
-    #[serde(rename = "DIAG-COMM-SNREF", alias = "DOP-BASE-SNREF", alias = "TABLE-SNREF", alias = "GLOBAL-NEG-RESPONSE-SNREF", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "DIAG-COMM-SNREF",
+        alias = "DOP-BASE-SNREF",
+        alias = "TABLE-SNREF",
+        alias = "GLOBAL-NEG-RESPONSE-SNREF",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub snref: Option<OdxSnRef>,
 }
 
@@ -1098,7 +1210,10 @@ pub struct NotInheritedSnRef {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct OdxEcuVariantPattern {
-    #[serde(rename = "MATCHING-PARAMETERS", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "MATCHING-PARAMETERS",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub matching_parameters: Option<MatchingParametersWrapper>,
 }
 
@@ -1196,7 +1311,10 @@ pub struct OdxJobParam {
     pub short_name: Option<String>,
     #[serde(rename = "LONG-NAME", skip_serializing_if = "Option::is_none")]
     pub long_name: Option<String>,
-    #[serde(rename = "PHYSICAL-DEFAULT-VALUE", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "PHYSICAL-DEFAULT-VALUE",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub physical_default_value: Option<String>,
     #[serde(rename = "DOP-BASE-REF", skip_serializing_if = "Option::is_none")]
     pub dop_base_ref: Option<OdxRef>,

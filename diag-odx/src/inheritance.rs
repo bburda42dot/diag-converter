@@ -112,8 +112,7 @@ impl<'a> MergedLayer<'a> {
                 // Resolve parent layer and inherit its content
                 if let Some(parent_id) = &pref.id_ref {
                     if let Some(parent_layer) = index.layers.get(parent_id.as_str()) {
-                        let parent_merged =
-                            MergedLayer::merge_inner(parent_layer, index, visited);
+                        let parent_merged = MergedLayer::merge_inner(parent_layer, index, visited);
                         merged.inherit_from(
                             &parent_merged,
                             &excluded_diag_comms,
@@ -219,12 +218,12 @@ impl<'a> MergedLayer<'a> {
         self.diag_services.retain(|ds| {
             ds.short_name
                 .as_deref()
-                .map_or(true, |sn| !own_service_names.contains(sn))
+                .is_none_or(|sn| !own_service_names.contains(sn))
         });
         self.single_ecu_jobs.retain(|j| {
             j.short_name
                 .as_deref()
-                .map_or(true, |sn| !own_job_names.contains(sn))
+                .is_none_or(|sn| !own_job_names.contains(sn))
         });
 
         // Add own items (once)

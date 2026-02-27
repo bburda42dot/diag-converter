@@ -73,13 +73,17 @@ fn test_pdx_with_comparam_spec_skipped() {
   <COMPARAM-SPEC><SHORT-NAME>CP_Spec</SHORT-NAME></COMPARAM-SPEC>
 </ODX>"#;
 
-    let bytes = create_pdx_bytes(&[
-        ("comparam.odx", comparam_xml),
-        ("ECU.odx", minimal_odx()),
-    ]);
+    let bytes = create_pdx_bytes(&[("comparam.odx", comparam_xml), ("ECU.odx", minimal_odx())]);
     let result = read_pdx_from_reader(Cursor::new(bytes));
-    assert!(result.is_ok(), "PDX with COMPARAM-SPEC should not fail: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "PDX with COMPARAM-SPEC should not fail: {:?}",
+        result.err()
+    );
 
     let db = result.unwrap();
-    assert!(!db.variants.is_empty(), "should have at least one variant from ECU.odx");
+    assert!(
+        !db.variants.is_empty(),
+        "should have at least one variant from ECU.odx"
+    );
 }

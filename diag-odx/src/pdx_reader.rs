@@ -28,7 +28,9 @@ pub fn read_pdx_file(path: &Path) -> Result<DiagDatabase, PdxReadError> {
 }
 
 /// Read a PDX from any reader (for testing with in-memory data).
-pub fn read_pdx_from_reader<R: Read + std::io::Seek>(reader: R) -> Result<DiagDatabase, PdxReadError> {
+pub fn read_pdx_from_reader<R: Read + std::io::Seek>(
+    reader: R,
+) -> Result<DiagDatabase, PdxReadError> {
     let mut archive = zip::ZipArchive::new(reader)?;
     let mut merged: Option<DiagDatabase> = None;
 
@@ -37,6 +39,7 @@ pub fn read_pdx_from_reader<R: Read + std::io::Seek>(reader: R) -> Result<DiagDa
         let name = entry.name().to_string();
 
         let lower = name.to_lowercase();
+        #[allow(clippy::case_sensitive_file_extension_comparisons)]
         if !lower.ends_with(".odx") && !lower.contains(".odx-") {
             continue;
         }

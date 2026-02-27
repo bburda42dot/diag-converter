@@ -1,6 +1,6 @@
 # diag-converter
 
-![CI](https://github.com/ORG/diag-converter/actions/workflows/build_test.yml/badge.svg)
+![CI](https://github.com/bburda42dot/diag-converter/actions/workflows/build_test.yml/badge.svg)
 ![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
 
 Rust replacement for the `odx-converter` (Kotlin) and `yaml-to-mdd` (Python) diagnostic toolchains. Converts between automotive diagnostic formats through a canonical intermediate representation (IR), enabling any-to-any format conversion with a single tool.

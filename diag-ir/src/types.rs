@@ -1003,7 +1003,10 @@ pub struct AddressFormat {
 
 impl Default for AddressFormat {
     fn default() -> Self {
-        Self { address_bytes: 4, length_bytes: 4 }
+        Self {
+            address_bytes: 4,
+            length_bytes: 4,
+        }
     }
 }
 

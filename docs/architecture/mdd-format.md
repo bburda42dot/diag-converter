@@ -16,7 +16,7 @@ The magic bytes `MDD version 0      \0` (20 bytes, null-terminated, space-padded
 
 ## MDDFile message
 
-The Protobuf envelope (`MDDFile` in `proto/file_format.proto`) contains metadata and an array of chunks:
+The Protobuf envelope (`MDDFile` in `mdd-format/proto/file_format.proto`) contains metadata and an array of chunks:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -69,7 +69,7 @@ The signature covers the data before compression, allowing integrity verificatio
 
 ## FlatBuffers payload
 
-The `DIAGNOSTIC_DESCRIPTION` chunk contains a FlatBuffers buffer whose root type is `EcuData` (defined in `schemas/diagnostic_description.fbs`). Key tables:
+The `DIAGNOSTIC_DESCRIPTION` chunk contains a FlatBuffers buffer whose root type is `EcuData` (defined in `mdd-format/schemas/diagnostic_description.fbs`). Key tables:
 
 ```
 EcuData (root)

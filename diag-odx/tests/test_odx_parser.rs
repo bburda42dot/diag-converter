@@ -46,11 +46,7 @@ fn test_parse_odx_ecu_variant() {
 #[test]
 fn test_parse_odx_diag_services() {
     let db = parse_minimal();
-    let base = db
-        .variants
-        .iter()
-        .find(|v| v.is_base_variant)
-        .unwrap();
+    let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
     assert!(
         !base.diag_layer.diag_services.is_empty(),
         "Base variant should have diag services"
@@ -252,7 +248,11 @@ fn test_parse_odx_audience() {
         .find(|s| s.diag_comm.short_name == "Read_VehicleSpeed")
         .unwrap();
 
-    let audience = svc.diag_comm.audience.as_ref().expect("Should have audience");
+    let audience = svc
+        .diag_comm
+        .audience
+        .as_ref()
+        .expect("Should have audience");
     assert!(audience.is_development);
     assert!(audience.is_after_sales);
     assert!(!audience.is_supplier);
@@ -261,11 +261,7 @@ fn test_parse_odx_audience() {
 #[test]
 fn test_parse_odx_variant_pattern() {
     let db = parse_minimal();
-    let ecu_var = db
-        .variants
-        .iter()
-        .find(|v| !v.is_base_variant)
-        .unwrap();
+    let ecu_var = db.variants.iter().find(|v| !v.is_base_variant).unwrap();
 
     assert_eq!(ecu_var.variant_patterns.len(), 1);
     let mp = &ecu_var.variant_patterns[0].matching_parameters[0];
@@ -275,11 +271,7 @@ fn test_parse_odx_variant_pattern() {
 #[test]
 fn test_ecu_variant_inherits_services_from_base() {
     let db = parse_minimal();
-    let ecu_var = db
-        .variants
-        .iter()
-        .find(|v| !v.is_base_variant)
-        .unwrap();
+    let ecu_var = db.variants.iter().find(|v| !v.is_base_variant).unwrap();
 
     // ECU variant should inherit Read_VehicleSpeed from base
     // (FlashECU is in NOT-INHERITED, so it should be excluded)
@@ -318,11 +310,7 @@ fn test_ecu_variant_inherits_dtcs() {
 #[test]
 fn test_parse_odx_funct_class_refs() {
     let db = parse_minimal();
-    let base = db
-        .variants
-        .iter()
-        .find(|v| v.is_base_variant)
-        .unwrap();
+    let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
     let svc = base
         .diag_layer
         .diag_services
@@ -348,11 +336,7 @@ fn test_parse_odx_funct_class_refs() {
 #[test]
 fn test_parse_odx_pre_condition_and_state_transition_refs() {
     let db = parse_minimal();
-    let base = db
-        .variants
-        .iter()
-        .find(|v| v.is_base_variant)
-        .unwrap();
+    let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
     let svc = base
         .diag_layer
         .diag_services
@@ -390,15 +374,21 @@ fn test_parse_odx_pre_condition_and_state_transition_refs() {
 fn test_parse_odx_admin_data_full() {
     let db = parse_minimal();
     assert_eq!(
-        db.metadata.get("admin_language").map(|s| s.as_str()),
+        db.metadata
+            .get("admin_language")
+            .map(std::string::String::as_str),
         Some("en")
     );
     assert_eq!(
-        db.metadata.get("admin_doc_state").map(|s| s.as_str()),
+        db.metadata
+            .get("admin_doc_state")
+            .map(std::string::String::as_str),
         Some("released")
     );
     assert_eq!(
-        db.metadata.get("admin_doc_date").map(|s| s.as_str()),
+        db.metadata
+            .get("admin_doc_date")
+            .map(std::string::String::as_str),
         Some("2025-01-01")
     );
 }

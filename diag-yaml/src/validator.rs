@@ -32,8 +32,8 @@ pub fn validate_yaml_schema(yaml_text: &str) -> Result<(), Vec<SchemaError>> {
 
     let schema: Value = serde_json::from_str(SCHEMA_JSON).expect("embedded schema is valid JSON");
 
-    let validator = jsonschema::draft202012::new(&schema)
-        .expect("embedded schema is a valid JSON Schema");
+    let validator =
+        jsonschema::draft202012::new(&schema).expect("embedded schema is a valid JSON Schema");
 
     let errors: Vec<SchemaError> = validator
         .iter_errors(&instance)

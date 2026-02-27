@@ -1,4 +1,4 @@
-use mdd_format::compression::{compress, decompress, decompress_bounded, Compression};
+use mdd_format::compression::{Compression, compress, decompress, decompress_bounded};
 
 #[test]
 fn test_lzma_roundtrip() {
@@ -63,6 +63,10 @@ fn test_decompress_bounded_exact_limit() {
 
         // Limit exactly equal to output size should succeed
         let result = decompress_bounded(&compressed, algo_name, 256).unwrap();
-        assert_eq!(result, original, "exact-limit roundtrip failed for {:?}", algo);
+        assert_eq!(
+            result, original,
+            "exact-limit roundtrip failed for {:?}",
+            algo
+        );
     }
 }

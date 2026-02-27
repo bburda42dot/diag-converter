@@ -141,6 +141,7 @@ fn layer_to_functional_group(
     })
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn build_diag_layer(
     merged: &MergedLayer,
     index: &OdxIndex,
@@ -228,13 +229,10 @@ fn build_diag_layer(
 
     let diag_layer = DiagLayer {
         short_name: layer.short_name.clone().unwrap_or_default(),
-        long_name: layer
-            .long_name
-            .as_ref()
-            .map(|ln| LongName {
-                value: ln.clone(),
-                ti: String::new(),
-            }),
+        long_name: layer.long_name.as_ref().map(|ln| LongName {
+            value: ln.clone(),
+            ti: String::new(),
+        }),
         funct_classes,
         com_param_refs: map_comparam_refs(layer),
         diag_services,
@@ -331,9 +329,9 @@ fn map_diag_service(
                                 long_name: None,
                             });
                             // Normalize value to canonical form so ODX roundtrip is stable
-                            let value = state.as_ref()
-                                .map(|s| format!("S_{}", s.short_name))
-                                .unwrap_or_else(|| id.to_string());
+                            let value = state
+                                .as_ref()
+                                .map_or_else(|| id.to_string(), |s| format!("S_{}", s.short_name));
                             Some(PreConditionStateRef {
                                 value,
                                 in_param_if_short_name: String::new(),
@@ -352,14 +350,9 @@ fn map_diag_service(
                         .iter()
                         .filter_map(|r| {
                             let id = r.id_ref.as_deref()?;
-                            let state_transition = index
-                                .state_transitions
-                                .get(id)
-                                .map(|st| StateTransition {
-                                    short_name: st
-                                        .short_name
-                                        .clone()
-                                        .unwrap_or_default(),
+                            let state_transition =
+                                index.state_transitions.get(id).map(|st| StateTransition {
+                                    short_name: st.short_name.clone().unwrap_or_default(),
                                     source_short_name_ref: st
                                         .source_snref
                                         .as_ref()
@@ -372,9 +365,10 @@ fn map_diag_service(
                                         .unwrap_or_default(),
                                 });
                             // Normalize value to canonical form so ODX roundtrip is stable
-                            let value = state_transition.as_ref()
-                                .map(|st| format!("ST_{}", st.short_name))
-                                .unwrap_or_else(|| id.to_string());
+                            let value = state_transition.as_ref().map_or_else(
+                                || id.to_string(),
+                                |st| format!("ST_{}", st.short_name),
+                            );
                             Some(StateTransitionRef {
                                 value,
                                 state_transition,
@@ -462,7 +456,13 @@ fn map_request(req: &odx_model::OdxRequest, index: &OdxIndex, lenient: bool) -> 
         params: req
             .params
             .as_ref()
-            .map(|w| w.items.iter().enumerate().map(|(i, p)| map_param(p, i as u32, index, lenient)).collect())
+            .map(|w| {
+                w.items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| map_param(p, i as u32, index, lenient))
+                    .collect()
+            })
             .unwrap_or_default(),
         sdgs: map_sdgs_opt(&req.sdgs),
     }
@@ -479,7 +479,13 @@ fn map_response(
         params: resp
             .params
             .as_ref()
-            .map(|w| w.items.iter().enumerate().map(|(i, p)| map_param(p, i as u32, index, lenient)).collect())
+            .map(|w| {
+                w.items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| map_param(p, i as u32, index, lenient))
+                    .collect()
+            })
             .unwrap_or_default(),
         sdgs: map_sdgs_opt(&resp.sdgs),
     }
@@ -498,8 +504,7 @@ fn map_param(p: &odx_model::OdxParam, id: u32, index: &OdxIndex, lenient: bool) 
                 diag_coded_type: p
                     .diag_coded_type
                     .as_ref()
-                    .map(map_diag_coded_type)
-                    .unwrap_or_else(default_diag_coded_type),
+                    .map_or_else(default_diag_coded_type, map_diag_coded_type),
             }),
         ),
         "NRC-CONST" => (
@@ -513,8 +518,7 @@ fn map_param(p: &odx_model::OdxParam, id: u32, index: &OdxIndex, lenient: bool) 
                 diag_coded_type: p
                     .diag_coded_type
                     .as_ref()
-                    .map(map_diag_coded_type)
-                    .unwrap_or_else(default_diag_coded_type),
+                    .map_or_else(default_diag_coded_type, map_diag_coded_type),
             }),
         ),
         "VALUE" => {
@@ -564,9 +568,7 @@ fn map_param(p: &odx_model::OdxParam, id: u32, index: &OdxIndex, lenient: bool) 
             let dop = resolve_dop(p, index, lenient);
             (
                 ParamType::LengthKey,
-                Some(ParamData::LengthKeyRef {
-                    dop: Box::new(dop),
-                }),
+                Some(ParamData::LengthKeyRef { dop: Box::new(dop) }),
             )
         }
         "DYNAMIC" => (ParamType::Dynamic, Some(ParamData::Dynamic)),
@@ -772,9 +774,7 @@ fn map_compu_method(cm: &odx_model::OdxCompuMethod) -> CompuMethod {
     }
 }
 
-fn map_compu_internal_to_phys(
-    citp: &odx_model::OdxCompuInternalToPhys,
-) -> CompuInternalToPhys {
+fn map_compu_internal_to_phys(citp: &odx_model::OdxCompuInternalToPhys) -> CompuInternalToPhys {
     CompuInternalToPhys {
         compu_scales: citp
             .compu_scales
@@ -782,13 +782,14 @@ fn map_compu_internal_to_phys(
             .map(|w| w.items.iter().map(map_compu_scale).collect())
             .unwrap_or_default(),
         prog_code: citp.prog_code.as_ref().map(map_prog_code),
-        compu_default_value: citp.compu_default_value.as_ref().map(map_compu_default_value),
+        compu_default_value: citp
+            .compu_default_value
+            .as_ref()
+            .map(map_compu_default_value),
     }
 }
 
-fn map_compu_phys_to_internal(
-    cpti: &odx_model::OdxCompuPhysToInternal,
-) -> CompuPhysToInternal {
+fn map_compu_phys_to_internal(cpti: &odx_model::OdxCompuPhysToInternal) -> CompuPhysToInternal {
     CompuPhysToInternal {
         compu_scales: cpti
             .compu_scales
@@ -796,7 +797,10 @@ fn map_compu_phys_to_internal(
             .map(|w| w.items.iter().map(map_compu_scale).collect())
             .unwrap_or_default(),
         prog_code: cpti.prog_code.as_ref().map(map_prog_code),
-        compu_default_value: cpti.compu_default_value.as_ref().map(map_compu_default_value),
+        compu_default_value: cpti
+            .compu_default_value
+            .as_ref()
+            .map(map_compu_default_value),
     }
 }
 
@@ -1088,9 +1092,10 @@ fn map_comparam_refs(layer: &odx_model::DiagLayerVariant) -> Vec<ComParamRef> {
 }
 
 fn map_comparam_ref(cr: &odx_model::OdxComparamRef) -> ComParamRef {
-    let simple_value = cr.simple_value.as_ref().map(|v| SimpleValue {
-        value: v.clone(),
-    });
+    let simple_value = cr
+        .simple_value
+        .as_ref()
+        .map(|v| SimpleValue { value: v.clone() });
     let complex_value = cr.complex_value.as_ref().map(|cv| ComplexValue {
         entries: cv
             .simple_values
@@ -1177,10 +1182,7 @@ fn extract_variant_patterns(layer: &odx_model::DiagLayerVariant) -> Vec<VariantP
         .unwrap_or_default()
 }
 
-fn extract_parent_refs(
-    layer: &odx_model::DiagLayerVariant,
-    _index: &OdxIndex,
-) -> Vec<ParentRef> {
+fn extract_parent_refs(layer: &odx_model::DiagLayerVariant, _index: &OdxIndex) -> Vec<ParentRef> {
     layer
         .parent_refs
         .as_ref()

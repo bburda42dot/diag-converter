@@ -1,4 +1,4 @@
-use mdd_format::reader::{read_mdd_bytes, MddReadError, FILE_MAGIC};
+use mdd_format::reader::{FILE_MAGIC, MddReadError, read_mdd_bytes};
 
 #[test]
 fn test_invalid_magic_header() {
@@ -23,7 +23,7 @@ fn test_too_short() {
 #[test]
 fn test_uncompressed_data_without_algorithm_field() {
     use mdd_format::compression::Compression;
-    use mdd_format::writer::{write_mdd_bytes, WriteOptions};
+    use mdd_format::writer::{WriteOptions, write_mdd_bytes};
 
     let fake_fbs = b"uncompressed fbs data for testing the reader path";
     let options = WriteOptions {
@@ -44,11 +44,13 @@ fn test_no_algorithm_with_garbage_data_returns_error() {
     use prost::Message;
 
     // Build a valid MDD container with garbage data and NO compression_algorithm.
-    let mut mdd_file = mdd_format::fileformat::MddFile::default();
-    mdd_file.ecu_name = "BAD".into();
+    let mut mdd_file = mdd_format::fileformat::MddFile {
+        ecu_name: "BAD".into(),
+        ..Default::default()
+    };
     let chunk = mdd_format::fileformat::Chunk {
-        r#type: 0, // DIAGNOSTIC_DESCRIPTION
-        data: Some(vec![0xFF; 3]), // too short for valid FlatBuffers (< 4 bytes)
+        r#type: 0,                   // DIAGNOSTIC_DESCRIPTION
+        data: Some(vec![0xFF; 3]),   // too short for valid FlatBuffers (< 4 bytes)
         compression_algorithm: None, // hits the _ => branch
         ..Default::default()
     };
@@ -58,5 +60,8 @@ fn test_no_algorithm_with_garbage_data_returns_error() {
     mdd_file.encode(&mut buf).unwrap();
 
     let result = read_mdd_bytes(&buf);
-    assert!(result.is_err(), "tiny garbage data with no algorithm should error, not silently fallback");
+    assert!(
+        result.is_err(),
+        "tiny garbage data with no algorithm should error, not silently fallback"
+    );
 }

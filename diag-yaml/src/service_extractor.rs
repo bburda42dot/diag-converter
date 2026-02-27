@@ -33,9 +33,10 @@ use crate::yaml_model::{ServiceEntry, YamlServices};
 /// Returns `None` if the service has no request or no SID CodedConst param.
 pub fn extract_sid(svc: &DiagService) -> Option<u8> {
     let request = svc.request.as_ref()?;
-    let sid_param = request.params.iter().find(|p| {
-        p.short_name == "SID" && p.param_type == ParamType::CodedConst
-    })?;
+    let sid_param = request
+        .params
+        .iter()
+        .find(|p| p.short_name == "SID" && p.param_type == ParamType::CodedConst)?;
     match &sid_param.specific_data {
         Some(ParamData::CodedConst { coded_value, .. }) => parse_hex_or_decimal(coded_value),
         _ => None,
@@ -50,9 +51,10 @@ pub fn extract_sid(svc: &DiagService) -> Option<u8> {
 /// "ResetType", or "SessionType".
 pub fn extract_subfunction(svc: &DiagService) -> Option<u8> {
     let request = svc.request.as_ref()?;
-    let sf_param = request.params.iter().find(|p| {
-        p.param_type == ParamType::CodedConst && p.byte_position == Some(1)
-    })?;
+    let sf_param = request
+        .params
+        .iter()
+        .find(|p| p.param_type == ParamType::CodedConst && p.byte_position == Some(1))?;
     match &sf_param.specific_data {
         Some(ParamData::CodedConst { coded_value, .. }) => parse_hex_or_decimal(coded_value),
         _ => None,
@@ -265,7 +267,8 @@ const DEFAULT_COMM_CONTROL_SUBTYPES: &[(&str, u8)] = &[
 /// the `temporal_sync` flag. Otherwise reconstruct explicit subfunctions.
 fn extract_comm_control_entry(services: &[&DiagService]) -> ServiceEntry {
     // Separate TemporalSync from regular comm control services
-    let regular_svcs: Vec<&DiagService> = services.iter()
+    let regular_svcs: Vec<&DiagService> = services
+        .iter()
         .filter(|svc| svc.diag_comm.short_name != "TemporalSync_Control")
         .copied()
         .collect();
@@ -429,12 +432,7 @@ mod tests {
     fn test_extract_tester_present() {
         let services = vec![make_service("TesterPresent", "TESTING", "0x3E")];
         let yaml_svcs = extract_services(&services);
-        assert!(
-            yaml_svcs
-                .tester_present
-                .as_ref()
-                .map_or(false, |e| e.enabled)
-        );
+        assert!(yaml_svcs.tester_present.as_ref().is_some_and(|e| e.enabled));
     }
 
     #[test]
@@ -446,7 +444,10 @@ mod tests {
         let yaml_svcs = extract_services(&services);
         let entry = yaml_svcs.diagnostic_session_control.as_ref().unwrap();
         assert!(entry.enabled);
-        let subfuncs = entry.subfunctions.as_ref().expect("subfunctions should be present");
+        let subfuncs = entry
+            .subfunctions
+            .as_ref()
+            .expect("subfunctions should be present");
         let mapping = subfuncs.as_mapping().unwrap();
         assert_eq!(mapping.len(), 2);
         assert_eq!(
@@ -471,8 +472,8 @@ mod tests {
         let subfuncs = entry.subfunctions.as_ref().unwrap();
         let map = subfuncs.as_mapping().unwrap();
         assert_eq!(map.len(), 2);
-        assert!(map.contains_key(&serde_yaml::Value::String("HardReset".to_string())));
-        assert!(map.contains_key(&serde_yaml::Value::String("SoftReset".to_string())));
+        assert!(map.contains_key(serde_yaml::Value::String("HardReset".to_string())));
+        assert!(map.contains_key(serde_yaml::Value::String("SoftReset".to_string())));
     }
 
     #[test]
@@ -489,12 +490,7 @@ mod tests {
             make_service("TesterPresent", "TESTING", "0x3E"),
         ];
         let yaml_svcs = extract_services(&services);
-        assert!(
-            yaml_svcs
-                .tester_present
-                .as_ref()
-                .map_or(false, |e| e.enabled)
-        );
+        assert!(yaml_svcs.tester_present.as_ref().is_some_and(|e| e.enabled));
         assert!(yaml_svcs.read_data_by_identifier.is_none());
     }
 
@@ -597,11 +593,13 @@ mod tests {
 
     #[test]
     fn test_has_any_service_with_tester_present() {
-        let mut svcs = YamlServices::default();
-        svcs.tester_present = Some(ServiceEntry {
-            enabled: true,
+        let svcs = YamlServices {
+            tester_present: Some(ServiceEntry {
+                enabled: true,
+                ..Default::default()
+            }),
             ..Default::default()
-        });
+        };
         assert!(has_any_service(&svcs));
     }
 
@@ -613,7 +611,7 @@ mod tests {
             yaml_svcs
                 .diagnostic_session_control
                 .as_ref()
-                .map_or(false, |e| e.enabled),
+                .is_some_and(|e| e.enabled),
             "Should detect DiagnosticSessionControl by SID 0x10 even without semantic"
         );
     }
@@ -626,7 +624,7 @@ mod tests {
             yaml_svcs
                 .communication_control
                 .as_ref()
-                .map_or(false, |e| e.enabled),
+                .is_some_and(|e| e.enabled),
             "Should detect CommunicationControl by SID 0x28"
         );
     }
@@ -677,16 +675,11 @@ mod tests {
         };
         let yaml_svcs = extract_services(&[svc]);
         assert!(
-            yaml_svcs.ecu_reset.as_ref().map_or(false, |e| e.enabled),
+            yaml_svcs.ecu_reset.as_ref().is_some_and(|e| e.enabled),
             "Should detect ECUReset by SID 0x11"
         );
         assert!(
-            yaml_svcs
-                .ecu_reset
-                .as_ref()
-                .unwrap()
-                .subfunctions
-                .is_some(),
+            yaml_svcs.ecu_reset.as_ref().unwrap().subfunctions.is_some(),
             "Should extract subfunction by byte position even with non-standard param name"
         );
     }

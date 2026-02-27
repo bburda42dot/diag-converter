@@ -1185,6 +1185,7 @@ dependencies = [
  "flatbuffers",
  "flate2",
  "log",
+ "mdd-format",
  "pretty_assertions",
  "prost",
  "prost-build",

@@ -4,14 +4,12 @@ This document is the complete reference for writing YAML/JSON documents that val
 
 ## Quick Links
 
-| Resource                                   | Description              |
-| ------------------------------------------ | ------------------------ |
-| [README.md](README.md)                     | Overview and quick start |
-| [schema.json](schema.json)                 | Normative JSON Schema    |
-| [minimal-ecu.yml](minimal-ecu.yml)         | Minimal example          |
-| [example-ecm.yml](example-ecm.yml)         | Full example             |
-| [ODX_YAML_MAPPING.md](ODX_YAML_MAPPING.md) | ODX → YAML mapping       |
-| [validate.py](validate.py)                 | Validation tool          |
+| Resource                                                           | Description              |
+| ------------------------------------------------------------------ | ------------------------ |
+| [schema.json](schema.json)                                         | Normative JSON Schema    |
+| [minimal-ecu.yml](../../test-fixtures/yaml/minimal-ecu.yml)        | Minimal example          |
+| [example-ecm.yml](../../test-fixtures/yaml/example-ecm.yml)        | Full example             |
+| [ODX_YAML_MAPPING.md](ODX_YAML_MAPPING.md)                         | ODX → YAML mapping       |
 
 ---
 
@@ -47,7 +45,7 @@ Common references:
 - **Variant name**: keys under `variants.definitions` (e.g. `bootloader`, `application_v1`)
 - **Expected ident name**: keys under `identification.expected_idents` (e.g. `bootloader_ident`)
 
-The [validate.py](validate.py) tool performs semantic validation of these cross-references.
+The `diag-yaml` semantic validator performs semantic validation of these cross-references.
 
 ---
 

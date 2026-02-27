@@ -1,6 +1,6 @@
 use mdd_format::compression::Compression;
-use mdd_format::reader::{read_mdd_bytes, FILE_MAGIC};
-use mdd_format::writer::{write_mdd_bytes, ExtraChunk, ExtraChunkType, WriteOptions};
+use mdd_format::reader::{FILE_MAGIC, read_mdd_bytes};
+use mdd_format::writer::{ExtraChunk, ExtraChunkType, WriteOptions, write_mdd_bytes};
 use prost::Message;
 use sha2::{Digest, Sha512};
 
@@ -95,9 +95,12 @@ fn test_extra_chunks_included_in_output() {
     assert_eq!(recovered_fbs, fake_fbs_data);
 
     // Decode raw protobuf to verify all 3 chunks exist
-    let mdd_file =
-        mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
-    assert_eq!(mdd_file.chunks.len(), 3, "should have desc + 2 extra chunks");
+    let mdd_file = mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
+    assert_eq!(
+        mdd_file.chunks.len(),
+        3,
+        "should have desc + 2 extra chunks"
+    );
 
     let jar_chunk = &mdd_file.chunks[1];
     assert_eq!(jar_chunk.r#type, 1); // JAR_FILE
@@ -125,9 +128,12 @@ fn test_no_extra_chunks_by_default() {
     };
 
     let mdd_bytes = write_mdd_bytes(fake_fbs_data, &options).unwrap();
-    let mdd_file =
-        mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
-    assert_eq!(mdd_file.chunks.len(), 1, "only diagnostic description chunk");
+    let mdd_file = mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
+    assert_eq!(
+        mdd_file.chunks.len(),
+        1,
+        "only diagnostic description chunk"
+    );
 }
 
 #[test]
@@ -139,8 +145,7 @@ fn test_sha512_signature_present() {
     };
 
     let mdd_bytes = write_mdd_bytes(fake_fbs_data, &options).unwrap();
-    let mdd_file =
-        mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
+    let mdd_file = mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
 
     let desc_chunk = &mdd_file.chunks[0];
     assert_eq!(desc_chunk.signatures.len(), 1, "should have one signature");
@@ -169,8 +174,7 @@ fn test_sha512_signature_with_compression() {
     assert_eq!(recovered, fake_fbs_data);
 
     // Verify signature is of the uncompressed data
-    let mdd_file =
-        mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
+    let mdd_file = mdd_format::fileformat::MddFile::decode(&mdd_bytes[FILE_MAGIC.len()..]).unwrap();
     let sig = &mdd_file.chunks[0].signatures[0];
     let expected_hash = Sha512::digest(fake_fbs_data);
     assert_eq!(sig.signature, expected_hash.as_slice());

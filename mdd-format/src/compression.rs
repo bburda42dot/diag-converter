@@ -90,10 +90,8 @@ pub fn decompress_bounded(
             const LZMA_MEMLIMIT: u64 = 256 * 1024 * 1024;
             let decompressor = xz2::stream::Stream::new_lzma_decoder(LZMA_MEMLIMIT)
                 .map_err(|e| CompressionError::DecompressFailed(e.to_string()))?;
-            let decoder = xz2::bufread::XzDecoder::new_stream(
-                std::io::BufReader::new(data),
-                decompressor,
-            );
+            let decoder =
+                xz2::bufread::XzDecoder::new_stream(std::io::BufReader::new(data), decompressor);
             let mut limited = decoder.take(max_size + 1);
             let mut out = Vec::new();
             limited
@@ -144,16 +142,15 @@ pub fn decompress_bounded(
     }
 }
 
+#[cfg(any(test, feature = "test-utils"))]
 pub fn decompress(data: &[u8], algorithm: &str) -> Result<Vec<u8>, CompressionError> {
     match algorithm {
         "lzma" => {
             // Match CDA's decompression: xz2::stream::Stream::new_lzma_decoder(u64::MAX)
             let decompressor = xz2::stream::Stream::new_lzma_decoder(u64::MAX)
                 .map_err(|e| CompressionError::DecompressFailed(e.to_string()))?;
-            let mut decoder = xz2::bufread::XzDecoder::new_stream(
-                std::io::BufReader::new(data),
-                decompressor,
-            );
+            let mut decoder =
+                xz2::bufread::XzDecoder::new_stream(std::io::BufReader::new(data), decompressor);
             let mut out = Vec::new();
             decoder
                 .read_to_end(&mut out)

@@ -23,7 +23,11 @@ pub fn write_yaml(db: &DiagDatabase) -> Result<String, YamlWriteError> {
 
 /// Transform the canonical IR into a YAML document model.
 fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
-    let base_variant = db.variants.iter().find(|v| v.is_base_variant).or(db.variants.first());
+    let base_variant = db
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .or(db.variants.first());
     let layer = base_variant.map(|v| &v.diag_layer);
 
     // Build meta from metadata map
@@ -53,16 +57,25 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
     // Start with type definitions from IR (authoritative source for roundtrip).
     // For string/bytes types without bit_length, compute length (bytes) from the
     // DOP to preserve the original YAML length field.
-    let mut types_map: BTreeMap<String, YamlType> = db.type_definitions.iter()
-        .map(|td| (td.name.clone(), YamlType {
-            base: td.base.clone(),
-            bit_length: td.bit_length,
-            min_length: td.min_length,
-            max_length: td.max_length,
-            enum_values: td.enum_values_json.as_ref()
-                .and_then(|json| serde_json::from_str::<serde_yaml::Value>(json).ok()),
-            ..Default::default()
-        }))
+    let mut types_map: BTreeMap<String, YamlType> = db
+        .type_definitions
+        .iter()
+        .map(|td| {
+            (
+                td.name.clone(),
+                YamlType {
+                    base: td.base.clone(),
+                    bit_length: td.bit_length,
+                    min_length: td.min_length,
+                    max_length: td.max_length,
+                    enum_values: td
+                        .enum_values_json
+                        .as_ref()
+                        .and_then(|json| serde_json::from_str::<serde_yaml::Value>(json).ok()),
+                    ..Default::default()
+                },
+            )
+        })
         .collect();
 
     if let Some(layer) = layer {
@@ -74,7 +87,11 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
                 routines_map.insert(key, serde_yaml::to_value(&routine).unwrap_or_default());
             } else if svc.diag_comm.short_name.ends_with("_Read") {
                 let did_id = extract_did_id(svc);
-                let did_name = svc.diag_comm.short_name.strip_suffix("_Read").unwrap_or(&svc.diag_comm.short_name);
+                let did_name = svc
+                    .diag_comm
+                    .short_name
+                    .strip_suffix("_Read")
+                    .unwrap_or(&svc.diag_comm.short_name);
 
                 // Extract type info from DOP if available
                 let (did_type_val, type_name) = extract_did_type(svc, did_name);
@@ -90,7 +107,11 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
                     name: did_name.to_string(),
                     description: svc.diag_comm.long_name.as_ref().map(|ln| ln.value.clone()),
                     did_type: did_type_val,
-                    access: if access_name.is_empty() { "public".into() } else { access_name },
+                    access: if access_name.is_empty() {
+                        "public".into()
+                    } else {
+                        access_name
+                    },
                     readable: Some(true),
                     writable: None, // Check if there's a matching write service
                     snapshot: snap,
@@ -120,9 +141,7 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
     }
 
     // Convert SDGs
-    let sdgs = layer
-        .and_then(|l| l.sdgs.as_ref())
-        .map(|s| ir_sdgs_to_yaml(s));
+    let sdgs = layer.and_then(|l| l.sdgs.as_ref()).map(ir_sdgs_to_yaml);
 
     // Convert DTCs
     let dtcs = if !db.dtcs.is_empty() {
@@ -147,17 +166,23 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
     };
 
     // Convert ECU jobs
-    let ecu_jobs = layer.map(|l| {
-        let mut jobs = BTreeMap::new();
-        for job in &l.single_ecu_jobs {
-            let key = job.diag_comm.short_name.to_lowercase().replace(' ', "_");
-            jobs.insert(key, ir_job_to_yaml(job));
-        }
-        jobs
-    }).filter(|j| !j.is_empty());
+    let ecu_jobs = layer
+        .map(|l| {
+            let mut jobs = BTreeMap::new();
+            for job in &l.single_ecu_jobs {
+                let key = job.diag_comm.short_name.to_lowercase().replace(' ', "_");
+                jobs.insert(key, ir_job_to_yaml(job));
+            }
+            jobs
+        })
+        .filter(|j| !j.is_empty());
 
     YamlDocument {
-        schema: db.metadata.get("schema").cloned().unwrap_or_else(|| "opensovd.cda.diagdesc/v1".into()),
+        schema: db
+            .metadata
+            .get("schema")
+            .cloned()
+            .unwrap_or_else(|| "opensovd.cda.diagdesc/v1".into()),
         meta,
         ecu,
         audience: None,
@@ -170,28 +195,48 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
             enrich_security_levels(&mut levels, &l.diag_services);
             Some(levels)
         }),
-        authentication: layer.and_then(|l| extract_authentication_from_state_charts(&l.state_charts)),
+        authentication: layer
+            .and_then(|l| extract_authentication_from_state_charts(&l.state_charts)),
         identification: base_variant.and_then(|v| extract_identification(&v.diag_layer)),
         variants: extract_variants(db),
         services: layer
             .map(|l| service_extractor::extract_services(&l.diag_services))
-            .filter(|s| service_extractor::has_any_service(s)),
-        access_patterns: base_variant.and_then(|v| extract_access_patterns(v)),
-        types: if types_map.is_empty() { None } else { Some(types_map) },
-        dids: if dids_map.is_empty() { None } else { Some(serde_yaml::Value::Mapping(dids_map)) },
-        routines: if routines_map.is_empty() { None } else { Some(serde_yaml::Value::Mapping(routines_map)) },
+            .filter(service_extractor::has_any_service),
+        access_patterns: base_variant.and_then(extract_access_patterns),
+        types: if types_map.is_empty() {
+            None
+        } else {
+            Some(types_map)
+        },
+        dids: if dids_map.is_empty() {
+            None
+        } else {
+            Some(serde_yaml::Value::Mapping(dids_map))
+        },
+        routines: if routines_map.is_empty() {
+            None
+        } else {
+            Some(serde_yaml::Value::Mapping(routines_map))
+        },
         dtc_config: base_variant.and_then(|v| extract_dtc_config(&v.diag_layer)),
         dtcs,
         annotations: base_variant.and_then(|v| extract_sdg_json(&v.diag_layer, "yaml_annotations")),
         x_oem: base_variant.and_then(|v| extract_sdg_json(&v.diag_layer, "yaml_x_oem")),
         ecu_jobs,
         memory: db.memory.as_ref().map(ir_memory_to_yaml),
-        functional_classes: base_variant.map(|v| {
-            let classes: Vec<String> = v.diag_layer.funct_classes.iter()
+        functional_classes: base_variant.and_then(|v| {
+            let classes: Vec<String> = v
+                .diag_layer
+                .funct_classes
+                .iter()
                 .map(|fc| fc.short_name.clone())
                 .collect();
-            if classes.is_empty() { None } else { Some(classes) }
-        }).flatten(),
+            if classes.is_empty() {
+                None
+            } else {
+                Some(classes)
+            }
+        }),
     }
 }
 
@@ -232,12 +277,26 @@ fn parse_coded_value(s: &str) -> u32 {
 }
 
 /// Extract DID type info from the service's response DOP.
-fn extract_did_type(svc: &DiagService, did_name: &str) -> (serde_yaml::Value, Option<(String, YamlType)>) {
+fn extract_did_type(
+    svc: &DiagService,
+    did_name: &str,
+) -> (serde_yaml::Value, Option<(String, YamlType)>) {
     if let Some(resp) = svc.pos_responses.first() {
         // Find the data Value param (skip SID and DID echo params)
-        if let Some(param) = resp.params.iter().find(|p| p.param_type == ParamType::Value) {
+        if let Some(param) = resp
+            .params
+            .iter()
+            .find(|p| p.param_type == ParamType::Value)
+        {
             if let Some(ParamData::Value { dop, .. }) = &param.specific_data {
-                if let Some(DopData::NormalDop { diag_coded_type, compu_method, unit_ref, internal_constr, .. }) = &dop.specific_data {
+                if let Some(DopData::NormalDop {
+                    diag_coded_type,
+                    compu_method,
+                    unit_ref,
+                    internal_constr,
+                    ..
+                }) = &dop.specific_data
+                {
                     let mut yaml_type = YamlType {
                         base: String::new(),
                         endian: None,
@@ -266,7 +325,10 @@ fn extract_did_type(svc: &DiagService, did_name: &str) -> (serde_yaml::Value, Op
                         yaml_type.base = data_type_to_base(&dct.base_data_type);
                         if !dct.is_high_low_byte_order {
                             yaml_type.endian = Some("little".into());
-                        } else if matches!(dct.base_data_type, DataType::AUint32 | DataType::AFloat32 | DataType::AFloat64) {
+                        } else if matches!(
+                            dct.base_data_type,
+                            DataType::AUint32 | DataType::AFloat32 | DataType::AFloat64
+                        ) {
                             yaml_type.endian = Some("big".into());
                         }
 
@@ -275,7 +337,11 @@ fn extract_did_type(svc: &DiagService, did_name: &str) -> (serde_yaml::Value, Op
                                 yaml_type.bit_length = Some(*bit_length);
                                 yaml_type.base = bit_length_to_base(*bit_length, &yaml_type.base);
                             }
-                            Some(DiagCodedTypeData::MinMax { min_length, max_length, termination }) => {
+                            Some(DiagCodedTypeData::MinMax {
+                                min_length,
+                                max_length,
+                                termination,
+                            }) => {
                                 yaml_type.min_length = Some(*min_length);
                                 yaml_type.max_length = *max_length;
                                 yaml_type.termination = Some(match termination {
@@ -307,14 +373,17 @@ fn extract_did_type(svc: &DiagService, did_name: &str) -> (serde_yaml::Value, Op
                                 if let Some(itp) = &cm.internal_to_phys {
                                     let mut enum_map = serde_yaml::Mapping::new();
                                     for scale in &itp.compu_scales {
-                                        if let (Some(ll), Some(consts)) = (&scale.lower_limit, &scale.consts) {
+                                        if let (Some(ll), Some(consts)) =
+                                            (&scale.lower_limit, &scale.consts)
+                                        {
                                             let key = serde_yaml::Value::String(ll.value.clone());
                                             let val = serde_yaml::Value::String(consts.vt.clone());
                                             enum_map.insert(key, val);
                                         }
                                     }
                                     if !enum_map.is_empty() {
-                                        yaml_type.enum_values = Some(serde_yaml::Value::Mapping(enum_map));
+                                        yaml_type.enum_values =
+                                            Some(serde_yaml::Value::Mapping(enum_map));
                                     }
                                 }
                             }
@@ -405,7 +474,7 @@ fn extract_did_extra(svc: &DiagService) -> (Option<bool>, Option<serde_yaml::Val
     };
     let sd = match entry.sds.iter().find_map(|c| match c {
         SdOrSdg::Sd(sd) => Some(&sd.value),
-        _ => None,
+        SdOrSdg::Sdg(_) => None,
     }) {
         Some(s) => s,
         None => return (None, None),
@@ -414,7 +483,9 @@ fn extract_did_extra(svc: &DiagService) -> (Option<bool>, Option<serde_yaml::Val
         Ok(v) => v,
         Err(_) => return (None, None),
     };
-    let snapshot = json_val.get("snapshot").and_then(|v| v.as_bool());
+    let snapshot = json_val
+        .get("snapshot")
+        .and_then(serde_json::Value::as_bool);
     let io_control = json_val
         .get("io_control")
         .and_then(|v| serde_json::from_value::<serde_yaml::Value>(v.clone()).ok());
@@ -427,7 +498,7 @@ fn extract_sdg_json(layer: &DiagLayer, caption: &str) -> Option<serde_yaml::Valu
     let entry = sdgs.sdgs.iter().find(|e| e.caption_sn == caption)?;
     let sd = entry.sds.iter().find_map(|c| match c {
         SdOrSdg::Sd(sd) => Some(&sd.value),
-        _ => None,
+        SdOrSdg::Sdg(_) => None,
     })?;
     let json_val: serde_json::Value = serde_json::from_str(sd).ok()?;
     serde_json::from_value(json_val).ok()
@@ -458,10 +529,20 @@ fn extract_dtc_records(dtc: &Dtc) -> (Option<Vec<String>>, Option<Vec<String>>) 
     let mut snapshots = None;
     let mut extended_data = None;
     for sdg in &sdgs.sdgs {
-        let names: Vec<String> = sdg.sds.iter().filter_map(|sd| {
-            if let SdOrSdg::Sd(sd) = sd { Some(sd.value.clone()) } else { None }
-        }).collect();
-        if names.is_empty() { continue; }
+        let names: Vec<String> = sdg
+            .sds
+            .iter()
+            .filter_map(|sd| {
+                if let SdOrSdg::Sd(sd) = sd {
+                    Some(sd.value.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if names.is_empty() {
+            continue;
+        }
         match sdg.caption_sn.as_str() {
             "dtc_snapshots" => snapshots = Some(names),
             "dtc_extended_data" => extended_data = Some(names),
@@ -519,7 +600,9 @@ fn extract_access_patterns(variant: &Variant) -> Option<BTreeMap<String, AccessP
         for pcsr in refs {
             match pcsr.value.as_str() {
                 "SessionStates" => session_names.push(pcsr.in_param_path_short_name.clone()),
-                "SecurityAccessStates" => security_names.push(pcsr.in_param_path_short_name.clone()),
+                "SecurityAccessStates" => {
+                    security_names.push(pcsr.in_param_path_short_name.clone());
+                }
                 "AuthenticationStates" => auth_names.push(pcsr.in_param_path_short_name.clone()),
                 _ => {}
             }
@@ -541,15 +624,22 @@ fn extract_access_patterns(variant: &Variant) -> Option<BTreeMap<String, AccessP
             serde_yaml::to_value(&auth_names).unwrap_or_default()
         };
 
-        patterns.insert(name, AccessPattern {
-            sessions,
-            security,
-            authentication,
-            nrc_on_fail: None,
-        });
+        patterns.insert(
+            name,
+            AccessPattern {
+                sessions,
+                security,
+                authentication,
+                nrc_on_fail: None,
+            },
+        );
     }
 
-    if patterns.is_empty() { None } else { Some(patterns) }
+    if patterns.is_empty() {
+        None
+    } else {
+        Some(patterns)
+    }
 }
 
 fn service_to_routine(svc: &DiagService) -> Routine {
@@ -565,7 +655,11 @@ fn service_to_routine(svc: &DiagService) -> Routine {
     Routine {
         name: svc.diag_comm.short_name.clone(),
         description: svc.diag_comm.long_name.as_ref().map(|ln| ln.value.clone()),
-        access: if access_name.is_empty() { "public".into() } else { access_name },
+        access: if access_name.is_empty() {
+            "public".into()
+        } else {
+            access_name
+        },
         operations,
         parameters: None, // Simplified - could reconstruct from params
         audience: None,
@@ -576,7 +670,11 @@ fn service_to_routine(svc: &DiagService) -> Routine {
 /// SDG captions that are extracted into dedicated YAML sections and must not
 /// appear in the generic `sdgs:` output to avoid duplication on roundtrip.
 const DEDICATED_SDG_CAPTIONS: &[&str] = &[
-    "identification", "comparams", "dtc_config", "yaml_annotations", "yaml_x_oem",
+    "identification",
+    "comparams",
+    "dtc_config",
+    "yaml_annotations",
+    "yaml_x_oem",
 ];
 
 /// Convert IR SDGs to YAML SDGs.
@@ -597,25 +695,33 @@ fn ir_sdgs_to_yaml(sdgs: &Sdgs) -> BTreeMap<String, YamlSdg> {
 }
 
 fn ir_sdg_to_yaml(sdg: &Sdg) -> YamlSdg {
-    let values = sdg.sds.iter().map(|sd_or_sdg| match sd_or_sdg {
-        SdOrSdg::Sd(sd) => YamlSdValue {
-            si: sd.si.clone(),
-            ti: if sd.ti.is_empty() { None } else { Some(sd.ti.clone()) },
-            value: Some(sd.value.clone()),
-            caption: None,
-            values: None,
-        },
-        SdOrSdg::Sdg(nested) => {
-            let nested_yaml = ir_sdg_to_yaml(nested);
-            YamlSdValue {
-                si: nested.si.clone(),
-                ti: None,
-                value: None,
-                caption: Some(nested.caption_sn.clone()),
-                values: Some(nested_yaml.values),
+    let values = sdg
+        .sds
+        .iter()
+        .map(|sd_or_sdg| match sd_or_sdg {
+            SdOrSdg::Sd(sd) => YamlSdValue {
+                si: sd.si.clone(),
+                ti: if sd.ti.is_empty() {
+                    None
+                } else {
+                    Some(sd.ti.clone())
+                },
+                value: Some(sd.value.clone()),
+                caption: None,
+                values: None,
+            },
+            SdOrSdg::Sdg(nested) => {
+                let nested_yaml = ir_sdg_to_yaml(nested);
+                YamlSdValue {
+                    si: nested.si.clone(),
+                    ti: None,
+                    value: None,
+                    caption: Some(nested.caption_sn.clone()),
+                    values: Some(nested_yaml.values),
+                }
             }
-        }
-    }).collect();
+        })
+        .collect();
 
     YamlSdg {
         si: sdg.si.clone(),
@@ -630,17 +736,26 @@ fn ir_job_to_yaml(job: &SingleEcuJob) -> EcuJob {
         if params.is_empty() {
             return None;
         }
-        Some(params.iter().map(|p| JobParamDef {
-            name: p.short_name.clone(),
-            description: p.long_name.as_ref().map(|ln| ln.value.clone()),
-            param_type: serde_yaml::Value::Null,
-            semantic: if p.semantic.is_empty() { None } else { Some(p.semantic.clone()) },
-            default_value: if p.physical_default_value.is_empty() {
-                None
-            } else {
-                Some(serde_yaml::Value::String(p.physical_default_value.clone()))
-            },
-        }).collect())
+        Some(
+            params
+                .iter()
+                .map(|p| JobParamDef {
+                    name: p.short_name.clone(),
+                    description: p.long_name.as_ref().map(|ln| ln.value.clone()),
+                    param_type: serde_yaml::Value::Null,
+                    semantic: if p.semantic.is_empty() {
+                        None
+                    } else {
+                        Some(p.semantic.clone())
+                    },
+                    default_value: if p.physical_default_value.is_empty() {
+                        None
+                    } else {
+                        Some(serde_yaml::Value::String(p.physical_default_value.clone()))
+                    },
+                })
+                .collect(),
+        )
     };
 
     EcuJob {
@@ -668,28 +783,39 @@ fn extract_sessions_from_state_charts(
     for state in &sc.states {
         let (id_val, alias) = if let Some(ln) = &state.long_name {
             let id: u64 = ln.value.parse().unwrap_or(0);
-            let alias = if ln.ti.is_empty() { None } else { Some(ln.ti.clone()) };
-            (serde_yaml::Value::Number(serde_yaml::Number::from(id)), alias)
+            let alias = if ln.ti.is_empty() {
+                None
+            } else {
+                Some(ln.ti.clone())
+            };
+            (
+                serde_yaml::Value::Number(serde_yaml::Number::from(id)),
+                alias,
+            )
         } else {
-            (serde_yaml::Value::Number(serde_yaml::Number::from(0u64)), None)
+            (
+                serde_yaml::Value::Number(serde_yaml::Number::from(0u64)),
+                None,
+            )
         };
-        sessions.insert(state.short_name.clone(), Session {
-            id: id_val,
-            alias,
-            requires_unlock: None,
-            timing: None,
-        });
+        sessions.insert(
+            state.short_name.clone(),
+            Session {
+                id: id_val,
+                alias,
+                requires_unlock: None,
+                timing: None,
+            },
+        );
     }
     Some(sessions)
 }
 
 /// Extract state_model from a "SessionStates" state chart (transitions + start state).
-fn extract_state_model_from_state_charts(
-    state_charts: &[StateChart],
-) -> Option<StateModel> {
+fn extract_state_model_from_state_charts(state_charts: &[StateChart]) -> Option<StateModel> {
     let sc = state_charts.iter().find(|sc| sc.semantic == "SESSION")?;
-    let has_start = !sc.start_state_short_name_ref.is_empty()
-        && sc.start_state_short_name_ref != "default";
+    let has_start =
+        !sc.start_state_short_name_ref.is_empty() && sc.start_state_short_name_ref != "default";
     let has_transitions = !sc.state_transitions.is_empty();
     if !has_start && !has_transitions {
         return None;
@@ -708,7 +834,8 @@ fn extract_state_model_from_state_charts(
     let session_transitions = if has_transitions {
         let mut trans_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for t in &sc.state_transitions {
-            trans_map.entry(t.source_short_name_ref.clone())
+            trans_map
+                .entry(t.source_short_name_ref.clone())
                 .or_default()
                 .push(t.target_short_name_ref.clone());
         }
@@ -736,20 +863,25 @@ fn extract_security_from_state_charts(
     }
     let mut levels = BTreeMap::new();
     for state in &sc.states {
-        let level_num = state.long_name.as_ref()
+        let level_num = state
+            .long_name
+            .as_ref()
             .and_then(|ln| ln.value.parse::<u32>().ok())
             .unwrap_or(0);
-        levels.insert(state.short_name.clone(), SecurityLevel {
-            level: level_num,
-            seed_request: serde_yaml::Value::Null,
-            key_send: serde_yaml::Value::Null,
-            seed_size: 0,
-            key_size: 0,
-            algorithm: String::new(),
-            max_attempts: 0,
-            delay_on_fail_ms: 0,
-            allowed_sessions: vec![],
-        });
+        levels.insert(
+            state.short_name.clone(),
+            SecurityLevel {
+                level: level_num,
+                seed_request: serde_yaml::Value::Null,
+                key_send: serde_yaml::Value::Null,
+                seed_size: 0,
+                key_size: 0,
+                algorithm: String::new(),
+                max_attempts: 0,
+                delay_on_fail_ms: 0,
+                allowed_sessions: vec![],
+            },
+        );
     }
     Some(levels)
 }
@@ -759,10 +891,7 @@ fn extract_security_from_state_charts(
 ///
 /// The state chart only stores level names and numbers - not the UDS subfunction
 /// bytes or seed/key sizes. These must be reconstructed from the service params.
-fn enrich_security_levels(
-    levels: &mut BTreeMap<String, SecurityLevel>,
-    services: &[DiagService],
-) {
+fn enrich_security_levels(levels: &mut BTreeMap<String, SecurityLevel>, services: &[DiagService]) {
     for svc in services {
         if svc.diag_comm.semantic != "SECURITY-ACCESS" {
             continue;
@@ -831,16 +960,18 @@ fn extract_value_param_bit_length(params: &[Param], param_name: &str) -> Option<
 }
 
 /// Extract authentication roles from an "AuthenticationStates" state chart (semantic = "AUTHENTICATION").
-fn extract_authentication_from_state_charts(
-    state_charts: &[StateChart],
-) -> Option<Authentication> {
-    let sc = state_charts.iter().find(|sc| sc.semantic == "AUTHENTICATION")?;
+fn extract_authentication_from_state_charts(state_charts: &[StateChart]) -> Option<Authentication> {
+    let sc = state_charts
+        .iter()
+        .find(|sc| sc.semantic == "AUTHENTICATION")?;
     if sc.states.is_empty() {
         return None;
     }
     let mut roles = BTreeMap::new();
     for state in &sc.states {
-        let id = state.long_name.as_ref()
+        let id = state
+            .long_name
+            .as_ref()
             .and_then(|ln| ln.value.parse::<u64>().ok())
             .unwrap_or(0);
         let mut role_map = serde_yaml::Mapping::new();
@@ -848,7 +979,10 @@ fn extract_authentication_from_state_charts(
             serde_yaml::Value::String("id".into()),
             serde_yaml::Value::Number(serde_yaml::Number::from(id)),
         );
-        roles.insert(state.short_name.clone(), serde_yaml::Value::Mapping(role_map));
+        roles.insert(
+            state.short_name.clone(),
+            serde_yaml::Value::Mapping(role_map),
+        );
     }
     Some(Authentication {
         anti_brute_force: None,
@@ -858,9 +992,7 @@ fn extract_authentication_from_state_charts(
 
 /// Extract variant definitions from non-base IR variants.
 fn extract_variants(db: &DiagDatabase) -> Option<Variants> {
-    let non_base: Vec<_> = db.variants.iter()
-        .filter(|v| !v.is_base_variant)
-        .collect();
+    let non_base: Vec<_> = db.variants.iter().filter(|v| !v.is_base_variant).collect();
     if non_base.is_empty() {
         return None;
     }
@@ -872,7 +1004,9 @@ fn extract_variants(db: &DiagDatabase) -> Option<Variants> {
         let name = variant.diag_layer.short_name.clone();
         detection_order.push(name.clone());
 
-        let detect = variant.variant_patterns.first()
+        let detect = variant
+            .variant_patterns
+            .first()
             .and_then(|vp| vp.matching_parameters.first())
             .map(|mp| {
                 let mut rpm = serde_yaml::Mapping::new();
@@ -898,14 +1032,12 @@ fn extract_variants(db: &DiagDatabase) -> Option<Variants> {
 
         // Extract variant-specific services (e.g., security access on Boot_Variant)
         let variant_overrides = if !variant.diag_layer.diag_services.is_empty() {
-            let yaml_services = service_extractor::extract_services(&variant.diag_layer.diag_services);
+            let yaml_services =
+                service_extractor::extract_services(&variant.diag_layer.diag_services);
             if service_extractor::has_any_service(&yaml_services) {
                 let services_val = serde_yaml::to_value(&yaml_services).unwrap_or_default();
                 let mut overrides_map = serde_yaml::Mapping::new();
-                overrides_map.insert(
-                    serde_yaml::Value::String("services".into()),
-                    services_val,
-                );
+                overrides_map.insert(serde_yaml::Value::String("services".into()), services_val);
                 Some(serde_yaml::Value::Mapping(overrides_map))
             } else {
                 None
@@ -914,19 +1046,30 @@ fn extract_variants(db: &DiagDatabase) -> Option<Variants> {
             None
         };
 
-        definitions.insert(name, VariantDef {
-            description: variant.diag_layer.long_name.as_ref().map(|ln| ln.value.clone()),
-            detect,
-            inheritance: None,
-            overrides: variant_overrides,
-            annotations: None,
-        });
+        definitions.insert(
+            name,
+            VariantDef {
+                description: variant
+                    .diag_layer
+                    .long_name
+                    .as_ref()
+                    .map(|ln| ln.value.clone()),
+                detect,
+                inheritance: None,
+                overrides: variant_overrides,
+                annotations: None,
+            },
+        );
     }
 
     Some(Variants {
         detection_order,
         fallback: non_base.last().map(|v| v.diag_layer.short_name.clone()),
-        definitions: if definitions.is_empty() { None } else { Some(definitions) },
+        definitions: if definitions.is_empty() {
+            None
+        } else {
+            Some(definitions)
+        },
     })
 }
 
@@ -948,59 +1091,87 @@ fn ir_memory_to_yaml(mc: &MemoryConfig) -> YamlMemoryConfig {
         length_bytes: mc.default_address_format.length_bytes,
     });
 
-    let regions: BTreeMap<String, YamlMemoryRegion> = mc.regions.iter().map(|r| {
-        let session = r.session.as_ref().map(|sessions| {
-            if sessions.len() == 1 {
-                serde_yaml::Value::String(sessions[0].clone())
-            } else {
-                serde_yaml::Value::Sequence(sessions.iter().map(|s| serde_yaml::Value::String(s.clone())).collect())
-            }
-        });
-        (r.name.clone(), YamlMemoryRegion {
-            name: r.name.clone(),
-            description: r.description.clone(),
-            start: r.start_address,
-            end: r.start_address + r.size,
-            access: match r.access {
-                MemoryAccess::Read => "read".into(),
-                MemoryAccess::Write => "write".into(),
-                MemoryAccess::ReadWrite => "read_write".into(),
-                MemoryAccess::Execute => "execute".into(),
-            },
-            address_format: r.address_format.map(|af| YamlAddressFormat {
-                address_bytes: af.address_bytes, length_bytes: af.length_bytes,
-            }),
-            security_level: r.security_level.clone(),
-            session,
+    let regions: BTreeMap<String, YamlMemoryRegion> = mc
+        .regions
+        .iter()
+        .map(|r| {
+            let session = r.session.as_ref().map(|sessions| {
+                if sessions.len() == 1 {
+                    serde_yaml::Value::String(sessions[0].clone())
+                } else {
+                    serde_yaml::Value::Sequence(
+                        sessions
+                            .iter()
+                            .map(|s| serde_yaml::Value::String(s.clone()))
+                            .collect(),
+                    )
+                }
+            });
+            (
+                r.name.clone(),
+                YamlMemoryRegion {
+                    name: r.name.clone(),
+                    description: r.description.clone(),
+                    start: r.start_address,
+                    end: r.start_address + r.size,
+                    access: match r.access {
+                        MemoryAccess::Read => "read".into(),
+                        MemoryAccess::Write => "write".into(),
+                        MemoryAccess::ReadWrite => "read_write".into(),
+                        MemoryAccess::Execute => "execute".into(),
+                    },
+                    address_format: r.address_format.map(|af| YamlAddressFormat {
+                        address_bytes: af.address_bytes,
+                        length_bytes: af.length_bytes,
+                    }),
+                    security_level: r.security_level.clone(),
+                    session,
+                },
+            )
         })
-    }).collect();
+        .collect();
 
-    let data_blocks: BTreeMap<String, YamlDataBlock> = mc.data_blocks.iter().map(|b| {
-        (b.name.clone(), YamlDataBlock {
-            name: b.name.clone(),
-            description: b.description.clone(),
-            block_type: match b.block_type {
-                DataBlockType::Download => "download".into(),
-                DataBlockType::Upload => "upload".into(),
-            },
-            memory_address: b.memory_address,
-            memory_size: b.memory_size,
-            format: match b.format {
-                DataBlockFormat::Raw => "raw".into(),
-                DataBlockFormat::Encrypted => "encrypted".into(),
-                DataBlockFormat::Compressed => "compressed".into(),
-                DataBlockFormat::EncryptedCompressed => "encrypted_compressed".into(),
-            },
-            max_block_length: b.max_block_length,
-            security_level: b.security_level.clone(),
-            session: b.session.clone(),
-            checksum_type: b.checksum_type.clone(),
+    let data_blocks: BTreeMap<String, YamlDataBlock> = mc
+        .data_blocks
+        .iter()
+        .map(|b| {
+            (
+                b.name.clone(),
+                YamlDataBlock {
+                    name: b.name.clone(),
+                    description: b.description.clone(),
+                    block_type: match b.block_type {
+                        DataBlockType::Download => "download".into(),
+                        DataBlockType::Upload => "upload".into(),
+                    },
+                    memory_address: b.memory_address,
+                    memory_size: b.memory_size,
+                    format: match b.format {
+                        DataBlockFormat::Raw => "raw".into(),
+                        DataBlockFormat::Encrypted => "encrypted".into(),
+                        DataBlockFormat::Compressed => "compressed".into(),
+                        DataBlockFormat::EncryptedCompressed => "encrypted_compressed".into(),
+                    },
+                    max_block_length: b.max_block_length,
+                    security_level: b.security_level.clone(),
+                    session: b.session.clone(),
+                    checksum_type: b.checksum_type.clone(),
+                },
+            )
         })
-    }).collect();
+        .collect();
 
     YamlMemoryConfig {
         default_address_format,
-        regions: if regions.is_empty() { None } else { Some(regions) },
-        data_blocks: if data_blocks.is_empty() { None } else { Some(data_blocks) },
+        regions: if regions.is_empty() {
+            None
+        } else {
+            Some(regions)
+        },
+        data_blocks: if data_blocks.is_empty() {
+            None
+        } else {
+            Some(data_blocks)
+        },
     }
 }

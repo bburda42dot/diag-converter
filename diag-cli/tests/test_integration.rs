@@ -1,8 +1,8 @@
-use diag_ir::{flatbuffers_to_ir, ir_to_flatbuffers, validate_database, DiagDatabase};
+use diag_ir::{DiagDatabase, flatbuffers_to_ir, ir_to_flatbuffers, validate_database};
 use diag_odx::{parse_odx, write_odx};
 use diag_yaml::{parse_yaml, write_yaml};
 use mdd_format::reader::read_mdd_bytes;
-use mdd_format::writer::{write_mdd_bytes, WriteOptions};
+use mdd_format::writer::{WriteOptions, write_mdd_bytes};
 
 fn yaml_fixture() -> &'static str {
     include_str!("../../test-fixtures/yaml/example-ecm.yml")
@@ -176,8 +176,12 @@ fn test_mdd_all_compressions() {
     let db = parse_yaml(yaml_fixture()).unwrap();
     let fbs = ir_to_flatbuffers(&db);
 
-    for compression in [Compression::None, Compression::Lzma, Compression::Gzip, Compression::Zstd]
-    {
+    for compression in [
+        Compression::None,
+        Compression::Lzma,
+        Compression::Gzip,
+        Compression::Zstd,
+    ] {
         let opts = WriteOptions {
             compression,
             ..Default::default()
@@ -216,11 +220,17 @@ memory:
       format: compressed
 "#;
     let db1 = parse_yaml(yaml).unwrap();
-    assert!(db1.memory.is_some(), "precondition: YAML parser should produce MemoryConfig");
+    assert!(
+        db1.memory.is_some(),
+        "precondition: YAML parser should produce MemoryConfig"
+    );
 
     let fbs = ir_to_flatbuffers(&db1);
     let db2 = flatbuffers_to_ir(&fbs).unwrap();
-    assert!(db2.memory.is_some(), "MemoryConfig should survive MDD roundtrip");
+    assert!(
+        db2.memory.is_some(),
+        "MemoryConfig should survive MDD roundtrip"
+    );
 
     let mem = db2.memory.unwrap();
     assert_eq!(mem.regions.len(), 1);
@@ -252,17 +262,32 @@ dids:
     type: VehicleSpeed
 "#;
     let db1 = parse_yaml(yaml).unwrap();
-    assert_eq!(db1.type_definitions.len(), 2, "precondition: parser should produce 2 type defs");
+    assert_eq!(
+        db1.type_definitions.len(),
+        2,
+        "precondition: parser should produce 2 type defs"
+    );
 
     let fbs = ir_to_flatbuffers(&db1);
     let db2 = flatbuffers_to_ir(&fbs).unwrap();
-    assert_eq!(db2.type_definitions.len(), 2,
-        "type definitions count should survive MDD roundtrip");
+    assert_eq!(
+        db2.type_definitions.len(),
+        2,
+        "type definitions count should survive MDD roundtrip"
+    );
 
     for td in &db1.type_definitions {
         let found = db2.type_definitions.iter().find(|t| t.name == td.name);
-        assert!(found.is_some(), "type '{}' should survive MDD roundtrip", td.name);
-        assert_eq!(found.unwrap().base, td.base,
-            "type '{}' base should match", td.name);
+        assert!(
+            found.is_some(),
+            "type '{}' should survive MDD roundtrip",
+            td.name
+        );
+        assert_eq!(
+            found.unwrap().base,
+            td.base,
+            "type '{}' base should match",
+            td.name
+        );
     }
 }

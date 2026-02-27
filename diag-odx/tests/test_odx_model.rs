@@ -98,9 +98,18 @@ fn test_parse_data_object_props() {
         .unwrap()
         .items;
     assert_eq!(scales2.len(), 3);
-    assert_eq!(scales2[0].compu_const.as_ref().unwrap().vt.as_deref(), Some("OFF"));
-    assert_eq!(scales2[1].compu_const.as_ref().unwrap().vt.as_deref(), Some("RUNNING"));
-    assert_eq!(scales2[2].compu_const.as_ref().unwrap().vt.as_deref(), Some("CRANKING"));
+    assert_eq!(
+        scales2[0].compu_const.as_ref().unwrap().vt.as_deref(),
+        Some("OFF")
+    );
+    assert_eq!(
+        scales2[1].compu_const.as_ref().unwrap().vt.as_deref(),
+        Some("RUNNING")
+    );
+    assert_eq!(
+        scales2[2].compu_const.as_ref().unwrap().vt.as_deref(),
+        Some("CRANKING")
+    );
 }
 
 #[test]
@@ -123,7 +132,10 @@ fn test_parse_dtc_dop() {
     assert_eq!(dtcs[0].short_name.as_deref(), Some("P0100"));
     assert_eq!(dtcs[0].trouble_code, Some(256));
     assert_eq!(dtcs[0].display_trouble_code.as_deref(), Some("P0100"));
-    assert_eq!(dtcs[0].text.as_ref().unwrap().ti.as_deref(), Some("Mass Air Flow Circuit Malfunction"));
+    assert_eq!(
+        dtcs[0].text.as_ref().unwrap().ti.as_deref(),
+        Some("Mass Air Flow Circuit Malfunction")
+    );
     assert_eq!(dtcs[0].level, Some(2));
     assert_eq!(dtcs[1].trouble_code, Some(512));
 }
@@ -257,11 +269,21 @@ fn test_parse_state_chart() {
     let transitions = &sc.state_transitions.as_ref().unwrap().items;
     assert_eq!(transitions.len(), 1);
     assert_eq!(
-        transitions[0].source_snref.as_ref().unwrap().short_name.as_deref(),
+        transitions[0]
+            .source_snref
+            .as_ref()
+            .unwrap()
+            .short_name
+            .as_deref(),
         Some("Default")
     );
     assert_eq!(
-        transitions[0].target_snref.as_ref().unwrap().short_name.as_deref(),
+        transitions[0]
+            .target_snref
+            .as_ref()
+            .unwrap()
+            .short_name
+            .as_deref(),
         Some("Extended")
     );
 }

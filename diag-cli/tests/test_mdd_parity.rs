@@ -20,8 +20,9 @@ use diag_ir::*;
 use diag_odx::pdx_reader::read_pdx_from_reader;
 use diag_yaml::parse_yaml;
 use mdd_format::reader::read_mdd_bytes;
-use mdd_format::writer::{write_mdd_bytes, WriteOptions};
+use mdd_format::writer::{WriteOptions, write_mdd_bytes};
 use std::collections::BTreeSet;
+use std::fmt::Write;
 use std::io::Cursor;
 
 // ── Fixtures ──────────────────────────────────────────────────────────
@@ -81,22 +82,37 @@ fn collect_diffs(a: &DiagDatabase, b: &DiagDatabase, label: &str) -> Vec<String>
 
     // For ODX-sourced IR: non-base variants have inherited (flattened) services.
     // Collect base variant service names to filter them out when comparing non-base.
-    let a_base_svc: BTreeSet<&str> = a.variants.iter()
+    let a_base_svc: BTreeSet<&str> = a
+        .variants
+        .iter()
         .find(|v| v.is_base_variant)
-        .map(|v| v.diag_layer.diag_services.iter()
-            .map(|s| s.diag_comm.short_name.as_str()).collect())
+        .map(|v| {
+            v.diag_layer
+                .diag_services
+                .iter()
+                .map(|s| s.diag_comm.short_name.as_str())
+                .collect()
+        })
         .unwrap_or_default();
-    let b_base_svc: BTreeSet<&str> = b.variants.iter()
+    let b_base_svc: BTreeSet<&str> = b
+        .variants
+        .iter()
         .find(|v| v.is_base_variant)
-        .map(|v| v.diag_layer.diag_services.iter()
-            .map(|s| s.diag_comm.short_name.as_str()).collect())
+        .map(|v| {
+            v.diag_layer
+                .diag_services
+                .iter()
+                .map(|s| s.diag_comm.short_name.as_str())
+                .collect()
+        })
         .unwrap_or_default();
 
     for a_v in &a.variants {
         let vname = normalize_name(&a_v.diag_layer.short_name, &ecu_prefix);
-        let b_v = b.variants.iter().find(|bv| {
-            normalize_name(&bv.diag_layer.short_name, &ecu_prefix) == vname
-        });
+        let b_v = b
+            .variants
+            .iter()
+            .find(|bv| normalize_name(&bv.diag_layer.short_name, &ecu_prefix) == vname);
         let Some(b_v) = b_v else { continue };
 
         let prefix = format!("{label}/{vname}");
@@ -104,11 +120,15 @@ fn collect_diffs(a: &DiagDatabase, b: &DiagDatabase, label: &str) -> Vec<String>
         let b_layer = &b_v.diag_layer;
 
         // For non-base variants, filter out inherited services before comparison.
-        let a_svc_names: BTreeSet<&str> = a_layer.diag_services.iter()
+        let a_svc_names: BTreeSet<&str> = a_layer
+            .diag_services
+            .iter()
             .map(|s| s.diag_comm.short_name.as_str())
             .filter(|n| a_v.is_base_variant || !a_base_svc.contains(n))
             .collect();
-        let b_svc_names: BTreeSet<&str> = b_layer.diag_services.iter()
+        let b_svc_names: BTreeSet<&str> = b_layer
+            .diag_services
+            .iter()
             .map(|s| s.diag_comm.short_name.as_str())
             .filter(|n| b_v.is_base_variant || !b_base_svc.contains(n))
             .collect();
@@ -124,22 +144,33 @@ fn collect_diffs(a: &DiagDatabase, b: &DiagDatabase, label: &str) -> Vec<String>
         if a_v.is_base_variant {
             for a_svc in &a_layer.diag_services {
                 let svc_name = &a_svc.diag_comm.short_name;
-                let b_svc = b_layer.diag_services.iter()
+                let b_svc = b_layer
+                    .diag_services
+                    .iter()
                     .find(|s| s.diag_comm.short_name == *svc_name);
                 let Some(b_svc) = b_svc else { continue };
 
                 if let (Some(ar), Some(br)) = (&a_svc.request, &b_svc.request) {
                     if ar.params.len() != br.params.len() {
-                        diffs.push(format!("{prefix}/{svc_name}: request param count {} vs {}",
-                            ar.params.len(), br.params.len()));
+                        diffs.push(format!(
+                            "{prefix}/{svc_name}: request param count {} vs {}",
+                            ar.params.len(),
+                            br.params.len()
+                        ));
                     }
                 }
-                for (i, (ar, br)) in a_svc.pos_responses.iter()
-                    .zip(b_svc.pos_responses.iter()).enumerate()
+                for (i, (ar, br)) in a_svc
+                    .pos_responses
+                    .iter()
+                    .zip(b_svc.pos_responses.iter())
+                    .enumerate()
                 {
                     if ar.params.len() != br.params.len() {
-                        diffs.push(format!("{prefix}/{svc_name}: pos_resp[{i}] param count {} vs {}",
-                            ar.params.len(), br.params.len()));
+                        diffs.push(format!(
+                            "{prefix}/{svc_name}: pos_resp[{i}] param count {} vs {}",
+                            ar.params.len(),
+                            br.params.len()
+                        ));
                     }
                 }
             }
@@ -147,12 +178,18 @@ fn collect_diffs(a: &DiagDatabase, b: &DiagDatabase, label: &str) -> Vec<String>
 
         // Structural counts
         if a_layer.com_param_refs.len() != b_layer.com_param_refs.len() {
-            diffs.push(format!("{prefix}: com_param_refs {} vs {}",
-                a_layer.com_param_refs.len(), b_layer.com_param_refs.len()));
+            diffs.push(format!(
+                "{prefix}: com_param_refs {} vs {}",
+                a_layer.com_param_refs.len(),
+                b_layer.com_param_refs.len()
+            ));
         }
         if a_layer.funct_classes.len() != b_layer.funct_classes.len() {
-            diffs.push(format!("{prefix}: funct_classes {} vs {}",
-                a_layer.funct_classes.len(), b_layer.funct_classes.len()));
+            diffs.push(format!(
+                "{prefix}: funct_classes {} vs {}",
+                a_layer.funct_classes.len(),
+                b_layer.funct_classes.len()
+            ));
         }
     }
 
@@ -167,29 +204,46 @@ fn assert_content_parity(a: &DiagDatabase, b: &DiagDatabase, label: &str) {
     assert_eq!(a.ecu_name, b.ecu_name, "{label}: ECU name mismatch");
 
     // Variant count
-    assert_eq!(a.variants.len(), b.variants.len(),
+    assert_eq!(
+        a.variants.len(),
+        b.variants.len(),
         "{label}: variant count mismatch ({} vs {})",
-        a.variants.len(), b.variants.len());
+        a.variants.len(),
+        b.variants.len()
+    );
 
     // Variant names (normalized, sorted)
-    let mut a_names: Vec<_> = a.variants.iter()
-        .map(|v| normalize_name(&v.diag_layer.short_name, &ecu_prefix).to_string()).collect();
-    let mut b_names: Vec<_> = b.variants.iter()
-        .map(|v| normalize_name(&v.diag_layer.short_name, &ecu_prefix).to_string()).collect();
+    let mut a_names: Vec<_> = a
+        .variants
+        .iter()
+        .map(|v| normalize_name(&v.diag_layer.short_name, &ecu_prefix).to_string())
+        .collect();
+    let mut b_names: Vec<_> = b
+        .variants
+        .iter()
+        .map(|v| normalize_name(&v.diag_layer.short_name, &ecu_prefix).to_string())
+        .collect();
     a_names.sort();
     b_names.sort();
     assert_eq!(a_names, b_names, "{label}: variant names differ");
 
     // DTC count
-    assert_eq!(a.dtcs.len(), b.dtcs.len(),
-        "{label}: DTC count mismatch ({} vs {})", a.dtcs.len(), b.dtcs.len());
+    assert_eq!(
+        a.dtcs.len(),
+        b.dtcs.len(),
+        "{label}: DTC count mismatch ({} vs {})",
+        a.dtcs.len(),
+        b.dtcs.len()
+    );
 
     // State charts
     for a_v in &a.variants {
         let vname = normalize_name(&a_v.diag_layer.short_name, &ecu_prefix);
-        let b_v = b.variants.iter().find(|bv| {
-            normalize_name(&bv.diag_layer.short_name, &ecu_prefix) == vname
-        }).unwrap();
+        let b_v = b
+            .variants
+            .iter()
+            .find(|bv| normalize_name(&bv.diag_layer.short_name, &ecu_prefix) == vname)
+            .unwrap();
         assert_eq!(
             a_v.diag_layer.state_charts.len(),
             b_v.diag_layer.state_charts.len(),
@@ -202,7 +256,7 @@ fn assert_content_parity(a: &DiagDatabase, b: &DiagDatabase, label: &str) {
     if !diffs.is_empty() {
         let mut msg = format!("{label}: {} content difference(s)\n", diffs.len());
         for d in &diffs {
-            msg.push_str(&format!("  {d}\n"));
+            let _ = writeln!(msg, "  {d}");
         }
         panic!("{msg}");
     }
@@ -216,7 +270,8 @@ fn assert_size_parity(a_mdd: &[u8], b_mdd: &[u8], label: &str) -> f64 {
         deviation_pct <= SIZE_TOLERANCE_PERCENT,
         "{label}: MDD byte size deviation {deviation_pct:.1}% exceeds +-{SIZE_TOLERANCE_PERCENT}% \
          ({} bytes vs {} bytes)",
-        a_mdd.len(), b_mdd.len()
+        a_mdd.len(),
+        b_mdd.len()
     );
     deviation_pct
 }
@@ -262,16 +317,21 @@ fn assert_golden_triangle(yaml: &str, ref_mdd: &[u8], pdx: &[u8], name: &str) {
     // YAML -> MDD must be within +-5% of reference (same storage model).
     // ODX -> MDD is larger due to flattened inheritance - log but don't fail.
 
-    let yaml_dev = assert_size_parity(&yaml_mdd, ref_mdd,
-        &format!("{name} [YAML vs REF size]"));
+    let yaml_dev = assert_size_parity(&yaml_mdd, ref_mdd, &format!("{name} [YAML vs REF size]"));
 
     let odx_ratio = odx_mdd.len() as f64 / ref_mdd.len() as f64;
     let odx_dev = (odx_ratio - 1.0).abs() * 100.0;
 
     eprintln!("{name}: GOLDEN TRIANGLE - all three pipelines agree on content");
     eprintln!("  Reference MDD: {} bytes", ref_mdd.len());
-    eprintln!("  YAML -> MDD:   {} bytes ({yaml_dev:+.1}%)", yaml_mdd.len());
-    eprintln!("  ODX  -> MDD:   {} bytes ({odx_dev:+.1}%, larger due to flattened inheritance)", odx_mdd.len());
+    eprintln!(
+        "  YAML -> MDD:   {} bytes ({yaml_dev:+.1}%)",
+        yaml_mdd.len()
+    );
+    eprintln!(
+        "  ODX  -> MDD:   {} bytes ({odx_dev:+.1}%, larger due to flattened inheritance)",
+        odx_mdd.len()
+    );
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 use diag_ir::{flatbuffers_to_ir, ir_to_flatbuffers};
 use diag_yaml::{parse_yaml, write_yaml};
 use mdd_format::reader::read_mdd_bytes;
-use mdd_format::writer::{write_mdd_bytes, WriteOptions};
+use mdd_format::writer::{WriteOptions, write_mdd_bytes};
 
 fn flxc1000_fixture() -> &'static str {
     include_str!("../../test-fixtures/yaml/FLXC1000.yml")
@@ -24,17 +24,31 @@ fn test_flxc1000_structure() {
     let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
     let non_base: Vec<_> = db.variants.iter().filter(|v| !v.is_base_variant).collect();
     assert_eq!(non_base.len(), 2);
-    assert!(non_base.iter().any(|v| v.diag_layer.short_name == "Boot_Variant"));
-    assert!(non_base.iter().any(|v| v.diag_layer.short_name == "App_0101"));
+    assert!(
+        non_base
+            .iter()
+            .any(|v| v.diag_layer.short_name == "Boot_Variant")
+    );
+    assert!(
+        non_base
+            .iter()
+            .any(|v| v.diag_layer.short_name == "App_0101")
+    );
 
     // 4 sessions
-    let session_chart = base.diag_layer.state_charts.iter()
+    let session_chart = base
+        .diag_layer
+        .state_charts
+        .iter()
         .find(|sc| sc.semantic == "SESSION")
         .expect("should have session state chart");
     assert_eq!(session_chart.states.len(), 4);
 
     // 3 security levels
-    let security_chart = base.diag_layer.state_charts.iter()
+    let security_chart = base
+        .diag_layer
+        .state_charts
+        .iter()
         .find(|sc| sc.semantic == "SECURITY")
         .expect("should have security state chart");
     assert_eq!(security_chart.states.len(), 3);
@@ -64,22 +78,34 @@ fn test_flxcng1000_structure() {
     let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
 
     // 4 sessions
-    let session_chart = base.diag_layer.state_charts.iter()
+    let session_chart = base
+        .diag_layer
+        .state_charts
+        .iter()
         .find(|sc| sc.semantic == "SESSION")
         .expect("should have session state chart");
     assert_eq!(session_chart.states.len(), 4);
 
     // 2 security levels
-    let security_chart = base.diag_layer.state_charts.iter()
+    let security_chart = base
+        .diag_layer
+        .state_charts
+        .iter()
         .find(|sc| sc.semantic == "SECURITY")
         .expect("should have security state chart");
     assert_eq!(security_chart.states.len(), 2);
 
     // securityAccess is disabled - verify no SecurityAccess services generated
-    let sec_services: Vec<_> = base.diag_layer.diag_services.iter()
+    let sec_services: Vec<_> = base
+        .diag_layer
+        .diag_services
+        .iter()
         .filter(|s| s.diag_comm.semantic == "SECURITY-ACCESS")
         .collect();
-    assert!(sec_services.is_empty(), "securityAccess disabled, should have no SecurityAccess services");
+    assert!(
+        sec_services.is_empty(),
+        "securityAccess disabled, should have no SecurityAccess services"
+    );
 }
 
 // --- YAML -> IR -> YAML roundtrip ---
@@ -90,7 +116,11 @@ fn assert_roundtrip(yaml: &str, name: &str) {
     let db2 = parse_yaml(&yaml_out).unwrap();
 
     assert_eq!(db.ecu_name, db2.ecu_name, "{name}: ecu_name mismatch");
-    assert_eq!(db.variants.len(), db2.variants.len(), "{name}: variant count mismatch");
+    assert_eq!(
+        db.variants.len(),
+        db2.variants.len(),
+        "{name}: variant count mismatch"
+    );
     assert_eq!(db.dtcs.len(), db2.dtcs.len(), "{name}: DTC count mismatch");
 
     let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
@@ -121,28 +151,57 @@ fn assert_mdd_roundtrip(yaml: &str, name: &str) {
     let (_meta, fbs_back) = read_mdd_bytes(&mdd).unwrap();
     let db2 = flatbuffers_to_ir(&fbs_back).unwrap();
 
-    assert_eq!(db.ecu_name, db2.ecu_name, "{name}: ecu_name mismatch after MDD roundtrip");
-    assert_eq!(db.variants.len(), db2.variants.len(), "{name}: variant count mismatch");
+    assert_eq!(
+        db.ecu_name, db2.ecu_name,
+        "{name}: ecu_name mismatch after MDD roundtrip"
+    );
+    assert_eq!(
+        db.variants.len(),
+        db2.variants.len(),
+        "{name}: variant count mismatch"
+    );
     assert_eq!(db.dtcs.len(), db2.dtcs.len(), "{name}: DTC count mismatch");
 
     // Compare service names (sorted) on base variant
     let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
     let base2 = db2.variants.iter().find(|v| v.is_base_variant).unwrap();
 
-    let mut names1: Vec<_> = base.diag_layer.diag_services.iter()
-        .map(|s| s.diag_comm.short_name.as_str()).collect();
-    let mut names2: Vec<_> = base2.diag_layer.diag_services.iter()
-        .map(|s| s.diag_comm.short_name.as_str()).collect();
-    names1.sort();
-    names2.sort();
-    assert_eq!(names1, names2, "{name}: service names differ after MDD roundtrip");
+    let mut names1: Vec<_> = base
+        .diag_layer
+        .diag_services
+        .iter()
+        .map(|s| s.diag_comm.short_name.as_str())
+        .collect();
+    let mut names2: Vec<_> = base2
+        .diag_layer
+        .diag_services
+        .iter()
+        .map(|s| s.diag_comm.short_name.as_str())
+        .collect();
+    names1.sort_unstable();
+    names2.sort_unstable();
+    assert_eq!(
+        names1, names2,
+        "{name}: service names differ after MDD roundtrip"
+    );
 
     // Compare variant names
-    let mut var_names1: Vec<_> = db.variants.iter().map(|v| v.diag_layer.short_name.as_str()).collect();
-    let mut var_names2: Vec<_> = db2.variants.iter().map(|v| v.diag_layer.short_name.as_str()).collect();
-    var_names1.sort();
-    var_names2.sort();
-    assert_eq!(var_names1, var_names2, "{name}: variant names differ after MDD roundtrip");
+    let mut var_names1: Vec<_> = db
+        .variants
+        .iter()
+        .map(|v| v.diag_layer.short_name.as_str())
+        .collect();
+    let mut var_names2: Vec<_> = db2
+        .variants
+        .iter()
+        .map(|v| v.diag_layer.short_name.as_str())
+        .collect();
+    var_names1.sort_unstable();
+    var_names2.sort_unstable();
+    assert_eq!(
+        var_names1, var_names2,
+        "{name}: variant names differ after MDD roundtrip"
+    );
 }
 
 #[test]

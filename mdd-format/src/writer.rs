@@ -67,10 +67,7 @@ pub fn write_mdd_file(
 }
 
 /// Write raw FlatBuffers data as MDD bytes.
-pub fn write_mdd_bytes(
-    fbs_data: &[u8],
-    options: &WriteOptions,
-) -> Result<Vec<u8>, MddWriteError> {
+pub fn write_mdd_bytes(fbs_data: &[u8], options: &WriteOptions) -> Result<Vec<u8>, MddWriteError> {
     let uncompressed_size = fbs_data.len() as u64;
 
     // Compute SHA-512 of uncompressed data before compression

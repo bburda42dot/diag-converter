@@ -35,7 +35,10 @@ fn test_parse_example_ecm() {
     let write_svc = services
         .iter()
         .find(|s| s.diag_comm.short_name.ends_with("_Write"));
-    assert!(write_svc.is_some(), "should have at least one write service");
+    assert!(
+        write_svc.is_some(),
+        "should have at least one write service"
+    );
 
     // Check routines are converted
     let routine_svc = services
@@ -47,11 +50,11 @@ fn test_parse_example_ecm() {
     );
 
     // Check DTCs
-    assert!(
-        !db.dtcs.is_empty(),
-        "ECM should have DTCs"
-    );
-    let misfire = db.dtcs.iter().find(|d| d.short_name == "RandomMisfireDetected");
+    assert!(!db.dtcs.is_empty(), "ECM should have DTCs");
+    let misfire = db
+        .dtcs
+        .iter()
+        .find(|d| d.short_name == "RandomMisfireDetected");
     assert!(misfire.is_some(), "should have RandomMisfireDetected DTC");
 
     // Check ECU jobs
@@ -66,8 +69,14 @@ fn test_parse_preserves_metadata() {
     let content = include_str!("../../test-fixtures/yaml/example-ecm.yml");
     let db = parse_yaml(content).unwrap();
     assert_eq!(db.revision, "1.1.0");
-    assert_eq!(db.metadata.get("author").map(|s| s.as_str()), Some("CDA Team"));
-    assert_eq!(db.metadata.get("domain").map(|s| s.as_str()), Some("Variant"));
+    assert_eq!(
+        db.metadata.get("author").map(std::string::String::as_str),
+        Some("CDA Team")
+    );
+    assert_eq!(
+        db.metadata.get("domain").map(std::string::String::as_str),
+        Some("Variant")
+    );
 }
 
 #[test]
@@ -144,7 +153,10 @@ ecu:
 "#;
     let db = parse_yaml(yaml).unwrap();
     assert_eq!(db.revision, "rev42");
-    assert_eq!(db.version, "2.0.0", "version should come from meta.version, not meta.revision");
+    assert_eq!(
+        db.version, "2.0.0",
+        "version should come from meta.version, not meta.revision"
+    );
 }
 
 #[test]
@@ -169,12 +181,27 @@ dids:
     type: ascii
 "#;
     let db = parse_yaml(yaml).unwrap();
-    assert_eq!(db.type_definitions.len(), 2, "types section should be stored in IR");
-    let speed = db.type_definitions.iter().find(|t| t.name == "VehicleSpeed").unwrap();
+    assert_eq!(
+        db.type_definitions.len(),
+        2,
+        "types section should be stored in IR"
+    );
+    let speed = db
+        .type_definitions
+        .iter()
+        .find(|t| t.name == "VehicleSpeed")
+        .unwrap();
     assert_eq!(speed.base, "u16");
     assert_eq!(speed.bit_length, Some(16));
-    let engine = db.type_definitions.iter().find(|t| t.name == "EngineState").unwrap();
-    assert!(engine.enum_values_json.is_some(), "enum_values_json should be populated");
+    let engine = db
+        .type_definitions
+        .iter()
+        .find(|t| t.name == "EngineState")
+        .unwrap();
+    assert!(
+        engine.enum_values_json.is_some(),
+        "enum_values_json should be populated"
+    );
     let json_str = engine.enum_values_json.as_ref().unwrap();
     assert!(json_str.contains("OFF"), "should contain OFF");
     assert!(json_str.contains("RUNNING"), "should contain RUNNING");

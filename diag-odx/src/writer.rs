@@ -41,11 +41,8 @@ fn ir_to_odx(db: &DiagDatabase) -> Odx {
         }
     }
 
-    let functional_groups: Vec<DiagLayerVariant> = db
-        .functional_groups
-        .iter()
-        .map(|fg| ir_fg_to_layer(fg))
-        .collect();
+    let functional_groups: Vec<DiagLayerVariant> =
+        db.functional_groups.iter().map(ir_fg_to_layer).collect();
 
     Odx {
         version: if db.version.is_empty() {
@@ -156,11 +153,7 @@ fn ir_fg_to_layer(fg: &FunctionalGroup) -> DiagLayerVariant {
 
     if !fg.parent_refs.is_empty() {
         layer.parent_refs = Some(ParentRefsWrapper {
-            items: fg
-                .parent_refs
-                .iter()
-                .map(ir_parent_ref_to_odx)
-                .collect(),
+            items: fg.parent_refs.iter().map(ir_parent_ref_to_odx).collect(),
         });
     }
 
@@ -284,12 +277,18 @@ fn ir_diag_layer_to_odx_no_dtcs(diag_layer: &DiagLayer) -> DiagLayerVariant {
         None
     } else {
         Some(DiagDataDictionarySpec {
-            data_object_props: opt_wrap(col.data_object_props, |v| DataObjectPropsWrapper { items: v }),
+            data_object_props: opt_wrap(col.data_object_props, |v| DataObjectPropsWrapper {
+                items: v,
+            }),
             dtc_dops: opt_wrap(col.dtc_dops, |v| DtcDopsWrapper { items: v }),
             structures: opt_wrap(col.structures, |v| StructuresWrapper { items: v }),
-            end_of_pdu_fields: opt_wrap(col.end_of_pdu_fields, |v| EndOfPduFieldsWrapper { items: v }),
+            end_of_pdu_fields: opt_wrap(col.end_of_pdu_fields, |v| EndOfPduFieldsWrapper {
+                items: v,
+            }),
             static_fields: opt_wrap(col.static_fields, |v| StaticFieldsWrapper { items: v }),
-            dynamic_length_fields: opt_wrap(col.dynamic_length_fields, |v| DynamicLengthFieldsWrapper { items: v }),
+            dynamic_length_fields: opt_wrap(col.dynamic_length_fields, |v| {
+                DynamicLengthFieldsWrapper { items: v }
+            }),
             muxs: opt_wrap(col.muxs, |v| MuxsWrapper { items: v }),
             env_datas: opt_wrap(col.env_datas, |v| EnvDatasWrapper { items: v }),
             env_data_descs: opt_wrap(col.env_data_descs, |v| EnvDataDescsWrapper { items: v }),
@@ -299,7 +298,9 @@ fn ir_diag_layer_to_odx_no_dtcs(diag_layer: &DiagLayer) -> DiagLayerVariant {
             } else {
                 Some(OdxUnitSpec {
                     units: opt_wrap(col.units, |v| UnitsWrapper { items: v }),
-                    physical_dimensions: opt_wrap(col.physical_dimensions, |v| PhysicalDimensionsWrapper { items: v }),
+                    physical_dimensions: opt_wrap(col.physical_dimensions, |v| {
+                        PhysicalDimensionsWrapper { items: v }
+                    }),
                     unit_groups: None,
                     sdgs: None,
                 })
@@ -333,9 +334,7 @@ fn ir_diag_layer_to_odx_no_dtcs(diag_layer: &DiagLayer) -> DiagLayerVariant {
         diag_comms: if diag_comms.is_empty() {
             None
         } else {
-            Some(DiagCommsWrapper {
-                items: diag_comms,
-            })
+            Some(DiagCommsWrapper { items: diag_comms })
         },
         requests: if requests.is_empty() {
             None
@@ -388,7 +387,11 @@ fn ir_diag_layer_to_odx_no_dtcs(diag_layer: &DiagLayer) -> DiagLayerVariant {
             None
         } else {
             Some(ComparamRefsWrapper {
-                items: diag_layer.com_param_refs.iter().map(ir_comparam_ref_to_odx).collect(),
+                items: diag_layer
+                    .com_param_refs
+                    .iter()
+                    .map(ir_comparam_ref_to_odx)
+                    .collect(),
             })
         },
         ecu_variant_patterns: None,
@@ -405,7 +408,7 @@ fn ir_comparam_ref_to_odx(cr: &ComParamRef) -> OdxComparamRef {
                 .iter()
                 .filter_map(|e| match e {
                     SimpleOrComplexValue::Simple(sv) => Some(sv.value.clone()),
-                    _ => None,
+                    SimpleOrComplexValue::Complex(_) => None,
                 })
                 .collect(),
         }),
@@ -522,9 +525,12 @@ fn ir_diag_service_to_odx(svc: &DiagService, svc_id: &str, idx: usize) -> OdxDia
                     .pre_condition_state_refs
                     .iter()
                     .map(|pcsr| OdxRef {
-                        id_ref: Some(pcsr.state.as_ref()
-                            .map(|s| format!("S_{}", s.short_name))
-                            .unwrap_or_else(|| pcsr.value.clone())),
+                        id_ref: Some(
+                            pcsr.state.as_ref().map_or_else(
+                                || pcsr.value.clone(),
+                                |s| format!("S_{}", s.short_name),
+                            ),
+                        ),
                         docref: None,
                         doctype: None,
                     })
@@ -540,9 +546,10 @@ fn ir_diag_service_to_odx(svc: &DiagService, svc_id: &str, idx: usize) -> OdxDia
                     .state_transition_refs
                     .iter()
                     .map(|str_ref| OdxRef {
-                        id_ref: Some(str_ref.state_transition.as_ref()
-                            .map(|st| format!("ST_{}", st.short_name))
-                            .unwrap_or_else(|| str_ref.value.clone())),
+                        id_ref: Some(str_ref.state_transition.as_ref().map_or_else(
+                            || str_ref.value.clone(),
+                            |st| format!("ST_{}", st.short_name),
+                        )),
                         docref: None,
                         doctype: None,
                     })
@@ -553,11 +560,7 @@ fn ir_diag_service_to_odx(svc: &DiagService, svc_id: &str, idx: usize) -> OdxDia
     }
 }
 
-fn ir_request_to_odx(
-    req: &Request,
-    req_id: &str,
-    dops: &[OdxDataObjectProp],
-) -> OdxRequest {
+fn ir_request_to_odx(req: &Request, req_id: &str, dops: &[OdxDataObjectProp]) -> OdxRequest {
     OdxRequest {
         id: Some(req_id.to_string()),
         short_name: Some(req_id.to_string()),
@@ -568,17 +571,17 @@ fn ir_request_to_odx(
             None
         } else {
             Some(ParamsWrapper {
-                items: req.params.iter().map(|p| ir_param_to_odx(p, dops)).collect(),
+                items: req
+                    .params
+                    .iter()
+                    .map(|p| ir_param_to_odx(p, dops))
+                    .collect(),
             })
         },
     }
 }
 
-fn ir_response_to_odx(
-    resp: &Response,
-    resp_id: &str,
-    dops: &[OdxDataObjectProp],
-) -> OdxResponse {
+fn ir_response_to_odx(resp: &Response, resp_id: &str, dops: &[OdxDataObjectProp]) -> OdxResponse {
     OdxResponse {
         id: Some(resp_id.to_string()),
         short_name: Some(resp_id.to_string()),
@@ -589,7 +592,11 @@ fn ir_response_to_odx(
             None
         } else {
             Some(ParamsWrapper {
-                items: resp.params.iter().map(|p| ir_param_to_odx(p, dops)).collect(),
+                items: resp
+                    .params
+                    .iter()
+                    .map(|p| ir_param_to_odx(p, dops))
+                    .collect(),
             })
         },
     }
@@ -756,14 +763,25 @@ fn collect_dops_from_params(params: &[Param], col: &mut DopCollection) {
             let name = &dop.short_name;
             match &dop.specific_data {
                 Some(DopData::NormalDop { unit_ref, .. }) => {
-                    if !col.data_object_props.iter().any(|d| d.short_name.as_deref() == Some(name.as_str())) {
+                    if !col
+                        .data_object_props
+                        .iter()
+                        .any(|d| d.short_name.as_deref() == Some(name.as_str()))
+                    {
                         col.data_object_props.push(ir_dop_to_odx(dop));
                     }
                     if let Some(unit) = unit_ref {
-                        if !col.units.iter().any(|u| u.short_name.as_deref() == Some(unit.short_name.as_str())) {
+                        if !col
+                            .units
+                            .iter()
+                            .any(|u| u.short_name.as_deref() == Some(unit.short_name.as_str()))
+                        {
                             if let Some(pd) = &unit.physical_dimension {
-                                if !col.physical_dimensions.iter().any(|p| p.short_name.as_deref() == Some(pd.short_name.as_str())) {
-                                    col.physical_dimensions.push(ir_physical_dimension_to_odx(pd));
+                                if !col.physical_dimensions.iter().any(|p| {
+                                    p.short_name.as_deref() == Some(pd.short_name.as_str())
+                                }) {
+                                    col.physical_dimensions
+                                        .push(ir_physical_dimension_to_odx(pd));
                                 }
                             }
                             col.units.push(ir_unit_to_odx(unit));
@@ -771,22 +789,65 @@ fn collect_dops_from_params(params: &[Param], col: &mut DopCollection) {
                     }
                 }
                 None => {
-                    if !col.data_object_props.iter().any(|d| d.short_name.as_deref() == Some(name.as_str())) {
+                    if !col
+                        .data_object_props
+                        .iter()
+                        .any(|d| d.short_name.as_deref() == Some(name.as_str()))
+                    {
                         col.data_object_props.push(ir_dop_to_odx(dop));
                     }
                 }
-                Some(DopData::Structure { params, byte_size, is_visible }) => {
-                    if !col.structures.iter().any(|s| s.short_name.as_deref() == Some(name.as_str())) {
-                        col.structures.push(ir_structure_to_odx(name, params, *byte_size, *is_visible, &col.data_object_props));
+                Some(DopData::Structure {
+                    params,
+                    byte_size,
+                    is_visible,
+                }) => {
+                    if !col
+                        .structures
+                        .iter()
+                        .any(|s| s.short_name.as_deref() == Some(name.as_str()))
+                    {
+                        col.structures.push(ir_structure_to_odx(
+                            name,
+                            params,
+                            *byte_size,
+                            *is_visible,
+                            &col.data_object_props,
+                        ));
                     }
                 }
-                Some(DopData::DtcDop { diag_coded_type, physical_type, compu_method, dtcs, is_visible }) => {
-                    if !col.dtc_dops.iter().any(|d| d.short_name.as_deref() == Some(name.as_str())) {
-                        col.dtc_dops.push(ir_dtc_dop_to_odx(name, diag_coded_type, physical_type, compu_method, dtcs, *is_visible));
+                Some(DopData::DtcDop {
+                    diag_coded_type,
+                    physical_type,
+                    compu_method,
+                    dtcs,
+                    is_visible,
+                }) => {
+                    if !col
+                        .dtc_dops
+                        .iter()
+                        .any(|d| d.short_name.as_deref() == Some(name.as_str()))
+                    {
+                        col.dtc_dops.push(ir_dtc_dop_to_odx(
+                            name,
+                            diag_coded_type,
+                            physical_type,
+                            compu_method,
+                            dtcs,
+                            *is_visible,
+                        ));
                     }
                 }
-                Some(DopData::EndOfPduField { max_number_of_items, min_number_of_items, .. }) => {
-                    if !col.end_of_pdu_fields.iter().any(|f| f.short_name.as_deref() == Some(name.as_str())) {
+                Some(DopData::EndOfPduField {
+                    max_number_of_items,
+                    min_number_of_items,
+                    ..
+                }) => {
+                    if !col
+                        .end_of_pdu_fields
+                        .iter()
+                        .any(|f| f.short_name.as_deref() == Some(name.as_str()))
+                    {
                         col.end_of_pdu_fields.push(OdxEndOfPduField {
                             id: Some(format!("EOPF_{name}")),
                             short_name: Some(name.clone()),
@@ -795,8 +856,16 @@ fn collect_dops_from_params(params: &[Param], col: &mut DopCollection) {
                         });
                     }
                 }
-                Some(DopData::StaticField { fixed_number_of_items, item_byte_size, .. }) => {
-                    if !col.static_fields.iter().any(|f| f.short_name.as_deref() == Some(name.as_str())) {
+                Some(DopData::StaticField {
+                    fixed_number_of_items,
+                    item_byte_size,
+                    ..
+                }) => {
+                    if !col
+                        .static_fields
+                        .iter()
+                        .any(|f| f.short_name.as_deref() == Some(name.as_str()))
+                    {
                         col.static_fields.push(OdxStaticField {
                             id: Some(format!("SF_{name}")),
                             short_name: Some(name.clone()),
@@ -806,7 +875,11 @@ fn collect_dops_from_params(params: &[Param], col: &mut DopCollection) {
                     }
                 }
                 Some(DopData::DynamicLengthField { offset, .. }) => {
-                    if !col.dynamic_length_fields.iter().any(|f| f.short_name.as_deref() == Some(name.as_str())) {
+                    if !col
+                        .dynamic_length_fields
+                        .iter()
+                        .any(|f| f.short_name.as_deref() == Some(name.as_str()))
+                    {
                         col.dynamic_length_fields.push(OdxDynamicLengthField {
                             id: Some(format!("DLF_{name}")),
                             short_name: Some(name.clone()),
@@ -815,7 +888,11 @@ fn collect_dops_from_params(params: &[Param], col: &mut DopCollection) {
                     }
                 }
                 Some(DopData::MuxDop { .. }) => {
-                    if !col.muxs.iter().any(|m| m.short_name.as_deref() == Some(name.as_str())) {
+                    if !col
+                        .muxs
+                        .iter()
+                        .any(|m| m.short_name.as_deref() == Some(name.as_str()))
+                    {
                         col.muxs.push(OdxMux {
                             id: Some(format!("MUX_{name}")),
                             short_name: Some(name.clone()),
@@ -823,7 +900,11 @@ fn collect_dops_from_params(params: &[Param], col: &mut DopCollection) {
                     }
                 }
                 Some(DopData::EnvData { .. }) => {
-                    if !col.env_datas.iter().any(|e| e.short_name.as_deref() == Some(name.as_str())) {
+                    if !col
+                        .env_datas
+                        .iter()
+                        .any(|e| e.short_name.as_deref() == Some(name.as_str()))
+                    {
                         col.env_datas.push(OdxEnvData {
                             id: Some(format!("ED_{name}")),
                             short_name: Some(name.clone()),
@@ -831,7 +912,11 @@ fn collect_dops_from_params(params: &[Param], col: &mut DopCollection) {
                     }
                 }
                 Some(DopData::EnvDataDesc { .. }) => {
-                    if !col.env_data_descs.iter().any(|e| e.short_name.as_deref() == Some(name.as_str())) {
+                    if !col
+                        .env_data_descs
+                        .iter()
+                        .any(|e| e.short_name.as_deref() == Some(name.as_str()))
+                    {
                         col.env_data_descs.push(OdxEnvDataDesc {
                             id: Some(format!("EDD_{name}")),
                             short_name: Some(name.clone()),
@@ -928,9 +1013,13 @@ fn ir_dop_to_odx(dop: &Dop) -> OdxDataObjectProp {
 
 fn ir_dct_to_odx(dct: &DiagCodedType) -> OdxDiagCodedType {
     let (xsi_type, bit_length, min_length, max_length, termination) = match &dct.specific_data {
-        Some(DiagCodedTypeData::StandardLength { bit_length, .. }) => {
-            (Some("STANDARD-LENGTH-TYPE".into()), Some(*bit_length), None, None, None)
-        }
+        Some(DiagCodedTypeData::StandardLength { bit_length, .. }) => (
+            Some("STANDARD-LENGTH-TYPE".into()),
+            Some(*bit_length),
+            None,
+            None,
+            None,
+        ),
         Some(DiagCodedTypeData::MinMax {
             min_length,
             max_length,
@@ -949,13 +1038,27 @@ fn ir_dct_to_odx(dct: &DiagCodedType) -> OdxDiagCodedType {
                 Some(term.into()),
             )
         }
-        Some(DiagCodedTypeData::LeadingLength { bit_length }) => {
-            (Some("LEADING-LENGTH-INFO-TYPE".into()), Some(*bit_length), None, None, None)
-        }
-        Some(DiagCodedTypeData::ParamLength { .. }) => {
-            (Some("PARAM-LENGTH-INFO-TYPE".into()), None, None, None, None)
-        }
-        None => (Some("STANDARD-LENGTH-TYPE".into()), Some(8), None, None, None),
+        Some(DiagCodedTypeData::LeadingLength { bit_length }) => (
+            Some("LEADING-LENGTH-INFO-TYPE".into()),
+            Some(*bit_length),
+            None,
+            None,
+            None,
+        ),
+        Some(DiagCodedTypeData::ParamLength { .. }) => (
+            Some("PARAM-LENGTH-INFO-TYPE".into()),
+            None,
+            None,
+            None,
+            None,
+        ),
+        None => (
+            Some("STANDARD-LENGTH-TYPE".into()),
+            Some(8),
+            None,
+            None,
+            None,
+        ),
     };
 
     OdxDiagCodedType {
@@ -995,8 +1098,10 @@ fn ir_cm_to_odx(cm: &CompuMethod) -> OdxCompuMethod {
 
     OdxCompuMethod {
         category: Some(category.into()),
-        compu_internal_to_phys: cm.internal_to_phys.as_ref().map(|itp| {
-            OdxCompuInternalToPhys {
+        compu_internal_to_phys: cm
+            .internal_to_phys
+            .as_ref()
+            .map(|itp| OdxCompuInternalToPhys {
                 compu_scales: if itp.compu_scales.is_empty() {
                     None
                 } else {
@@ -1008,20 +1113,16 @@ fn ir_cm_to_odx(cm: &CompuMethod) -> OdxCompuMethod {
                 compu_default_value: itp.compu_default_value.as_ref().map(|dv| {
                     OdxCompuDefaultValue {
                         v: dv.values.as_ref().and_then(|v| v.v.map(|f| f.to_string())),
-                        vt: dv
-                            .values
-                            .as_ref()
-                            .and_then(|v| {
-                                if v.vt.is_empty() {
-                                    None
-                                } else {
-                                    Some(v.vt.clone())
-                                }
-                            }),
+                        vt: dv.values.as_ref().and_then(|v| {
+                            if v.vt.is_empty() {
+                                None
+                            } else {
+                                Some(v.vt.clone())
+                            }
+                        }),
                     }
                 }),
-            }
-        }),
+            }),
         compu_phys_to_internal: None,
     }
 }
@@ -1033,20 +1134,29 @@ fn ir_scale_to_odx(scale: &CompuScale) -> OdxCompuScale {
         upper_limit: scale.upper_limit.as_ref().map(ir_limit_to_odx),
         compu_inverse_value: scale.inverse_values.as_ref().map(ir_cv_to_odx),
         compu_const: scale.consts.as_ref().map(ir_cv_to_odx),
-        compu_rational_coeffs: scale.rational_co_effs.as_ref().map(|rc| {
-            OdxCompuRationalCoeffs {
+        compu_rational_coeffs: scale
+            .rational_co_effs
+            .as_ref()
+            .map(|rc| OdxCompuRationalCoeffs {
                 compu_numerator: Some(CompuCoeffsWrapper {
-                    items: rc.numerator.iter().map(|v| v.to_string()).collect(),
+                    items: rc
+                        .numerator
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect(),
                 }),
                 compu_denominator: if rc.denominator.is_empty() {
                     None
                 } else {
                     Some(CompuCoeffsWrapper {
-                        items: rc.denominator.iter().map(|v| v.to_string()).collect(),
+                        items: rc
+                            .denominator
+                            .iter()
+                            .map(std::string::ToString::to_string)
+                            .collect(),
                     })
                 },
-            }
-        }),
+            }),
     }
 }
 
@@ -1112,7 +1222,11 @@ fn ir_dtc_to_odx(dtc: &Dtc) -> OdxDtc {
         trouble_code: Some(dtc.trouble_code),
         display_trouble_code: Some(dtc.display_trouble_code.clone()),
         text: dtc.text.as_ref().map(|t| OdxText {
-            ti: if t.ti.is_empty() { None } else { Some(t.ti.clone()) },
+            ti: if t.ti.is_empty() {
+                None
+            } else {
+                Some(t.ti.clone())
+            },
             value: if t.value.is_empty() {
                 None
             } else {
@@ -1406,7 +1520,10 @@ fn ir_parent_ref_to_odx(pref: &ParentRef) -> OdxParentRef {
                     .collect(),
             })
         },
-        not_inherited_global_neg_responses: if pref.not_inherited_global_neg_responses_short_names.is_empty() {
+        not_inherited_global_neg_responses: if pref
+            .not_inherited_global_neg_responses_short_names
+            .is_empty()
+        {
             None
         } else {
             Some(NotInheritedGlobalNegResponsesWrapper {

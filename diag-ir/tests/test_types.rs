@@ -135,8 +135,11 @@ fn test_empty_service_name_detected() {
     };
     let errors = validate_database(&db).unwrap_err();
     assert!(
-        errors.iter().any(|e| e.to_string().contains("empty service name")),
-        "should detect empty service name: {:?}", errors
+        errors
+            .iter()
+            .any(|e| e.to_string().contains("empty service name")),
+        "should detect empty service name: {:?}",
+        errors
     );
 }
 
@@ -148,7 +151,10 @@ fn test_duplicate_dtc_id_detected() {
             diag_layer: DiagLayer {
                 short_name: "Base".into(),
                 diag_services: vec![DiagService {
-                    diag_comm: DiagComm { short_name: "Svc".into(), ..Default::default() },
+                    diag_comm: DiagComm {
+                        short_name: "Svc".into(),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 }],
                 ..Default::default()
@@ -157,15 +163,26 @@ fn test_duplicate_dtc_id_detected() {
             ..Default::default()
         }],
         dtcs: vec![
-            Dtc { short_name: "DTC_A".into(), trouble_code: 0x123456, ..Default::default() },
-            Dtc { short_name: "DTC_B".into(), trouble_code: 0x123456, ..Default::default() },
+            Dtc {
+                short_name: "DTC_A".into(),
+                trouble_code: 0x123456,
+                ..Default::default()
+            },
+            Dtc {
+                short_name: "DTC_B".into(),
+                trouble_code: 0x123456,
+                ..Default::default()
+            },
         ],
         ..Default::default()
     };
     let errors = validate_database(&db).unwrap_err();
     assert!(
-        errors.iter().any(|e| e.to_string().contains("duplicate DTC")),
-        "should detect duplicate DTC ID: {:?}", errors
+        errors
+            .iter()
+            .any(|e| e.to_string().contains("duplicate DTC")),
+        "should detect duplicate DTC ID: {:?}",
+        errors
     );
 }
 
@@ -177,7 +194,10 @@ fn test_empty_state_chart_detected() {
             diag_layer: DiagLayer {
                 short_name: "Base".into(),
                 diag_services: vec![DiagService {
-                    diag_comm: DiagComm { short_name: "Svc".into(), ..Default::default() },
+                    diag_comm: DiagComm {
+                        short_name: "Svc".into(),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 }],
                 state_charts: vec![StateChart {
@@ -197,7 +217,8 @@ fn test_empty_state_chart_detected() {
     let errors = validate_database(&db).unwrap_err();
     assert!(
         errors.iter().any(|e| e.to_string().contains("EmptyChart")),
-        "should detect empty state chart: {:?}", errors
+        "should detect empty state chart: {:?}",
+        errors
     );
 }
 
@@ -228,5 +249,8 @@ fn test_duplicate_dtc_detected_without_base_variant() {
         ..Default::default()
     };
     let result = validate_database(&db);
-    assert!(result.is_err(), "duplicate DTC IDs should be caught even without base variants");
+    assert!(
+        result.is_err(),
+        "duplicate DTC IDs should be caught even without base variants"
+    );
 }

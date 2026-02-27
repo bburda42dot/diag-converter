@@ -121,10 +121,7 @@ access_patterns:
 bogus_field: "not allowed"
 "#;
     let result = validate_yaml_schema(yaml);
-    assert!(
-        result.is_err(),
-        "additional properties should be rejected"
-    );
+    assert!(result.is_err(), "additional properties should be rejected");
 }
 
 #[test]

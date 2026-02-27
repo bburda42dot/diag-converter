@@ -3,11 +3,11 @@
 //! These tests verify **deep equality** (PartialEq on the full IR tree),
 //! not just structural counts. Any field lost during conversion will fail.
 
-use diag_ir::{flatbuffers_to_ir, ir_to_flatbuffers, DiagDatabase};
+use diag_ir::{DiagDatabase, flatbuffers_to_ir, ir_to_flatbuffers};
 use diag_odx::{parse_odx, write_odx};
 use diag_yaml::{parse_yaml, write_yaml};
 use mdd_format::reader::read_mdd_bytes;
-use mdd_format::writer::{write_mdd_bytes, WriteOptions};
+use mdd_format::writer::{WriteOptions, write_mdd_bytes};
 
 // ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -35,13 +35,22 @@ fn deep_diff(a: &DiagDatabase, b: &DiagDatabase) -> Vec<String> {
 
     fn summary<T: std::fmt::Debug>(v: &T) -> String {
         let s = format!("{v:?}");
-        if s.len() > 200 { format!("{}...", &s[..200]) } else { s }
+        if s.len() > 200 {
+            format!("{}...", &s[..200])
+        } else {
+            s
+        }
     }
 
     macro_rules! cmp {
         ($a:expr, $b:expr, $label:expr) => {
             if $a != $b {
-                diffs.push(format!("{}: {:?} != {:?}", $label, summary(&$a), summary(&$b)));
+                diffs.push(format!(
+                    "{}: {:?} != {:?}",
+                    $label,
+                    summary(&$a),
+                    summary(&$b)
+                ));
             }
         };
     }
@@ -51,28 +60,55 @@ fn deep_diff(a: &DiagDatabase, b: &DiagDatabase) -> Vec<String> {
     cmp!(a.revision, b.revision, "revision");
     cmp!(a.metadata, b.metadata, "metadata");
     cmp!(a.variants.len(), b.variants.len(), "variants.len");
-    cmp!(a.functional_groups.len(), b.functional_groups.len(), "functional_groups.len");
+    cmp!(
+        a.functional_groups.len(),
+        b.functional_groups.len(),
+        "functional_groups.len"
+    );
     cmp!(a.dtcs.len(), b.dtcs.len(), "dtcs.len");
     cmp!(a.memory, b.memory, "memory");
-    cmp!(a.type_definitions.len(), b.type_definitions.len(), "type_definitions.len");
+    cmp!(
+        a.type_definitions.len(),
+        b.type_definitions.len(),
+        "type_definitions.len"
+    );
 
     // Per-variant comparison
     for (i, (av, bv)) in a.variants.iter().zip(b.variants.iter()).enumerate() {
         let prefix = format!("variants[{i}]");
         if av.is_base_variant != bv.is_base_variant {
-            diffs.push(format!("{prefix}.is_base_variant: {} != {}", av.is_base_variant, bv.is_base_variant));
+            diffs.push(format!(
+                "{prefix}.is_base_variant: {} != {}",
+                av.is_base_variant, bv.is_base_variant
+            ));
         }
         if av.diag_layer.short_name != bv.diag_layer.short_name {
-            diffs.push(format!("{prefix}.short_name: {:?} != {:?}", av.diag_layer.short_name, bv.diag_layer.short_name));
+            diffs.push(format!(
+                "{prefix}.short_name: {:?} != {:?}",
+                av.diag_layer.short_name, bv.diag_layer.short_name
+            ));
         }
         if av.diag_layer.diag_services.len() != bv.diag_layer.diag_services.len() {
-            diffs.push(format!("{prefix}.diag_services.len: {} != {}", av.diag_layer.diag_services.len(), bv.diag_layer.diag_services.len()));
+            diffs.push(format!(
+                "{prefix}.diag_services.len: {} != {}",
+                av.diag_layer.diag_services.len(),
+                bv.diag_layer.diag_services.len()
+            ));
         }
         if av.diag_layer.state_charts != bv.diag_layer.state_charts {
             diffs.push(format!("{prefix}.state_charts differ"));
-            for (k, (asc, bsc)) in av.diag_layer.state_charts.iter().zip(bv.diag_layer.state_charts.iter()).enumerate() {
+            for (k, (asc, bsc)) in av
+                .diag_layer
+                .state_charts
+                .iter()
+                .zip(bv.diag_layer.state_charts.iter())
+                .enumerate()
+            {
                 if asc != bsc {
-                    diffs.push(format!("  state_charts[{k}] ({:?}): {:?} != {:?}", asc.short_name, asc, bsc));
+                    diffs.push(format!(
+                        "  state_charts[{k}] ({:?}): {:?} != {:?}",
+                        asc.short_name, asc, bsc
+                    ));
                 }
             }
         }
@@ -87,9 +123,16 @@ fn deep_diff(a: &DiagDatabase, b: &DiagDatabase) -> Vec<String> {
         }
         if av.diag_layer.single_ecu_jobs != bv.diag_layer.single_ecu_jobs {
             diffs.push(format!("{prefix}.single_ecu_jobs differ"));
-            for (k, (aj, bj)) in av.diag_layer.single_ecu_jobs.iter().zip(bv.diag_layer.single_ecu_jobs.iter()).enumerate() {
+            for (k, (aj, bj)) in av
+                .diag_layer
+                .single_ecu_jobs
+                .iter()
+                .zip(bv.diag_layer.single_ecu_jobs.iter())
+                .enumerate()
+            {
                 if aj != bj {
-                    diffs.push(format!("  job[{k}] ({:?}): dc={} pc={} ip={} op={} np={}",
+                    diffs.push(format!(
+                        "  job[{k}] ({:?}): dc={} pc={} ip={} op={} np={}",
                         aj.diag_comm.short_name,
                         aj.diag_comm != bj.diag_comm,
                         aj.prog_codes != bj.prog_codes,
@@ -97,18 +140,32 @@ fn deep_diff(a: &DiagDatabase, b: &DiagDatabase) -> Vec<String> {
                         aj.output_params != bj.output_params,
                         aj.neg_output_params != bj.neg_output_params,
                     ));
-                    for (m, (ap, bp)) in aj.input_params.iter().zip(bj.input_params.iter()).enumerate() {
+                    for (m, (ap, bp)) in aj
+                        .input_params
+                        .iter()
+                        .zip(bj.input_params.iter())
+                        .enumerate()
+                    {
                         if ap != bp {
-                            diffs.push(format!("    input[{m}] ({:?}): dop a={} b={}", ap.short_name, ap.dop_base.is_some(), bp.dop_base.is_some()));
+                            diffs.push(format!(
+                                "    input[{m}] ({:?}): dop a={} b={}",
+                                ap.short_name,
+                                ap.dop_base.is_some(),
+                                bp.dop_base.is_some()
+                            ));
                         }
                     }
                 }
             }
         }
         if av.diag_layer.sdgs != bv.diag_layer.sdgs {
-            let a_sdgs = av.diag_layer.sdgs.as_ref().map(|s| &s.sdgs[..]).unwrap_or(&[]);
-            let b_sdgs = bv.diag_layer.sdgs.as_ref().map(|s| &s.sdgs[..]).unwrap_or(&[]);
-            diffs.push(format!("{prefix}.sdgs differ (a={}, b={})", a_sdgs.len(), b_sdgs.len()));
+            let a_sdgs = av.diag_layer.sdgs.as_ref().map_or(&[][..], |s| &s.sdgs[..]);
+            let b_sdgs = bv.diag_layer.sdgs.as_ref().map_or(&[][..], |s| &s.sdgs[..]);
+            diffs.push(format!(
+                "{prefix}.sdgs differ (a={}, b={})",
+                a_sdgs.len(),
+                b_sdgs.len()
+            ));
             for s in a_sdgs {
                 if !b_sdgs.iter().any(|bs| bs.caption_sn == s.caption_sn) {
                     diffs.push(format!("  only in a: {:?}", s.caption_sn));
@@ -128,22 +185,36 @@ fn deep_diff(a: &DiagDatabase, b: &DiagDatabase) -> Vec<String> {
         }
 
         // Per-service comparison
-        for (j, (as_, bs)) in av.diag_layer.diag_services.iter().zip(bv.diag_layer.diag_services.iter()).enumerate() {
+        for (j, (as_, bs)) in av
+            .diag_layer
+            .diag_services
+            .iter()
+            .zip(bv.diag_layer.diag_services.iter())
+            .enumerate()
+        {
             if as_ != bs {
-                let svc_prefix = format!("{prefix}.diag_services[{j}] ({:?})", as_.diag_comm.short_name);
+                let svc_prefix = format!(
+                    "{prefix}.diag_services[{j}] ({:?})",
+                    as_.diag_comm.short_name
+                );
                 if as_.diag_comm != bs.diag_comm {
                     diffs.push(format!("{svc_prefix}.diag_comm differs"));
                     if as_.diag_comm.funct_classes != bs.diag_comm.funct_classes {
-                        diffs.push(format!("  .funct_classes: {:?} != {:?}", as_.diag_comm.funct_classes, bs.diag_comm.funct_classes));
+                        diffs.push(format!(
+                            "  .funct_classes: {:?} != {:?}",
+                            as_.diag_comm.funct_classes, bs.diag_comm.funct_classes
+                        ));
                     }
-                    if as_.diag_comm.pre_condition_state_refs != bs.diag_comm.pre_condition_state_refs {
-                        diffs.push(format!("  .pre_condition_state_refs differ"));
+                    if as_.diag_comm.pre_condition_state_refs
+                        != bs.diag_comm.pre_condition_state_refs
+                    {
+                        diffs.push("  .pre_condition_state_refs differ".to_string());
                     }
                     if as_.diag_comm.state_transition_refs != bs.diag_comm.state_transition_refs {
-                        diffs.push(format!("  .state_transition_refs differ"));
+                        diffs.push("  .state_transition_refs differ".to_string());
                     }
                     if as_.diag_comm.sdgs != bs.diag_comm.sdgs {
-                        diffs.push(format!("  .sdgs differ"));
+                        diffs.push("  .sdgs differ".to_string());
                     }
                 }
                 if as_.request != bs.request {
@@ -151,13 +222,27 @@ fn deep_diff(a: &DiagDatabase, b: &DiagDatabase) -> Vec<String> {
                 }
                 if as_.pos_responses != bs.pos_responses {
                     diffs.push(format!("{svc_prefix}.pos_responses differ"));
-                    for (r, (ar, br)) in as_.pos_responses.iter().zip(bs.pos_responses.iter()).enumerate() {
+                    for (r, (ar, br)) in as_
+                        .pos_responses
+                        .iter()
+                        .zip(bs.pos_responses.iter())
+                        .enumerate()
+                    {
                         for (p, (ap, bp)) in ar.params.iter().zip(br.params.iter()).enumerate() {
                             if ap != bp {
-                                diffs.push(format!("  resp[{r}].param[{p}] ({:?}) differs", ap.short_name));
+                                diffs.push(format!(
+                                    "  resp[{r}].param[{p}] ({:?}) differs",
+                                    ap.short_name
+                                ));
                                 if ap.specific_data != bp.specific_data {
-                                    diffs.push(format!("    specific_data: a={:?}", summary(&ap.specific_data)));
-                                    diffs.push(format!("    specific_data: b={:?}", summary(&bp.specific_data)));
+                                    diffs.push(format!(
+                                        "    specific_data: a={:?}",
+                                        summary(&ap.specific_data)
+                                    ));
+                                    diffs.push(format!(
+                                        "    specific_data: b={:?}",
+                                        summary(&bp.specific_data)
+                                    ));
                                 }
                             }
                         }
@@ -178,9 +263,17 @@ fn deep_diff(a: &DiagDatabase, b: &DiagDatabase) -> Vec<String> {
     }
 
     // Type definitions comparison
-    for (i, (at, bt)) in a.type_definitions.iter().zip(b.type_definitions.iter()).enumerate() {
+    for (i, (at, bt)) in a
+        .type_definitions
+        .iter()
+        .zip(b.type_definitions.iter())
+        .enumerate()
+    {
         if at != bt {
-            diffs.push(format!("type_definitions[{i}] ({:?}): {:?} != {:?}", at.name, at, bt));
+            diffs.push(format!(
+                "type_definitions[{i}] ({:?}): {:?} != {:?}",
+                at.name, at, bt
+            ));
         }
     }
 
@@ -335,4 +428,3 @@ fn lossless_odx_double_roundtrip_minimal() {
 
     assert_lossless(&db1, &db3, "ODX double roundtrip (MDD+ODX): minimal");
 }
-

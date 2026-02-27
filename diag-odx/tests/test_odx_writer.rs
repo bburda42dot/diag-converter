@@ -70,8 +70,16 @@ fn test_odx_roundtrip_preserves_service_names() {
     let odx_output = write_odx(&original).unwrap();
     let reparsed = parse_odx(&odx_output).unwrap();
 
-    let orig_base = original.variants.iter().find(|v| v.is_base_variant).unwrap();
-    let repr_base = reparsed.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let orig_base = original
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
+    let repr_base = reparsed
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
 
     // Should preserve diag service count
     assert_eq!(
@@ -102,8 +110,16 @@ fn test_odx_roundtrip_preserves_state_chart() {
     let odx_output = write_odx(&original).unwrap();
     let reparsed = parse_odx(&odx_output).unwrap();
 
-    let orig_base = original.variants.iter().find(|v| v.is_base_variant).unwrap();
-    let repr_base = reparsed.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let orig_base = original
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
+    let repr_base = reparsed
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
 
     assert_eq!(
         orig_base.diag_layer.state_charts.len(),
@@ -126,8 +142,16 @@ fn test_odx_roundtrip_preserves_comparam_refs() {
     let odx_output = write_odx(&original).unwrap();
     let reparsed = parse_odx(&odx_output).unwrap();
 
-    let orig_base = original.variants.iter().find(|v| v.is_base_variant).unwrap();
-    let repr_base = reparsed.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let orig_base = original
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
+    let repr_base = reparsed
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
 
     assert_eq!(
         orig_base.diag_layer.com_param_refs.len(),
@@ -166,28 +190,66 @@ fn test_odx_roundtrip_preserves_audience_refs() {
     let odx_output = write_odx(&original).unwrap();
     let reparsed = parse_odx(&odx_output).unwrap();
 
-    let orig_base = original.variants.iter().find(|v| v.is_base_variant).unwrap();
-    let repr_base = reparsed.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let orig_base = original
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
+    let repr_base = reparsed
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .unwrap();
 
     let orig_svc = &orig_base.diag_layer.diag_services[0];
     let repr_svc = &repr_base.diag_layer.diag_services[0];
 
     // Audience boolean flags
     assert_eq!(
-        orig_svc.diag_comm.audience.as_ref().map(|a| a.is_development),
-        repr_svc.diag_comm.audience.as_ref().map(|a| a.is_development),
+        orig_svc
+            .diag_comm
+            .audience
+            .as_ref()
+            .map(|a| a.is_development),
+        repr_svc
+            .diag_comm
+            .audience
+            .as_ref()
+            .map(|a| a.is_development),
         "is_development should be preserved"
     );
 
     // Enabled audience refs
-    let orig_enabled: Vec<_> = orig_svc.diag_comm.audience.as_ref()
-        .map(|a| a.enabled_audiences.iter().map(|aa| &aa.short_name).collect())
+    let orig_enabled: Vec<_> = orig_svc
+        .diag_comm
+        .audience
+        .as_ref()
+        .map(|a| {
+            a.enabled_audiences
+                .iter()
+                .map(|aa| &aa.short_name)
+                .collect()
+        })
         .unwrap_or_default();
-    let repr_enabled: Vec<_> = repr_svc.diag_comm.audience.as_ref()
-        .map(|a| a.enabled_audiences.iter().map(|aa| &aa.short_name).collect())
+    let repr_enabled: Vec<_> = repr_svc
+        .diag_comm
+        .audience
+        .as_ref()
+        .map(|a| {
+            a.enabled_audiences
+                .iter()
+                .map(|aa| &aa.short_name)
+                .collect()
+        })
         .unwrap_or_default();
-    assert_eq!(orig_enabled, repr_enabled, "enabled audience refs should be preserved");
-    assert!(!orig_enabled.is_empty(), "fixture should have at least one enabled audience ref");
+    assert_eq!(
+        orig_enabled, repr_enabled,
+        "enabled audience refs should be preserved"
+    );
+    assert!(
+        !orig_enabled.is_empty(),
+        "fixture should have at least one enabled audience ref"
+    );
 }
 
 #[test]
@@ -266,10 +328,7 @@ fn test_odx_roundtrip_preserves_admin_data() {
     let odx_xml = write_odx(&db).unwrap();
     let db2 = parse_odx(&odx_xml).unwrap();
 
-    assert_eq!(
-        db2.metadata.get("admin_language"),
-        Some(&"en".to_string())
-    );
+    assert_eq!(db2.metadata.get("admin_language"), Some(&"en".to_string()));
     assert_eq!(
         db2.metadata.get("admin_doc_state"),
         Some(&"released".to_string())
@@ -292,8 +351,5 @@ fn test_odx_writer_handles_all_param_types() {
         odx_output.contains("CODED-CONST"),
         "should contain CODED-CONST param"
     );
-    assert!(
-        odx_output.contains("VALUE"),
-        "should contain VALUE param"
-    );
+    assert!(odx_output.contains("VALUE"), "should contain VALUE param");
 }

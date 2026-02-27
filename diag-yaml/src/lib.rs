@@ -6,7 +6,7 @@ pub mod validator;
 pub mod writer;
 pub mod yaml_model;
 
-pub use parser::{parse_yaml, YamlParseError};
-pub use semantic_validator::{validate_semantics, SemanticIssue, Severity};
-pub use validator::{validate_yaml_schema, SchemaError};
-pub use writer::{write_yaml, YamlWriteError};
+pub use parser::{YamlParseError, parse_yaml};
+pub use semantic_validator::{SemanticIssue, Severity, validate_semantics};
+pub use validator::{SchemaError, validate_yaml_schema};
+pub use writer::{YamlWriteError, write_yaml};
