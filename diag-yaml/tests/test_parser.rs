@@ -206,3 +206,64 @@ dids:
     assert!(json_str.contains("OFF"), "should contain OFF");
     assert!(json_str.contains("RUNNING"), "should contain RUNNING");
 }
+
+#[test]
+fn test_parse_comparams_flat_simple() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+comparams:
+  CAN_FD_ENABLED: false
+  P2_Client:
+    cptype: uint16
+    default: 50
+    values:
+      global: 50
+      uds: 50
+  CP_UniqueRespIdTable:
+    cptype: complex
+    values:
+      UDS_Ethernet_DoIP: ["4096", "0", "FLXC"]
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    let base = db.variants.iter().find(|v| v.is_base_variant).unwrap();
+    let refs = &base.diag_layer.com_param_refs;
+
+    // CAN_FD_ENABLED -> 1 ref (no protocol, simple value)
+    let can_fd: Vec<_> = refs
+        .iter()
+        .filter(|r| {
+            r.com_param
+                .as_ref()
+                .is_some_and(|cp| cp.short_name == "CAN_FD_ENABLED")
+        })
+        .collect();
+    assert_eq!(can_fd.len(), 1);
+    assert!(can_fd[0].simple_value.is_some());
+    assert!(can_fd[0].protocol.is_none());
+
+    // P2_Client -> 2 refs (global + uds)
+    let p2: Vec<_> = refs
+        .iter()
+        .filter(|r| {
+            r.com_param
+                .as_ref()
+                .is_some_and(|cp| cp.short_name == "P2_Client")
+        })
+        .collect();
+    assert_eq!(p2.len(), 2);
+
+    // CP_UniqueRespIdTable -> 1 ref with complex value
+    let unique: Vec<_> = refs
+        .iter()
+        .filter(|r| {
+            r.com_param
+                .as_ref()
+                .is_some_and(|cp| cp.short_name == "CP_UniqueRespIdTable")
+        })
+        .collect();
+    assert_eq!(unique.len(), 1);
+    assert!(unique[0].complex_value.is_some());
+    assert_eq!(unique[0].complex_value.as_ref().unwrap().entries.len(), 3);
+}
