@@ -833,35 +833,13 @@ fn empty_param() -> Param {
 
 fn empty_table_row() -> TableRow {
     TableRow {
-        short_name: String::new(),
-        long_name: None,
-        key: String::new(),
-        dop: None,
-        structure: None,
-        sdgs: None,
-        audience: None,
-        funct_class_refs: vec![],
-        state_transition_refs: vec![],
-        pre_condition_state_refs: vec![],
         is_executable: true,
-        semantic: String::new(),
-        is_mandatory: false,
-        is_final: false,
+        ..Default::default()
     }
 }
 
 fn empty_table_dop() -> TableDop {
-    TableDop {
-        semantic: String::new(),
-        short_name: String::new(),
-        long_name: None,
-        key_label: String::new(),
-        struct_label: String::new(),
-        key_dop: None,
-        rows: vec![],
-        diag_comm_connectors: vec![],
-        sdgs: None,
-    }
+    TableDop::default()
 }
 
 fn convert_table_row(tr: &dataformat::TableRow<'_>) -> TableRow {

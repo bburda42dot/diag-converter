@@ -485,7 +485,7 @@ pub struct Dtc {
 // --- Tables ---
 
 /// Maps to FBS TableDop
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct TableDop {
     pub semantic: String,
     pub short_name: String,
@@ -499,7 +499,7 @@ pub struct TableDop {
 }
 
 /// Maps to FBS TableRow
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct TableRow {
     pub short_name: String,
     pub long_name: Option<LongName>,

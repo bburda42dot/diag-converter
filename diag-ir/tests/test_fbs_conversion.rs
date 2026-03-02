@@ -879,45 +879,24 @@ fn roundtrip_param_data_table_variants() {
     let table_dop = TableDop {
         semantic: "TABLE".into(),
         short_name: "TDop".into(),
-        long_name: None,
         key_label: "key".into(),
         struct_label: "struct".into(),
         key_dop: Some(Box::new(minimal_dop())),
         rows: vec![TableRow {
             short_name: "Row1".into(),
-            long_name: None,
             key: "0x01".into(),
-            dop: None,
-            structure: None,
-            sdgs: None,
-            audience: None,
-            funct_class_refs: vec![],
-            state_transition_refs: vec![],
-            pre_condition_state_refs: vec![],
-            is_executable: false,
-            semantic: String::new(),
-            is_mandatory: false,
-            is_final: false,
+            ..Default::default()
         }],
-        diag_comm_connectors: vec![],
-        sdgs: None,
+        ..Default::default()
     };
 
     let table_row = TableRow {
         short_name: "TargetRow".into(),
-        long_name: None,
         key: "0x02".into(),
         dop: Some(Box::new(minimal_dop())),
-        structure: None,
-        sdgs: None,
-        audience: None,
-        funct_class_refs: vec![],
-        state_transition_refs: vec![],
-        pre_condition_state_refs: vec![],
         is_executable: true,
         semantic: "ROW".into(),
-        is_mandatory: false,
-        is_final: false,
+        ..Default::default()
     };
 
     let table_key_param = Param {
@@ -968,19 +947,8 @@ fn roundtrip_param_data_table_variants() {
             specific_data: Some(ParamData::TableKey {
                 table_key_reference: TableKeyReference::TableRow(Box::new(TableRow {
                     short_name: "RefRow".into(),
-                    long_name: None,
                     key: "0xFF".into(),
-                    dop: None,
-                    structure: None,
-                    sdgs: None,
-                    audience: None,
-                    funct_class_refs: vec![],
-                    state_transition_refs: vec![],
-                    pre_condition_state_refs: vec![],
-                    is_executable: false,
-                    semantic: String::new(),
-                    is_mandatory: false,
-                    is_final: false,
+                    ..Default::default()
                 })),
             }),
             ..Default::default()
