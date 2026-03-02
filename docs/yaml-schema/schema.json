@@ -2669,10 +2669,70 @@
                         },
                         "values": {
                             "$ref": "#/$defs/comparam_values"
+                        },
+                        "dop": {
+                            "$ref": "#/$defs/comparam_dop",
+                            "description": "DOP (Data Object Property) definition. Required when DOP is needed for the comparam."
+                        },
+                        "children": {
+                            "type": "array",
+                            "description": "Child comparam definitions for complex comparams. Required when cptype is 'complex'.",
+                            "items": {
+                                "$ref": "#/$defs/comparam_child"
+                            }
                         }
                     }
                 }
             ]
+        },
+        "comparam_dop": {
+            "type": "object",
+            "description": "Data Object Property configuration for a comparam",
+            "additionalProperties": false,
+            "required": ["base_type"],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "DOP short name override. If not set, generated from base type and constraints."
+                },
+                "base_type": {
+                    "type": "string",
+                    "description": "Base data type (required)",
+                    "enum": ["u8", "u16", "u32", "s8", "s16", "s32", "f32", "f64", "string", "bytes"]
+                },
+                "bit_length": {
+                    "type": "integer",
+                    "description": "Bit length (derived from base_type if not specified)"
+                },
+                "min": {
+                    "type": "number",
+                    "description": "Minimum constraint value (optional)"
+                },
+                "max": {
+                    "type": "number",
+                    "description": "Maximum constraint value (optional)"
+                }
+            }
+        },
+        "comparam_child": {
+            "type": "object",
+            "description": "Child comparam definition for complex comparams",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Short name of the child comparam (e.g., CP_DoIPLogicalEcuAddress)"
+                },
+                "param_class": {
+                    "type": "string",
+                    "description": "Parameter class (e.g., UNIQUE_ID)"
+                },
+                "dop": {
+                    "$ref": "#/$defs/comparam_dop",
+                    "description": "DOP definition for this child comparam"
+                }
+            }
         },
         "comparam_values": {
             "type": "object",

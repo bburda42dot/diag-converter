@@ -684,6 +684,10 @@ fn convert_legacy_comparams(legacy: &LegacyYamlComParams) -> YamlComParams {
                             max: None,
                             allowed_values: None,
                             values: Some(values),
+                            dop: None,
+                            children: None,
+                            param_class: None,
+                            usage: None,
                         }),
                     );
                 }
@@ -693,7 +697,13 @@ fn convert_legacy_comparams(legacy: &LegacyYamlComParams) -> YamlComParams {
                 let cptype = spec_val
                     .get("cptype")
                     .and_then(|v| v.as_str())
-                    .map(String::from);
+                    .map(|s| {
+                        if s.eq_ignore_ascii_case("complex") {
+                            ComParamTypeYaml::Complex
+                        } else {
+                            ComParamTypeYaml::Other(s.to_string())
+                        }
+                    });
                 let unit = spec_val
                     .get("unit")
                     .and_then(|v| v.as_str())
@@ -705,6 +715,7 @@ fn convert_legacy_comparams(legacy: &LegacyYamlComParams) -> YamlComParams {
                 let default = spec_val.get("default_value").cloned();
                 let min = spec_val.get("min").and_then(serde_yaml::Value::as_f64);
                 let max = spec_val.get("max").and_then(serde_yaml::Value::as_f64);
+                let dop = None; // TODO: reconstruct DOP from IR if needed
 
                 result.insert(
                     name.clone(),
@@ -717,6 +728,10 @@ fn convert_legacy_comparams(legacy: &LegacyYamlComParams) -> YamlComParams {
                         max,
                         allowed_values: None,
                         values: values_map,
+                        dop,
+                        children: None,
+                        param_class: None,
+                        usage: None,
                     }),
                 );
             }
@@ -739,6 +754,10 @@ fn convert_legacy_comparams(legacy: &LegacyYamlComParams) -> YamlComParams {
                     max: None,
                     allowed_values: None,
                     values: Some(values),
+                    dop: None,
+                    children: None,
+                    param_class: None,
+                    usage: None,
                 })
             }
         });

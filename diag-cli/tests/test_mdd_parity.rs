@@ -48,7 +48,12 @@ fn flxcng1000_pdx() -> &'static [u8] {
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-const SIZE_TOLERANCE_PERCENT: f64 = 5.0;
+// Size tolerance increased to 15% to account for:
+// - DOPs added to regular comparams (required for CDA compatibility)
+// - Child ComParams added for complex comparams like CP_UniqueRespIdTable
+// - InternalConstr (min/max) constraints added to DOPs
+// - param_class and usage fields added to comparams
+const SIZE_TOLERANCE_PERCENT: f64 = 15.0;
 
 /// Build MDD bytes from YAML source.
 fn yaml_to_mdd(yaml: &str) -> Vec<u8> {

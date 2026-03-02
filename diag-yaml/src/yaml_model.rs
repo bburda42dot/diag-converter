@@ -182,10 +182,29 @@ pub enum ComParamEntry {
     Simple(serde_yaml::Value),
 }
 
+/// Communication parameter type - distinguishes complex comparams from regular ones.
+/// Other values (like "uint16", "uint8") describe data types and are treated as regular.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ComParamTypeYaml {
+    /// Complex comparam with nested values
+    Complex,
+    /// Any other type string (data type descriptors like "uint16", "uint8")
+    #[serde(untagged)]
+    Other(String),
+}
+
+impl ComParamTypeYaml {
+    /// Returns true if this is a complex comparam type.
+    pub fn is_complex(&self) -> bool {
+        matches!(self, ComParamTypeYaml::Complex)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComParamFull {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cptype: Option<String>,
+    pub cptype: Option<ComParamTypeYaml>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unit: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -200,6 +219,52 @@ pub struct ComParamFull {
     pub allowed_values: Option<Vec<serde_yaml::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub values: Option<BTreeMap<String, serde_yaml::Value>>,
+    /// Optional DOP (Data Object Property) configuration for this comparam.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dop: Option<ComParamDopDef>,
+    /// Child comparam definitions for complex comparams.
+    /// Each child maps to one entry in the values array.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<ComParamChild>>,
+    /// Parameter class (e.g., "COM", "UNIQUE_ID")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub param_class: Option<String>,
+    /// Usage: "TESTER", "ECU_COMM", etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<String>,
+}
+
+/// Child comparam definition for complex comparams.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComParamChild {
+    /// Short name of the child comparam (e.g., "CP_DoIPLogicalEcuAddress")
+    pub name: String,
+    /// Parameter class (e.g., "UNIQUE_ID")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub param_class: Option<String>,
+    /// DOP configuration for this child
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dop: Option<ComParamDopDef>,
+}
+
+/// DOP (Data Object Property) definition for comparams.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComParamDopDef {
+    /// DOP short name override. If not set, generated from base type.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Base data type: u8, u16, u32, s8, s16, s32, f32, f64, string, bytes
+    #[serde(alias = "type", skip_serializing_if = "Option::is_none")]
+    pub base_type: Option<String>,
+    /// Bit length (for numeric types)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bit_length: Option<u32>,
+    /// Minimum value constraint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    /// Maximum value constraint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
 }
 
 // --- Sessions ---
@@ -762,7 +827,7 @@ values:
         let entry: ComParamEntry = serde_yaml::from_str(yaml).unwrap();
         match entry {
             ComParamEntry::Full(f) => {
-                assert_eq!(f.cptype.as_deref(), Some("uint16"));
+                assert_eq!(f.cptype, Some(ComParamTypeYaml::Other("uint16".to_string())));
                 assert_eq!(f.unit.as_deref(), Some("ms"));
                 let vals = f.values.unwrap();
                 assert_eq!(vals.len(), 2);

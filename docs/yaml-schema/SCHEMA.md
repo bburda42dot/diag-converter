@@ -818,23 +818,41 @@ comparams:
     default: 50
     min: 10
     max: 5000
+    dop:
+      base_type: u16
+      min: 10
+      max: 5000
     values:
       global: 50
       uds: 50
 
-  # Minimal form - only per-protocol values
+  # Minimal form - only per-protocol values (no DOP generated)
   CP_DoIPLogicalGatewayAddress:
+    dop:
+      base_type: u32
+      min: 0
+      max: 65535
     values:
       UDS_Ethernet_DoIP: "4096"
       UDS_Ethernet_DoIP_DOBT: "4096"
 
-  # Complex values (ordered list)
+  # Complex values with explicit children definition
   CP_UniqueRespIdTable:
     cptype: complex
+    children:
+      - name: CP_DoIPLogicalEcuAddress
+        param_class: UNIQUE_ID
+        dop: { base_type: u32, min: 0, max: 65535 }
+      - name: CP_DoIPSecondaryLogicalECUResponseAddress
+        param_class: UNIQUE_ID
+        dop: { base_type: u32, min: 0, max: 65535 }
+      - name: CP_ECULayerShortName
+        param_class: UNIQUE_ID
+        dop: { base_type: string }
     values:
       UDS_Ethernet_DoIP: ["4096", "0", "FLXC1000"]
 
-  # Short form - scalar value, no metadata needed
+  # Short form - scalar value, no DOP
   CAN_FD_ENABLED: false
   MAX_DLC: 8
 ```
@@ -851,6 +869,26 @@ comparams:
 | `max` | number | Maximum allowed value |
 | `allowed_values` | array | Enumeration of allowed values |
 | `values` | map | Protocol-scoped values (keys: `global`, `doip`, `can`, `uds`, `iso15765`, or specific protocol identifiers) |
+| `dop` | object | DOP (Data Object Property) definition. Required when DOP is needed. |
+| `children` | array | Child comparam definitions for complex comparams. Required for `cptype: complex`. |
+
+**DOP fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | DOP short name override (generated from type/constraints if not specified) |
+| `base_type` | string | **Required.** Base data type: `u8`, `u16`, `u32`, `s8`, `s16`, `s32`, `f32`, `f64`, `string`, `bytes` |
+| `bit_length` | number | Bit length (derived from base_type if not specified) |
+| `min` | number | Minimum constraint value (optional, only creates constraint if specified) |
+| `max` | number | Maximum constraint value (optional, only creates constraint if specified) |
+
+**Child comparam fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Short name of the child comparam (required) |
+| `param_class` | string | Parameter class (e.g., `UNIQUE_ID`) |
+| `dop` | object | DOP definition for this child |
 
 ---
 
