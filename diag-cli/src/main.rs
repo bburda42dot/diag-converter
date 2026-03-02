@@ -181,3 +181,46 @@ fn main() -> Result<()> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn detect_format_odx() {
+        assert_eq!(detect_format(Path::new("file.odx")).unwrap(), Format::Odx);
+    }
+
+    #[test]
+    fn detect_format_pdx() {
+        assert_eq!(detect_format(Path::new("file.pdx")).unwrap(), Format::Pdx);
+    }
+
+    #[test]
+    fn detect_format_yml() {
+        assert_eq!(detect_format(Path::new("file.yml")).unwrap(), Format::Yaml);
+    }
+
+    #[test]
+    fn detect_format_yaml() {
+        assert_eq!(detect_format(Path::new("file.yaml")).unwrap(), Format::Yaml);
+    }
+
+    #[test]
+    fn detect_format_mdd() {
+        assert_eq!(detect_format(Path::new("file.mdd")).unwrap(), Format::Mdd);
+    }
+
+    #[test]
+    fn detect_format_unknown_extension() {
+        let err = detect_format(Path::new("file.xyz")).unwrap_err();
+        assert!(err.to_string().contains("Unknown file extension"));
+    }
+
+    #[test]
+    fn detect_format_no_extension() {
+        let err = detect_format(Path::new("noext")).unwrap_err();
+        assert!(err.to_string().contains("no extension"));
+    }
+}

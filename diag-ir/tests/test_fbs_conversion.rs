@@ -722,3 +722,605 @@ fn roundtrip_preserves_type_definitions() {
         "enum_values_json should contain ON"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Helpers for coverage tests
+// ---------------------------------------------------------------------------
+
+fn minimal_diag_coded_type() -> DiagCodedType {
+    DiagCodedType {
+        type_name: DiagCodedTypeName::StandardLengthType,
+        base_type_encoding: "unsigned".into(),
+        base_data_type: DataType::AUint32,
+        is_high_low_byte_order: true,
+        specific_data: Some(DiagCodedTypeData::StandardLength {
+            bit_length: 8,
+            bit_mask: vec![],
+            condensed: false,
+        }),
+    }
+}
+
+fn minimal_dop() -> Dop {
+    Dop {
+        dop_type: DopType::Regular,
+        short_name: "TestDop".into(),
+        sdgs: None,
+        specific_data: Some(DopData::NormalDop {
+            compu_method: None,
+            diag_coded_type: Some(minimal_diag_coded_type()),
+            physical_type: None,
+            internal_constr: None,
+            unit_ref: None,
+            phys_constr: None,
+        }),
+    }
+}
+
+fn wrap_params_in_db(params: Vec<Param>) -> DiagDatabase {
+    DiagDatabase {
+        variants: vec![Variant {
+            diag_layer: DiagLayer {
+                short_name: "V".into(),
+                diag_services: vec![DiagService {
+                    diag_comm: DiagComm {
+                        short_name: "Svc".into(),
+                        ..Default::default()
+                    },
+                    request: Some(Request { params, sdgs: None }),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        }],
+        ..Default::default()
+    }
+}
+
+fn wrap_dop_in_db(dop: Dop) -> DiagDatabase {
+    let param = Param {
+        id: 0,
+        param_type: ParamType::Value,
+        short_name: "P".into(),
+        specific_data: Some(ParamData::Value {
+            physical_default_value: "0".into(),
+            dop: Box::new(dop),
+        }),
+        ..Default::default()
+    };
+    wrap_params_in_db(vec![param])
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: Roundtrip ParamData variants
+// ---------------------------------------------------------------------------
+
+#[test]
+fn roundtrip_param_data_scalar_variants() {
+    let params = vec![
+        Param {
+            id: 0,
+            param_type: ParamType::MatchingRequestParam,
+            short_name: "MRP".into(),
+            specific_data: Some(ParamData::MatchingRequestParam {
+                request_byte_pos: 2,
+                byte_length: 4,
+            }),
+            ..Default::default()
+        },
+        Param {
+            id: 1,
+            param_type: ParamType::Reserved,
+            short_name: "Rsv".into(),
+            specific_data: Some(ParamData::Reserved { bit_length: 16 }),
+            ..Default::default()
+        },
+        Param {
+            id: 2,
+            param_type: ParamType::NrcConst,
+            short_name: "NRC".into(),
+            specific_data: Some(ParamData::NrcConst {
+                coded_values: vec!["0x12".into(), "0x13".into(), "0x31".into()],
+                diag_coded_type: minimal_diag_coded_type(),
+            }),
+            ..Default::default()
+        },
+    ];
+
+    let db = wrap_params_in_db(params);
+    let fbs = ir_to_flatbuffers(&db);
+    let db2 = flatbuffers_to_ir(&fbs).expect("roundtrip failed");
+    pretty_assertions::assert_eq!(db, db2);
+}
+
+#[test]
+fn roundtrip_param_data_dop_variants() {
+    let params = vec![
+        Param {
+            id: 0,
+            param_type: ParamType::LengthKey,
+            short_name: "LenKey".into(),
+            specific_data: Some(ParamData::LengthKeyRef {
+                dop: Box::new(minimal_dop()),
+            }),
+            ..Default::default()
+        },
+        Param {
+            id: 1,
+            param_type: ParamType::PhysConst,
+            short_name: "PC".into(),
+            specific_data: Some(ParamData::PhysConst {
+                phys_constant_value: "42.5".into(),
+                dop: Box::new(minimal_dop()),
+            }),
+            ..Default::default()
+        },
+        Param {
+            id: 2,
+            param_type: ParamType::System,
+            short_name: "Sys".into(),
+            specific_data: Some(ParamData::System {
+                dop: Box::new(minimal_dop()),
+                sys_param: "ECU_SERIAL".into(),
+            }),
+            ..Default::default()
+        },
+    ];
+
+    let db = wrap_params_in_db(params);
+    let fbs = ir_to_flatbuffers(&db);
+    let db2 = flatbuffers_to_ir(&fbs).expect("roundtrip failed");
+    pretty_assertions::assert_eq!(db, db2);
+}
+
+#[test]
+fn roundtrip_param_data_table_variants() {
+    let table_dop = TableDop {
+        semantic: "TABLE".into(),
+        short_name: "TDop".into(),
+        long_name: None,
+        key_label: "key".into(),
+        struct_label: "struct".into(),
+        key_dop: Some(Box::new(minimal_dop())),
+        rows: vec![TableRow {
+            short_name: "Row1".into(),
+            long_name: None,
+            key: "0x01".into(),
+            dop: None,
+            structure: None,
+            sdgs: None,
+            audience: None,
+            funct_class_refs: vec![],
+            state_transition_refs: vec![],
+            pre_condition_state_refs: vec![],
+            is_executable: false,
+            semantic: String::new(),
+            is_mandatory: false,
+            is_final: false,
+        }],
+        diag_comm_connectors: vec![],
+        sdgs: None,
+    };
+
+    let table_row = TableRow {
+        short_name: "TargetRow".into(),
+        long_name: None,
+        key: "0x02".into(),
+        dop: Some(Box::new(minimal_dop())),
+        structure: None,
+        sdgs: None,
+        audience: None,
+        funct_class_refs: vec![],
+        state_transition_refs: vec![],
+        pre_condition_state_refs: vec![],
+        is_executable: true,
+        semantic: "ROW".into(),
+        is_mandatory: false,
+        is_final: false,
+    };
+
+    let table_key_param = Param {
+        id: 10,
+        param_type: ParamType::CodedConst,
+        short_name: "TK_inner".into(),
+        specific_data: Some(ParamData::CodedConst {
+            coded_value: "0x01".into(),
+            diag_coded_type: minimal_diag_coded_type(),
+        }),
+        ..Default::default()
+    };
+
+    let params = vec![
+        Param {
+            id: 0,
+            param_type: ParamType::TableEntry,
+            short_name: "TE".into(),
+            specific_data: Some(ParamData::TableEntry {
+                param: Box::new(Param {
+                    id: 99,
+                    param_type: ParamType::Value,
+                    short_name: "inner".into(),
+                    specific_data: Some(ParamData::Value {
+                        physical_default_value: "0".into(),
+                        dop: Box::new(minimal_dop()),
+                    }),
+                    ..Default::default()
+                }),
+                target: TableEntryRowFragment::Key,
+                table_row: Box::new(table_row),
+            }),
+            ..Default::default()
+        },
+        Param {
+            id: 1,
+            param_type: ParamType::TableKey,
+            short_name: "TK_dop".into(),
+            specific_data: Some(ParamData::TableKey {
+                table_key_reference: TableKeyReference::TableDop(Box::new(table_dop)),
+            }),
+            ..Default::default()
+        },
+        Param {
+            id: 2,
+            param_type: ParamType::TableKey,
+            short_name: "TK_row".into(),
+            specific_data: Some(ParamData::TableKey {
+                table_key_reference: TableKeyReference::TableRow(Box::new(TableRow {
+                    short_name: "RefRow".into(),
+                    long_name: None,
+                    key: "0xFF".into(),
+                    dop: None,
+                    structure: None,
+                    sdgs: None,
+                    audience: None,
+                    funct_class_refs: vec![],
+                    state_transition_refs: vec![],
+                    pre_condition_state_refs: vec![],
+                    is_executable: false,
+                    semantic: String::new(),
+                    is_mandatory: false,
+                    is_final: false,
+                })),
+            }),
+            ..Default::default()
+        },
+        Param {
+            id: 3,
+            param_type: ParamType::TableStruct,
+            short_name: "TS".into(),
+            specific_data: Some(ParamData::TableStruct {
+                table_key: Box::new(table_key_param),
+            }),
+            ..Default::default()
+        },
+    ];
+
+    let db = wrap_params_in_db(params);
+    let fbs = ir_to_flatbuffers(&db);
+    let db2 = flatbuffers_to_ir(&fbs).expect("roundtrip failed");
+    pretty_assertions::assert_eq!(db, db2);
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: Roundtrip DopData variants
+// ---------------------------------------------------------------------------
+
+#[test]
+fn roundtrip_dop_data_field_variants() {
+    let structure_dop = Dop {
+        dop_type: DopType::Structure,
+        short_name: "StructDop".into(),
+        sdgs: None,
+        specific_data: Some(DopData::Structure {
+            params: vec![Param {
+                id: 0,
+                param_type: ParamType::CodedConst,
+                short_name: "F1".into(),
+                specific_data: Some(ParamData::CodedConst {
+                    coded_value: "0xAA".into(),
+                    diag_coded_type: minimal_diag_coded_type(),
+                }),
+                ..Default::default()
+            }],
+            byte_size: Some(4),
+            is_visible: true,
+        }),
+    };
+
+    let end_of_pdu_dop = Dop {
+        dop_type: DopType::EndOfPduField,
+        short_name: "EoPDop".into(),
+        sdgs: None,
+        specific_data: Some(DopData::EndOfPduField {
+            max_number_of_items: Some(10),
+            min_number_of_items: Some(1),
+            field: Some(Field {
+                basic_structure: Some(Box::new(minimal_dop())),
+                env_data_desc: None,
+                is_visible: true,
+            }),
+        }),
+    };
+
+    let static_field_dop = Dop {
+        dop_type: DopType::StaticField,
+        short_name: "SFDop".into(),
+        sdgs: None,
+        specific_data: Some(DopData::StaticField {
+            fixed_number_of_items: 5,
+            item_byte_size: 2,
+            field: Some(Field {
+                basic_structure: Some(Box::new(minimal_dop())),
+                env_data_desc: None,
+                is_visible: false,
+            }),
+        }),
+    };
+
+    let dyn_len_dop = Dop {
+        dop_type: DopType::DynamicLengthField,
+        short_name: "DynLenDop".into(),
+        sdgs: None,
+        specific_data: Some(DopData::DynamicLengthField {
+            offset: 4,
+            field: Some(Field {
+                basic_structure: Some(Box::new(minimal_dop())),
+                env_data_desc: None,
+                is_visible: true,
+            }),
+            determine_number_of_items: Some(DetermineNumberOfItems {
+                byte_position: 0,
+                bit_position: 0,
+                dop: Box::new(minimal_dop()),
+            }),
+        }),
+    };
+
+    for dop in [structure_dop, end_of_pdu_dop, static_field_dop, dyn_len_dop] {
+        let db = wrap_dop_in_db(dop);
+        let fbs = ir_to_flatbuffers(&db);
+        let db2 = flatbuffers_to_ir(&fbs).expect("roundtrip failed");
+        pretty_assertions::assert_eq!(db, db2);
+    }
+}
+
+#[test]
+fn roundtrip_dop_data_complex_variants() {
+    let dtc_dop = Dop {
+        dop_type: DopType::Dtc,
+        short_name: "DtcDop".into(),
+        sdgs: None,
+        specific_data: Some(DopData::DtcDop {
+            diag_coded_type: Some(minimal_diag_coded_type()),
+            physical_type: Some(PhysicalType {
+                precision: Some(0),
+                base_data_type: PhysicalTypeDataType::AUint32,
+                display_radix: Radix::Hex,
+            }),
+            compu_method: Some(CompuMethod {
+                category: CompuCategory::Identical,
+                internal_to_phys: None,
+                phys_to_internal: None,
+            }),
+            dtcs: vec![Dtc {
+                short_name: "P0100".into(),
+                trouble_code: 0x0100,
+                display_trouble_code: "P0100".into(),
+                text: Some(Text {
+                    value: "MAF".into(),
+                    ti: "en".into(),
+                }),
+                level: Some(2),
+                sdgs: None,
+                is_temporary: false,
+            }],
+            is_visible: true,
+        }),
+    };
+
+    let env_data_dop = Dop {
+        dop_type: DopType::EnvData,
+        short_name: "EnvDop".into(),
+        sdgs: None,
+        specific_data: Some(DopData::EnvData {
+            dtc_values: vec![0x01, 0x02],
+            params: vec![Param {
+                id: 0,
+                param_type: ParamType::Value,
+                short_name: "EP".into(),
+                specific_data: Some(ParamData::Value {
+                    physical_default_value: "0".into(),
+                    dop: Box::new(minimal_dop()),
+                }),
+                ..Default::default()
+            }],
+        }),
+    };
+
+    let env_data_desc_dop = Dop {
+        dop_type: DopType::EnvDataDesc,
+        short_name: "EnvDescDop".into(),
+        sdgs: None,
+        specific_data: Some(DopData::EnvDataDesc {
+            param_short_name: "ParamSN".into(),
+            param_path_short_name: "ParamPath".into(),
+            env_datas: vec![Dop {
+                dop_type: DopType::EnvData,
+                short_name: "NestedEnv".into(),
+                sdgs: None,
+                specific_data: Some(DopData::EnvData {
+                    dtc_values: vec![0x10],
+                    params: vec![],
+                }),
+            }],
+        }),
+    };
+
+    for dop in [dtc_dop, env_data_dop, env_data_desc_dop] {
+        let db = wrap_dop_in_db(dop);
+        let fbs = ir_to_flatbuffers(&db);
+        let db2 = flatbuffers_to_ir(&fbs).expect("roundtrip failed");
+        pretty_assertions::assert_eq!(db, db2);
+    }
+}
+
+#[test]
+fn roundtrip_dop_data_mux_dop() {
+    let mux_dop = Dop {
+        dop_type: DopType::Mux,
+        short_name: "MuxDop".into(),
+        sdgs: None,
+        specific_data: Some(DopData::MuxDop {
+            byte_position: 0,
+            switch_key: Some(SwitchKey {
+                byte_position: 0,
+                bit_position: Some(4),
+                dop: Box::new(minimal_dop()),
+            }),
+            default_case: Some(DefaultCase {
+                short_name: "DefCase".into(),
+                long_name: Some(LongName {
+                    value: "Default Case".into(),
+                    ti: "en".into(),
+                }),
+                structure: Some(Box::new(Dop {
+                    dop_type: DopType::Structure,
+                    short_name: "DefStruct".into(),
+                    sdgs: None,
+                    specific_data: Some(DopData::Structure {
+                        params: vec![],
+                        byte_size: Some(2),
+                        is_visible: false,
+                    }),
+                })),
+            }),
+            cases: vec![
+                Case {
+                    short_name: "Case1".into(),
+                    long_name: None,
+                    structure: Some(Box::new(Dop {
+                        dop_type: DopType::Structure,
+                        short_name: "C1Struct".into(),
+                        sdgs: None,
+                        specific_data: Some(DopData::Structure {
+                            params: vec![Param {
+                                id: 0,
+                                param_type: ParamType::CodedConst,
+                                short_name: "C1P".into(),
+                                specific_data: Some(ParamData::CodedConst {
+                                    coded_value: "0x01".into(),
+                                    diag_coded_type: minimal_diag_coded_type(),
+                                }),
+                                ..Default::default()
+                            }],
+                            byte_size: None,
+                            is_visible: true,
+                        }),
+                    })),
+                    lower_limit: Some(Limit {
+                        value: "0".into(),
+                        interval_type: IntervalType::Closed,
+                    }),
+                    upper_limit: Some(Limit {
+                        value: "10".into(),
+                        interval_type: IntervalType::Open,
+                    }),
+                },
+                Case {
+                    short_name: "Case2".into(),
+                    long_name: Some(LongName {
+                        value: "Second Case".into(),
+                        ti: "en".into(),
+                    }),
+                    structure: None,
+                    lower_limit: Some(Limit {
+                        value: "10".into(),
+                        interval_type: IntervalType::Closed,
+                    }),
+                    upper_limit: Some(Limit {
+                        value: "255".into(),
+                        interval_type: IntervalType::Closed,
+                    }),
+                },
+            ],
+            is_visible: true,
+        }),
+    };
+
+    let db = wrap_dop_in_db(mux_dop);
+    let fbs = ir_to_flatbuffers(&db);
+    let db2 = flatbuffers_to_ir(&fbs).expect("roundtrip failed");
+    pretty_assertions::assert_eq!(db, db2);
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: Roundtrip SingleEcuJob
+// ---------------------------------------------------------------------------
+
+#[test]
+fn roundtrip_single_ecu_job() {
+    let db = DiagDatabase {
+        variants: vec![Variant {
+            diag_layer: DiagLayer {
+                short_name: "V".into(),
+                single_ecu_jobs: vec![SingleEcuJob {
+                    diag_comm: DiagComm {
+                        short_name: "ReadEcuIdent".into(),
+                        semantic: "IDENTIFICATION".into(),
+                        ..Default::default()
+                    },
+                    prog_codes: vec![ProgCode {
+                        code_file: "ecu_ident.jar".into(),
+                        encryption: "none".into(),
+                        syntax: "JAVA".into(),
+                        revision: "1.0".into(),
+                        entrypoint: "com.ecu.ReadIdent".into(),
+                        libraries: vec![Library {
+                            short_name: "HelperLib".into(),
+                            long_name: Some(LongName {
+                                value: "Helper Library".into(),
+                                ti: "en".into(),
+                            }),
+                            code_file: "helper.jar".into(),
+                            encryption: "none".into(),
+                            syntax: "JAVA".into(),
+                            entry_point: "com.ecu.Helper".into(),
+                        }],
+                    }],
+                    input_params: vec![JobParam {
+                        short_name: "InputAddr".into(),
+                        long_name: None,
+                        physical_default_value: "0x0000".into(),
+                        dop_base: Some(Box::new(minimal_dop())),
+                        semantic: "INPUT".into(),
+                    }],
+                    output_params: vec![JobParam {
+                        short_name: "OutputData".into(),
+                        long_name: Some(LongName {
+                            value: "Output Data".into(),
+                            ti: "en".into(),
+                        }),
+                        physical_default_value: String::new(),
+                        dop_base: None,
+                        semantic: "OUTPUT".into(),
+                    }],
+                    neg_output_params: vec![JobParam {
+                        short_name: "NegResult".into(),
+                        long_name: None,
+                        physical_default_value: "0xFF".into(),
+                        dop_base: None,
+                        semantic: "NEG_OUTPUT".into(),
+                    }],
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let fbs = ir_to_flatbuffers(&db);
+    let db2 = flatbuffers_to_ir(&fbs).expect("roundtrip failed");
+    pretty_assertions::assert_eq!(db, db2);
+}

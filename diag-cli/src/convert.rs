@@ -348,3 +348,72 @@ pub fn run_batch_convert(
     );
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_compression_lzma() {
+        assert_eq!(
+            parse_compression("lzma").unwrap(),
+            mdd_format::compression::Compression::Lzma
+        );
+    }
+
+    #[test]
+    fn parse_compression_gzip() {
+        assert_eq!(
+            parse_compression("gzip").unwrap(),
+            mdd_format::compression::Compression::Gzip
+        );
+    }
+
+    #[test]
+    fn parse_compression_zstd() {
+        assert_eq!(
+            parse_compression("zstd").unwrap(),
+            mdd_format::compression::Compression::Zstd
+        );
+    }
+
+    #[test]
+    fn parse_compression_none() {
+        assert_eq!(
+            parse_compression("none").unwrap(),
+            mdd_format::compression::Compression::None
+        );
+    }
+
+    #[test]
+    fn parse_compression_invalid() {
+        let err = parse_compression("brotli").unwrap_err();
+        assert!(err.to_string().contains("Unknown compression"));
+    }
+
+    #[test]
+    fn format_extension_odx() {
+        assert_eq!(format_extension("odx").unwrap(), "odx");
+    }
+
+    #[test]
+    fn format_extension_yaml() {
+        assert_eq!(format_extension("yaml").unwrap(), "yml");
+    }
+
+    #[test]
+    fn format_extension_yml() {
+        assert_eq!(format_extension("yml").unwrap(), "yml");
+    }
+
+    #[test]
+    fn format_extension_mdd() {
+        assert_eq!(format_extension("mdd").unwrap(), "mdd");
+    }
+
+    #[test]
+    fn format_extension_invalid() {
+        let err = format_extension("json").unwrap_err();
+        assert!(err.to_string().contains("Unknown output format"));
+    }
+}
