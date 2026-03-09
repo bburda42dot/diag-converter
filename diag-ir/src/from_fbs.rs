@@ -52,15 +52,8 @@ pub fn flatbuffers_to_ir(fbs_data: &[u8]) -> Result<DiagDatabase, ConversionErro
         protocols: vec![],
         ecu_shared_datas: vec![],
         dtcs,
-        memory: ecu_data.memory().map(|m| convert_memory_config(&m)),
-        type_definitions: ecu_data
-            .type_definitions()
-            .map(|v| {
-                (0..v.len())
-                    .map(|i| convert_type_definition(&v.get(i)))
-                    .collect()
-            })
-            .unwrap_or_default(),
+        memory: None,
+        type_definitions: vec![],
     })
 }
 
@@ -1027,7 +1020,7 @@ fn convert_protocol(p: &dataformat::Protocol<'_>) -> Protocol {
         prot_stack: p.prot_stack().map(|ps| convert_prot_stack(&ps)),
         parent_refs: p
             .parent_refs()
-            .map(|v| (0..v.len()).map(|i| convert_protocol(&v.get(i))).collect())
+            .map(|v| (0..v.len()).map(|i| convert_parent_ref(&v.get(i))).collect())
             .unwrap_or_default(),
     }
 }
@@ -1661,127 +1654,3 @@ fn convert_com_param_usage(v: dataformat::ComParamUsage) -> ComParamUsage {
     }
 }
 
-fn convert_memory_access(v: dataformat::MemoryAccess) -> MemoryAccess {
-    match v {
-        dataformat::MemoryAccess::Read => MemoryAccess::Read,
-        dataformat::MemoryAccess::Write => MemoryAccess::Write,
-        dataformat::MemoryAccess::ReadWrite => MemoryAccess::ReadWrite,
-        dataformat::MemoryAccess::Execute => MemoryAccess::Execute,
-        _ => MemoryAccess::Read,
-    }
-}
-
-fn convert_data_block_type(v: dataformat::DataBlockType) -> DataBlockType {
-    match v {
-        dataformat::DataBlockType::Download => DataBlockType::Download,
-        dataformat::DataBlockType::Upload => DataBlockType::Upload,
-        _ => DataBlockType::Download,
-    }
-}
-
-fn convert_data_block_format(v: dataformat::DataBlockFormat) -> DataBlockFormat {
-    match v {
-        dataformat::DataBlockFormat::Raw => DataBlockFormat::Raw,
-        dataformat::DataBlockFormat::Encrypted => DataBlockFormat::Encrypted,
-        dataformat::DataBlockFormat::Compressed => DataBlockFormat::Compressed,
-        dataformat::DataBlockFormat::EncryptedCompressed => DataBlockFormat::EncryptedCompressed,
-        _ => DataBlockFormat::Raw,
-    }
-}
-
-fn convert_address_format(af: &dataformat::AddressFormat<'_>) -> AddressFormat {
-    AddressFormat {
-        address_bytes: af.address_bytes(),
-        length_bytes: af.length_bytes(),
-    }
-}
-
-fn convert_memory_region(r: &dataformat::MemoryRegion<'_>) -> MemoryRegion {
-    let session = r
-        .session()
-        .map(|v| (0..v.len()).map(|i| v.get(i).to_string()).collect());
-    MemoryRegion {
-        name: s(r.name()),
-        description: r.description().map(std::string::ToString::to_string),
-        start_address: r.start_address(),
-        size: r.size(),
-        access: convert_memory_access(r.access()),
-        address_format: r.address_format().map(|af| convert_address_format(&af)),
-        security_level: r.security_level().map(std::string::ToString::to_string),
-        session,
-    }
-}
-
-fn convert_data_block(b: &dataformat::DataBlock<'_>) -> DataBlock {
-    DataBlock {
-        name: s(b.name()),
-        description: b.description().map(std::string::ToString::to_string),
-        block_type: convert_data_block_type(b.block_type()),
-        memory_address: b.memory_address(),
-        memory_size: b.memory_size(),
-        format: convert_data_block_format(b.format()),
-        max_block_length: if b.max_block_length() == 0 {
-            None
-        } else {
-            Some(b.max_block_length())
-        },
-        security_level: b.security_level().map(std::string::ToString::to_string),
-        session: b.session().map(std::string::ToString::to_string),
-        checksum_type: b.checksum_type().map(std::string::ToString::to_string),
-    }
-}
-
-fn convert_memory_config(m: &dataformat::MemoryConfig<'_>) -> MemoryConfig {
-    let default_address_format = m.default_address_format().map_or(
-        AddressFormat {
-            address_bytes: 4,
-            length_bytes: 4,
-        },
-        |af| convert_address_format(&af),
-    );
-    let regions = m
-        .regions()
-        .map(|v| {
-            (0..v.len())
-                .map(|i| convert_memory_region(&v.get(i)))
-                .collect()
-        })
-        .unwrap_or_default();
-    let data_blocks = m
-        .data_blocks()
-        .map(|v| {
-            (0..v.len())
-                .map(|i| convert_data_block(&v.get(i)))
-                .collect()
-        })
-        .unwrap_or_default();
-    MemoryConfig {
-        default_address_format,
-        regions,
-        data_blocks,
-    }
-}
-
-fn convert_type_definition(td: &dataformat::TypeDefinition<'_>) -> TypeDefinition {
-    TypeDefinition {
-        name: s(td.name()),
-        base: s(td.base()),
-        bit_length: if td.bit_length() == 0 {
-            None
-        } else {
-            Some(td.bit_length())
-        },
-        min_length: if td.min_length() == 0 {
-            None
-        } else {
-            Some(td.min_length())
-        },
-        max_length: if td.max_length() == 0 {
-            None
-        } else {
-            Some(td.max_length())
-        },
-        enum_values_json: td.enum_values_json().map(std::string::ToString::to_string),
-        description: td.description().map(std::string::ToString::to_string),
-    }
-}

@@ -548,7 +548,7 @@ pub struct Protocol {
     pub diag_layer: DiagLayer,
     pub com_param_spec: Option<ComParamSpec>,
     pub prot_stack: Option<ProtStack>,
-    pub parent_refs: Vec<Protocol>,
+    pub parent_refs: Vec<ParentRef>,
 }
 
 /// Maps to FBS ComParamSpec
