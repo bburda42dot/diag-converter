@@ -315,7 +315,53 @@
             </MATCHING-PARAMETERS>
           </ECU-VARIANT-PATTERN>
         </ECU-VARIANT-PATTERNS>
+        <DIAG-COMMS>
+          <DIAG-COMM-REF ID-REF="DS_TesterPresent"/>
+        </DIAG-COMMS>
       </ECU-VARIANT>
     </ECU-VARIANTS>
+    <FUNCTIONAL-GROUPS>
+      <FUNCTIONAL-GROUP ID="FG_Diagnostics">
+        <SHORT-NAME>Diagnostics</SHORT-NAME>
+        <PARENT-REFS>
+          <PARENT-REF ID-REF="PROT_ISO15765" DOCTYPE="PROTOCOL"/>
+        </PARENT-REFS>
+      </FUNCTIONAL-GROUP>
+    </FUNCTIONAL-GROUPS>
+    <PROTOCOLS>
+      <PROTOCOL ID="PROT_ISO15765">
+        <SHORT-NAME>ISO_15765_3</SHORT-NAME>
+        <LONG-NAME>ISO 15765-3 Diagnostic Communication</LONG-NAME>
+        <DIAG-COMMS>
+          <DIAG-SERVICE ID="DS_TesterPresent" SEMANTIC="SESSION">
+            <SHORT-NAME>TesterPresent</SHORT-NAME>
+            <REQUEST-REF ID-REF="RQ_ReadSpeed"/>
+          </DIAG-SERVICE>
+        </DIAG-COMMS>
+        <COMPARAM-REFS>
+          <COMPARAM-REF ID-REF="CP_Baudrate">
+            <SIMPLE-VALUE>500000</SIMPLE-VALUE>
+            <PROTOCOL-SNREF SHORT-NAME="ISO_15765_3"/>
+            <PROT-STACK-SNREF SHORT-NAME="ISO_11898_2_DWCAN"/>
+          </COMPARAM-REF>
+        </COMPARAM-REFS>
+      </PROTOCOL>
+    </PROTOCOLS>
+    <ECU-SHARED-DATAS>
+      <ECU-SHARED-DATA ID="ESD_Common">
+        <SHORT-NAME>CommonSharedData</SHORT-NAME>
+        <LONG-NAME>Common ECU Shared Data</LONG-NAME>
+        <DIAG-DATA-DICTIONARY-SPEC>
+          <DATA-OBJECT-PROPS>
+            <DATA-OBJECT-PROP ID="DOP_SharedCounter">
+              <SHORT-NAME>SharedCounter</SHORT-NAME>
+              <DIAG-CODED-TYPE xsi:type="STANDARD-LENGTH-TYPE" BASE-DATA-TYPE="A_UINT32">
+                <BIT-LENGTH>8</BIT-LENGTH>
+              </DIAG-CODED-TYPE>
+            </DATA-OBJECT-PROP>
+          </DATA-OBJECT-PROPS>
+        </DIAG-DATA-DICTIONARY-SPEC>
+      </ECU-SHARED-DATA>
+    </ECU-SHARED-DATAS>
   </DIAG-LAYER-CONTAINER>
 </ODX>
