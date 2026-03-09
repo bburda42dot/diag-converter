@@ -77,7 +77,7 @@ fn odx_to_ir(odx: &Odx, index: &OdxIndex, lenient: bool) -> Result<DiagDatabase,
         }
     }
 
-    let functional_groups = if let Some(w) = &dlc.functional_groups {
+    let mut functional_groups = if let Some(w) = &dlc.functional_groups {
         w.items
             .iter()
             .map(|layer| {
@@ -125,7 +125,7 @@ fn odx_to_ir(odx: &Odx, index: &OdxIndex, lenient: bool) -> Result<DiagDatabase,
     dedup_dtcs(&mut all_dtcs);
 
     // Apply protocol associations to services in variants and functional groups
-    apply_protocol_associations(&mut variants, &service_protocols);
+    apply_protocol_associations(&mut variants, &mut functional_groups, &service_protocols);
 
     Ok(DiagDatabase {
         version,
@@ -1307,67 +1307,47 @@ fn extract_parent_refs(layer: &odx_model::DiagLayerVariant, index: &OdxIndex) ->
 
                     // Determine parent ref type from the layer category in the index
                     let ref_type = match pref.id_ref.as_deref() {
-                        Some(id) => match index.layer_types.get(id) {
-                            Some(LayerType::Protocol) => {
-                                let layer = index.layers.get(id);
-                                let short_name = layer
-                                    .and_then(|l| l.short_name.clone())
-                                    .unwrap_or_default();
-                                ParentRefType::Protocol(Box::new(Protocol {
-                                    diag_layer: DiagLayer {
-                                        short_name,
-                                        ..Default::default()
-                                    },
-                                    com_param_spec: None,
-                                    prot_stack: None,
-                                    parent_refs: Vec::new(),
-                                }))
-                            }
-                            Some(LayerType::FunctionalGroup) => {
-                                let layer = index.layers.get(id);
-                                let short_name = layer
-                                    .and_then(|l| l.short_name.clone())
-                                    .unwrap_or_default();
-                                ParentRefType::FunctionalGroup(Box::new(FunctionalGroup {
-                                    diag_layer: DiagLayer {
-                                        short_name,
-                                        ..Default::default()
-                                    },
-                                    parent_refs: Vec::new(),
-                                }))
-                            }
-                            Some(LayerType::EcuSharedData) => {
-                                let layer = index.layers.get(id);
-                                let short_name = layer
-                                    .and_then(|l| l.short_name.clone())
-                                    .unwrap_or_default();
-                                ParentRefType::EcuSharedData(Box::new(EcuSharedData {
-                                    diag_layer: DiagLayer {
-                                        short_name,
-                                        ..Default::default()
-                                    },
-                                }))
-                            }
-                            _ => {
-                                // BaseVariant, EcuVariant, or unknown -> Variant
-                                let layer = index.layers.get(id);
-                                let short_name = layer
-                                    .and_then(|l| l.short_name.clone())
-                                    .unwrap_or_default();
-                                ParentRefType::Variant(Box::new(Variant {
-                                    diag_layer: DiagLayer {
-                                        short_name,
-                                        ..Default::default()
-                                    },
+                        Some(id) => {
+                            let short_name = index
+                                .layers
+                                .get(id)
+                                .and_then(|l| l.short_name.clone())
+                                .unwrap_or_default();
+                            let dl = DiagLayer {
+                                short_name,
+                                ..Default::default()
+                            };
+                            match index.layer_types.get(id) {
+                                Some(LayerType::Protocol) => {
+                                    ParentRefType::Protocol(Box::new(Protocol {
+                                        diag_layer: dl,
+                                        com_param_spec: None,
+                                        prot_stack: None,
+                                        parent_refs: Vec::new(),
+                                    }))
+                                }
+                                Some(LayerType::FunctionalGroup) => {
+                                    ParentRefType::FunctionalGroup(Box::new(FunctionalGroup {
+                                        diag_layer: dl,
+                                        parent_refs: Vec::new(),
+                                    }))
+                                }
+                                Some(LayerType::EcuSharedData) => {
+                                    ParentRefType::EcuSharedData(Box::new(EcuSharedData {
+                                        diag_layer: dl,
+                                    }))
+                                }
+                                _ => ParentRefType::Variant(Box::new(Variant {
+                                    diag_layer: dl,
                                     is_base_variant: matches!(
                                         index.layer_types.get(id),
                                         Some(LayerType::BaseVariant)
                                     ),
                                     variant_patterns: Vec::new(),
                                     parent_refs: Vec::new(),
-                                }))
+                                })),
                             }
-                        },
+                        }
                         None => ParentRefType::Variant(Box::new(Variant {
                             diag_layer: DiagLayer::default(),
                             is_base_variant: true,
@@ -1555,40 +1535,64 @@ fn hex_to_bytes(hex: &str) -> Vec<u8> {
 
 // --- Protocol association helpers ---
 
-/// Build a map from service short_name to the Protocol(s) that define it.
+/// Build a map from service short_name to lightweight Protocol stub(s).
+/// Stubs contain only the protocol's own metadata (short_name, com_param_spec,
+/// prot_stack), NOT the full diag_layer with all services - avoiding O(N^2)
+/// cloning when many services share the same protocol.
 fn build_service_protocol_map(protocols: &[Protocol]) -> HashMap<String, Vec<Protocol>> {
     let mut map: HashMap<String, Vec<Protocol>> = HashMap::new();
     for proto in protocols {
+        let stub = Protocol {
+            diag_layer: DiagLayer {
+                short_name: proto.diag_layer.short_name.clone(),
+                long_name: proto.diag_layer.long_name.clone(),
+                ..Default::default()
+            },
+            com_param_spec: proto.com_param_spec.clone(),
+            prot_stack: proto.prot_stack.clone(),
+            parent_refs: Vec::new(),
+        };
         for svc in &proto.diag_layer.diag_services {
             map.entry(svc.diag_comm.short_name.clone())
                 .or_default()
-                .push(proto.clone());
+                .push(stub.clone());
         }
         for job in &proto.diag_layer.single_ecu_jobs {
             map.entry(job.diag_comm.short_name.clone())
                 .or_default()
-                .push(proto.clone());
+                .push(stub.clone());
         }
     }
     map
 }
 
-/// For each service in variants, if it appears in the service-protocol map,
-/// populate its `DiagComm.protocols` field.
+/// For each service in variants and functional groups, if it appears in the
+/// service-protocol map, populate its `DiagComm.protocols` field.
 fn apply_protocol_associations(
     variants: &mut [Variant],
+    functional_groups: &mut [FunctionalGroup],
     service_protocols: &HashMap<String, Vec<Protocol>>,
 ) {
     for variant in variants {
-        for svc in &mut variant.diag_layer.diag_services {
-            if let Some(protos) = service_protocols.get(&svc.diag_comm.short_name) {
-                svc.diag_comm.protocols = protos.clone();
-            }
+        apply_to_diag_layer(&mut variant.diag_layer, service_protocols);
+    }
+    for fg in functional_groups {
+        apply_to_diag_layer(&mut fg.diag_layer, service_protocols);
+    }
+}
+
+fn apply_to_diag_layer(
+    layer: &mut DiagLayer,
+    service_protocols: &HashMap<String, Vec<Protocol>>,
+) {
+    for svc in &mut layer.diag_services {
+        if let Some(protos) = service_protocols.get(&svc.diag_comm.short_name) {
+            svc.diag_comm.protocols = protos.clone();
         }
-        for job in &mut variant.diag_layer.single_ecu_jobs {
-            if let Some(protos) = service_protocols.get(&job.diag_comm.short_name) {
-                job.diag_comm.protocols = protos.clone();
-            }
+    }
+    for job in &mut layer.single_ecu_jobs {
+        if let Some(protos) = service_protocols.get(&job.diag_comm.short_name) {
+            job.diag_comm.protocols = protos.clone();
         }
     }
 }

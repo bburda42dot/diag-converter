@@ -49,9 +49,16 @@ pub fn flatbuffers_to_ir(fbs_data: &[u8]) -> Result<DiagDatabase, ConversionErro
         metadata,
         variants,
         functional_groups,
+        // Protocols and EcuSharedData are not stored at the EcuData root level
+        // in the FBS schema (matching odx-converter). Protocols are embedded
+        // per-service inside DiagComm.protocols; EcuSharedData only appears
+        // as a ParentRef variant.
         protocols: vec![],
         ecu_shared_datas: vec![],
         dtcs,
+        // MemoryConfig and TypeDefinition are not part of the shared FBS schema
+        // (odx-converter does not serialize them). These IR fields are only
+        // populated by the YAML parser and are lost during MDD serialization.
         memory: None,
         type_definitions: vec![],
     })
