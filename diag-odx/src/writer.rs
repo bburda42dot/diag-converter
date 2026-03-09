@@ -90,7 +90,13 @@ fn ir_to_odx(db: &DiagDatabase) -> Odx {
                     items: ecu_variants,
                 })
             },
-            ecu_shared_datas: None,
+            ecu_shared_datas: if db.ecu_shared_datas.is_empty() {
+                None
+            } else {
+                Some(EcuSharedDatasWrapper {
+                    items: db.ecu_shared_datas.iter().map(ir_ecu_shared_data_to_layer).collect(),
+                })
+            },
             functional_groups: if functional_groups.is_empty() {
                 None
             } else {
@@ -98,7 +104,13 @@ fn ir_to_odx(db: &DiagDatabase) -> Odx {
                     items: functional_groups,
                 })
             },
-            protocols: None,
+            protocols: if db.protocols.is_empty() {
+                None
+            } else {
+                Some(ProtocolsWrapper {
+                    items: db.protocols.iter().map(ir_protocol_to_layer).collect(),
+                })
+            },
         }),
         comparam_spec: None,
     }
@@ -158,6 +170,22 @@ fn ir_fg_to_layer(fg: &FunctionalGroup) -> DiagLayerVariant {
     }
 
     layer
+}
+
+fn ir_protocol_to_layer(proto: &Protocol) -> DiagLayerVariant {
+    let mut layer = ir_diag_layer_to_odx_no_dtcs(&proto.diag_layer);
+
+    if !proto.parent_refs.is_empty() {
+        layer.parent_refs = Some(ParentRefsWrapper {
+            items: proto.parent_refs.iter().map(ir_parent_ref_to_odx).collect(),
+        });
+    }
+
+    layer
+}
+
+fn ir_ecu_shared_data_to_layer(esd: &EcuSharedData) -> DiagLayerVariant {
+    ir_diag_layer_to_odx_no_dtcs(&esd.diag_layer)
 }
 
 fn ir_diag_layer_to_odx(diag_layer: &DiagLayer, db: &DiagDatabase) -> DiagLayerVariant {
