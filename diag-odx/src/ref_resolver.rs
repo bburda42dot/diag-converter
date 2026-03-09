@@ -7,6 +7,16 @@ use std::collections::HashMap;
 
 use crate::odx_model::*;
 
+/// Category of a DiagLayerVariant within the DIAG-LAYER-CONTAINER.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayerType {
+    Protocol,
+    FunctionalGroup,
+    BaseVariant,
+    EcuVariant,
+    EcuSharedData,
+}
+
 /// Pre-indexed ODX data for reference resolution.
 /// All items are borrowed from the original `Odx` tree.
 pub struct OdxIndex<'a> {
@@ -21,6 +31,7 @@ pub struct OdxIndex<'a> {
     pub physical_dimensions: HashMap<&'a str, &'a OdxPhysicalDimension>,
     pub tables: HashMap<&'a str, &'a OdxTable>,
     pub layers: HashMap<&'a str, &'a DiagLayerVariant>,
+    pub layer_types: HashMap<&'a str, LayerType>,
     pub states: HashMap<&'a str, &'a OdxState>,
     pub state_charts: HashMap<&'a str, &'a OdxStateChart>,
     pub diag_services: HashMap<&'a str, &'a OdxDiagService>,
@@ -45,6 +56,7 @@ impl<'a> OdxIndex<'a> {
             physical_dimensions: HashMap::new(),
             tables: HashMap::new(),
             layers: HashMap::new(),
+            layer_types: HashMap::new(),
             states: HashMap::new(),
             state_charts: HashMap::new(),
             diag_services: HashMap::new(),
@@ -55,30 +67,43 @@ impl<'a> OdxIndex<'a> {
         };
 
         if let Some(dlc) = &odx.diag_layer_container {
-            idx.index_layer_list(&dlc.base_variants, |w| &w.items);
-            idx.index_layer_list(&dlc.ecu_variants, |w| &w.items);
-            idx.index_layer_list(&dlc.ecu_shared_datas, |w| &w.items);
-            idx.index_layer_list(&dlc.functional_groups, |w| &w.items);
-            idx.index_layer_list(&dlc.protocols, |w| &w.items);
+            idx.index_layer_list(&dlc.base_variants, |w| &w.items, LayerType::BaseVariant);
+            idx.index_layer_list(&dlc.ecu_variants, |w| &w.items, LayerType::EcuVariant);
+            idx.index_layer_list(
+                &dlc.ecu_shared_datas,
+                |w| &w.items,
+                LayerType::EcuSharedData,
+            );
+            idx.index_layer_list(
+                &dlc.functional_groups,
+                |w| &w.items,
+                LayerType::FunctionalGroup,
+            );
+            idx.index_layer_list(&dlc.protocols, |w| &w.items, LayerType::Protocol);
         }
 
         idx
     }
 
-    fn index_layer_list<W, F>(&mut self, wrapper: &'a Option<W>, get_items: F)
-    where
+    fn index_layer_list<W, F>(
+        &mut self,
+        wrapper: &'a Option<W>,
+        get_items: F,
+        layer_type: LayerType,
+    ) where
         F: Fn(&'a W) -> &'a [DiagLayerVariant],
     {
         if let Some(w) = wrapper {
             for layer in get_items(w) {
-                self.index_layer(layer);
+                self.index_layer(layer, layer_type);
             }
         }
     }
 
-    fn index_layer(&mut self, layer: &'a DiagLayerVariant) {
+    fn index_layer(&mut self, layer: &'a DiagLayerVariant, layer_type: LayerType) {
         if let Some(id) = layer.id.as_deref() {
             self.layers.insert(id, layer);
+            self.layer_types.insert(id, layer_type);
         }
 
         if let Some(spec) = &layer.diag_data_dictionary_spec {
