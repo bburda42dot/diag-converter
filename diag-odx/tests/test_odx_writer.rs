@@ -369,8 +369,7 @@ fn test_odx_roundtrip_preserves_protocols() {
     if let Some(orig_p) = original.protocols.first() {
         let repr_p = &reparsed.protocols[0];
         assert_eq!(
-            orig_p.diag_layer.short_name,
-            repr_p.diag_layer.short_name,
+            orig_p.diag_layer.short_name, repr_p.diag_layer.short_name,
             "protocol short_name should be preserved"
         );
     }
@@ -391,8 +390,7 @@ fn test_odx_roundtrip_preserves_ecu_shared_data() {
     if let Some(orig_esd) = original.ecu_shared_datas.first() {
         let repr_esd = &reparsed.ecu_shared_datas[0];
         assert_eq!(
-            orig_esd.diag_layer.short_name,
-            repr_esd.diag_layer.short_name,
+            orig_esd.diag_layer.short_name, repr_esd.diag_layer.short_name,
             "ecu_shared_data short_name should be preserved"
         );
     }

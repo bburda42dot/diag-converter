@@ -340,5 +340,3 @@ fn lossless_odx_roundtrip_minimal() {
     let db2 = parse_odx(&odx_out).unwrap();
     assert_lossless(&db1, &db2, "ODX roundtrip: minimal");
 }
-
-

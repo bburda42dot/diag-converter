@@ -1027,7 +1027,11 @@ fn convert_protocol(p: &dataformat::Protocol<'_>) -> Protocol {
         prot_stack: p.prot_stack().map(|ps| convert_prot_stack(&ps)),
         parent_refs: p
             .parent_refs()
-            .map(|v| (0..v.len()).map(|i| convert_parent_ref(&v.get(i))).collect())
+            .map(|v| {
+                (0..v.len())
+                    .map(|i| convert_parent_ref(&v.get(i)))
+                    .collect()
+            })
             .unwrap_or_default(),
     }
 }
@@ -1660,4 +1664,3 @@ fn convert_com_param_usage(v: dataformat::ComParamUsage) -> ComParamUsage {
         _ => ComParamUsage::EcuSoftware,
     }
 }
-

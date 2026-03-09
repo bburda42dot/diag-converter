@@ -1581,10 +1581,7 @@ fn apply_protocol_associations(
     }
 }
 
-fn apply_to_diag_layer(
-    layer: &mut DiagLayer,
-    service_protocols: &HashMap<String, Vec<Protocol>>,
-) {
+fn apply_to_diag_layer(layer: &mut DiagLayer, service_protocols: &HashMap<String, Vec<Protocol>>) {
     for svc in &mut layer.diag_services {
         if let Some(protos) = service_protocols.get(&svc.diag_comm.short_name) {
             svc.diag_comm.protocols = protos.clone();

@@ -94,7 +94,11 @@ fn ir_to_odx(db: &DiagDatabase) -> Odx {
                 None
             } else {
                 Some(EcuSharedDatasWrapper {
-                    items: db.ecu_shared_datas.iter().map(ir_ecu_shared_data_to_layer).collect(),
+                    items: db
+                        .ecu_shared_datas
+                        .iter()
+                        .map(ir_ecu_shared_data_to_layer)
+                        .collect(),
                 })
             },
             functional_groups: if functional_groups.is_empty() {
