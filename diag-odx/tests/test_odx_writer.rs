@@ -353,3 +353,47 @@ fn test_odx_writer_handles_all_param_types() {
     );
     assert!(odx_output.contains("VALUE"), "should contain VALUE param");
 }
+
+#[test]
+fn test_odx_roundtrip_preserves_protocols() {
+    let xml = include_str!("../../test-fixtures/odx/minimal.odx");
+    let original = parse_odx(xml).unwrap();
+    let odx_output = write_odx(&original).unwrap();
+    let reparsed = parse_odx(&odx_output).unwrap();
+
+    assert_eq!(
+        original.protocols.len(),
+        reparsed.protocols.len(),
+        "protocol count should be preserved"
+    );
+    if let Some(orig_p) = original.protocols.first() {
+        let repr_p = &reparsed.protocols[0];
+        assert_eq!(
+            orig_p.diag_layer.short_name,
+            repr_p.diag_layer.short_name,
+            "protocol short_name should be preserved"
+        );
+    }
+}
+
+#[test]
+fn test_odx_roundtrip_preserves_ecu_shared_data() {
+    let xml = include_str!("../../test-fixtures/odx/minimal.odx");
+    let original = parse_odx(xml).unwrap();
+    let odx_output = write_odx(&original).unwrap();
+    let reparsed = parse_odx(&odx_output).unwrap();
+
+    assert_eq!(
+        original.ecu_shared_datas.len(),
+        reparsed.ecu_shared_datas.len(),
+        "ecu_shared_data count should be preserved"
+    );
+    if let Some(orig_esd) = original.ecu_shared_datas.first() {
+        let repr_esd = &reparsed.ecu_shared_datas[0];
+        assert_eq!(
+            orig_esd.diag_layer.short_name,
+            repr_esd.diag_layer.short_name,
+            "ecu_shared_data short_name should be preserved"
+        );
+    }
+}

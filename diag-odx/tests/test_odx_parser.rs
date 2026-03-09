@@ -423,3 +423,102 @@ fn test_parse_odx_compu_method_linear() {
         }
     }
 }
+
+#[test]
+fn test_parse_odx_protocols() {
+    let db = parse_minimal();
+    assert!(
+        !db.protocols.is_empty(),
+        "Should have protocols from PROTOCOLS section"
+    );
+    let proto = &db.protocols[0];
+    assert_eq!(proto.diag_layer.short_name, "ISO_15765_3");
+    assert!(
+        !proto.diag_layer.diag_services.is_empty(),
+        "Protocol should have diag services"
+    );
+    assert_eq!(
+        proto.diag_layer.diag_services[0].diag_comm.short_name,
+        "TesterPresent"
+    );
+}
+
+#[test]
+fn test_parse_odx_ecu_shared_data() {
+    let db = parse_minimal();
+    assert!(
+        !db.ecu_shared_datas.is_empty(),
+        "Should have ECU shared data from ECU-SHARED-DATAS section"
+    );
+    let esd = &db.ecu_shared_datas[0];
+    assert_eq!(esd.diag_layer.short_name, "CommonSharedData");
+}
+
+#[test]
+fn test_diag_comm_ref_resolved() {
+    let db = parse_minimal();
+    let ecu_var = db.variants.iter().find(|v| !v.is_base_variant).unwrap();
+
+    // ECU variant has DIAG-COMM-REF to DS_TesterPresent (protocol layer service).
+    // TesterPresent is NOT inherited via PARENT-REF - it only comes from DiagCommRef.
+    // This ensures the test is a true positive (fails without the DiagCommRef fix).
+    let has_tester_present = ecu_var
+        .diag_layer
+        .diag_services
+        .iter()
+        .any(|s| s.diag_comm.short_name == "TesterPresent");
+    assert!(
+        has_tester_present,
+        "DIAG-COMM-REF should resolve TesterPresent into ECU variant"
+    );
+}
+
+#[test]
+fn test_parse_odx_functional_groups() {
+    let db = parse_minimal();
+    assert!(
+        !db.functional_groups.is_empty(),
+        "Should have functional groups"
+    );
+    let fg = &db.functional_groups[0];
+    assert_eq!(fg.diag_layer.short_name, "Diagnostics");
+}
+
+#[test]
+fn test_parent_ref_type_protocol() {
+    let db = parse_minimal();
+    let fg = &db.functional_groups[0];
+    assert!(
+        !fg.parent_refs.is_empty(),
+        "Functional group should have parent refs"
+    );
+    match &fg.parent_refs[0].ref_type {
+        diag_ir::ParentRefType::Protocol(p) => {
+            assert_eq!(p.diag_layer.short_name, "ISO_15765_3");
+        }
+        other => panic!("Expected Protocol parent ref, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_service_has_protocol_association_via_reverse_map() {
+    let db = parse_minimal();
+    // TesterPresent is defined in the ISO_15765_3 protocol layer and referenced
+    // from the ECU variant via DIAG-COMM-REF. The service_protocols reverse map
+    // should populate DiagComm.protocols for this service in the variant.
+    let ecu_var = db.variants.iter().find(|v| !v.is_base_variant).unwrap();
+    let tp = ecu_var
+        .diag_layer
+        .diag_services
+        .iter()
+        .find(|s| s.diag_comm.short_name == "TesterPresent")
+        .expect("TesterPresent should exist in ECU variant via DiagCommRef");
+    assert!(
+        !tp.diag_comm.protocols.is_empty(),
+        "Service from protocol layer should have protocol association via reverse map"
+    );
+    assert_eq!(
+        tp.diag_comm.protocols[0].diag_layer.short_name,
+        "ISO_15765_3"
+    );
+}
