@@ -184,6 +184,8 @@ fn make_test_database() -> DiagDatabase {
             parent_refs: vec![],
         }],
         functional_groups: vec![],
+        protocols: vec![],
+        ecu_shared_datas: vec![],
         dtcs: vec![Dtc {
             short_name: "P0001".into(),
             trouble_code: 0x0001,
