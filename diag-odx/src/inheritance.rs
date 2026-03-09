@@ -67,7 +67,7 @@ impl<'a> MergedLayer<'a> {
                 layer_id
             );
             let mut merged = Self::empty(layer);
-            merged.add_own_content(layer);
+            merged.add_own_content(layer, index);
             return merged;
         }
 
@@ -125,7 +125,7 @@ impl<'a> MergedLayer<'a> {
         }
 
         // Add own content (overrides inherited by short_name)
-        merged.add_own_content(layer);
+        merged.add_own_content(layer, index);
 
         merged
     }
@@ -191,7 +191,7 @@ impl<'a> MergedLayer<'a> {
         }
     }
 
-    fn add_own_content(&mut self, layer: &'a DiagLayerVariant) {
+    fn add_own_content(&mut self, layer: &'a DiagLayerVariant, index: &'a OdxIndex<'a>) {
         // Collect own short names for dedup against inherited content
         let mut own_service_names: HashSet<&str> = HashSet::new();
         let mut own_job_names: HashSet<&str> = HashSet::new();
@@ -209,7 +209,19 @@ impl<'a> MergedLayer<'a> {
                             own_job_names.insert(sn.as_str());
                         }
                     }
-                    DiagCommEntry::DiagCommRef(_) => {}
+                    DiagCommEntry::DiagCommRef(ref_) => {
+                        if let Some(id) = &ref_.id_ref {
+                            if let Some(ds) = index.diag_services.get(id.as_str()) {
+                                if let Some(sn) = &ds.short_name {
+                                    own_service_names.insert(sn.as_str());
+                                }
+                            } else if let Some(job) = index.single_ecu_jobs.get(id.as_str()) {
+                                if let Some(sn) = &job.short_name {
+                                    own_job_names.insert(sn.as_str());
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -236,7 +248,15 @@ impl<'a> MergedLayer<'a> {
                     DiagCommEntry::SingleEcuJob(job) => {
                         self.single_ecu_jobs.push(job);
                     }
-                    DiagCommEntry::DiagCommRef(_) => {}
+                    DiagCommEntry::DiagCommRef(ref_) => {
+                        if let Some(id) = &ref_.id_ref {
+                            if let Some(ds) = index.diag_services.get(id.as_str()) {
+                                self.diag_services.push(ds);
+                            } else if let Some(job) = index.single_ecu_jobs.get(id.as_str()) {
+                                self.single_ecu_jobs.push(job);
+                            }
+                        }
+                    }
                 }
             }
         }
