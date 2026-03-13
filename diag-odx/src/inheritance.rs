@@ -248,6 +248,12 @@ impl<'a> MergedLayer<'a> {
                     DiagCommEntry::SingleEcuJob(job) => {
                         self.single_ecu_jobs.push(job);
                     }
+                    // DiagCommRef resolution relies on the global OdxIndex
+                    // which spans all layers. The resolved service comes from
+                    // the definition-site layer (e.g. a protocol layer) whose
+                    // DOP refs are valid because the index is global. If
+                    // indexing ever becomes per-layer, this will need to also
+                    // pull in the referenced layer's DOPs.
                     DiagCommEntry::DiagCommRef(ref_) => {
                         if let Some(id) = &ref_.id_ref {
                             if let Some(ds) = index.diag_services.get(id.as_str()) {
