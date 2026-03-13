@@ -110,6 +110,42 @@ fn merge_databases(mut base: DiagDatabase, other: DiagDatabase) -> DiagDatabase 
         }
     }
 
+    // Merge functional groups (avoid duplicates by short_name)
+    let existing_fg_names: std::collections::HashSet<String> = base
+        .functional_groups
+        .iter()
+        .map(|fg| fg.diag_layer.short_name.clone())
+        .collect();
+    for fg in other.functional_groups {
+        if !existing_fg_names.contains(&fg.diag_layer.short_name) {
+            base.functional_groups.push(fg);
+        }
+    }
+
+    // Merge protocols (avoid duplicates by short_name)
+    let existing_proto_names: std::collections::HashSet<String> = base
+        .protocols
+        .iter()
+        .map(|p| p.diag_layer.short_name.clone())
+        .collect();
+    for proto in other.protocols {
+        if !existing_proto_names.contains(&proto.diag_layer.short_name) {
+            base.protocols.push(proto);
+        }
+    }
+
+    // Merge ECU shared datas (avoid duplicates by short_name)
+    let existing_esd_names: std::collections::HashSet<String> = base
+        .ecu_shared_datas
+        .iter()
+        .map(|e| e.diag_layer.short_name.clone())
+        .collect();
+    for esd in other.ecu_shared_datas {
+        if !existing_esd_names.contains(&esd.diag_layer.short_name) {
+            base.ecu_shared_datas.push(esd);
+        }
+    }
+
     // Merge DTCs
     let existing_dtcs: std::collections::HashSet<u32> =
         base.dtcs.iter().map(|d| d.trouble_code).collect();

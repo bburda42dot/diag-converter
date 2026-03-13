@@ -48,18 +48,6 @@ pub fn ir_to_flatbuffers(db: &DiagDatabase) -> Vec<u8> {
         .collect();
     let dtcs = builder.create_vector(&dtcs);
 
-    let memory = db
-        .memory
-        .as_ref()
-        .map(|m| build_memory_config(&mut builder, m));
-
-    let type_defs: Vec<_> = db
-        .type_definitions
-        .iter()
-        .map(|td| build_type_definition(&mut builder, td))
-        .collect();
-    let type_definitions = builder.create_vector(&type_defs);
-
     let ecu_data = dataformat::EcuData::create(
         &mut builder,
         &dataformat::EcuDataArgs {
@@ -71,8 +59,6 @@ pub fn ir_to_flatbuffers(db: &DiagDatabase) -> Vec<u8> {
             variants: Some(variants),
             functional_groups: Some(functional_groups),
             dtcs: Some(dtcs),
-            memory,
-            type_definitions: Some(type_definitions),
         },
     );
 
@@ -1594,7 +1580,7 @@ fn build_protocol<'a>(
     let prs: Vec<_> = p
         .parent_refs
         .iter()
-        .map(|pr| build_protocol(builder, pr))
+        .map(|pr| build_parent_ref(builder, pr))
         .collect();
     let prs = builder.create_vector(&prs);
     dataformat::Protocol::create(
@@ -2358,147 +2344,4 @@ fn ir_transmission_mode_to_fbs(v: TransmissionMode) -> dataformat::TransmissionM
         TransmissionMode::SendAndReceive => dataformat::TransmissionMode::SEND_AND_RECEIVE,
         TransmissionMode::SendOrReceive => dataformat::TransmissionMode::SEND_OR_RECEIVE,
     }
-}
-fn ir_memory_access_to_fbs(v: MemoryAccess) -> dataformat::MemoryAccess {
-    match v {
-        MemoryAccess::Read => dataformat::MemoryAccess::Read,
-        MemoryAccess::Write => dataformat::MemoryAccess::Write,
-        MemoryAccess::ReadWrite => dataformat::MemoryAccess::ReadWrite,
-        MemoryAccess::Execute => dataformat::MemoryAccess::Execute,
-    }
-}
-fn ir_data_block_type_to_fbs(v: DataBlockType) -> dataformat::DataBlockType {
-    match v {
-        DataBlockType::Download => dataformat::DataBlockType::Download,
-        DataBlockType::Upload => dataformat::DataBlockType::Upload,
-    }
-}
-fn ir_data_block_format_to_fbs(v: DataBlockFormat) -> dataformat::DataBlockFormat {
-    match v {
-        DataBlockFormat::Raw => dataformat::DataBlockFormat::Raw,
-        DataBlockFormat::Encrypted => dataformat::DataBlockFormat::Encrypted,
-        DataBlockFormat::Compressed => dataformat::DataBlockFormat::Compressed,
-        DataBlockFormat::EncryptedCompressed => dataformat::DataBlockFormat::EncryptedCompressed,
-    }
-}
-
-fn build_address_format<'a>(
-    builder: &mut FlatBufferBuilder<'a>,
-    af: &AddressFormat,
-) -> flatbuffers::WIPOffset<dataformat::AddressFormat<'a>> {
-    dataformat::AddressFormat::create(
-        builder,
-        &dataformat::AddressFormatArgs {
-            address_bytes: af.address_bytes,
-            length_bytes: af.length_bytes,
-        },
-    )
-}
-
-fn build_memory_region<'a>(
-    builder: &mut FlatBufferBuilder<'a>,
-    r: &MemoryRegion,
-) -> flatbuffers::WIPOffset<dataformat::MemoryRegion<'a>> {
-    let name = builder.create_string(&r.name);
-    let description = r.description.as_ref().map(|d| builder.create_string(d));
-    let address_format = r
-        .address_format
-        .as_ref()
-        .map(|af| build_address_format(builder, af));
-    let security_level = r.security_level.as_ref().map(|s| builder.create_string(s));
-    let session = r.session.as_ref().map(|v| {
-        let strs: Vec<_> = v.iter().map(|s| builder.create_string(s)).collect();
-        builder.create_vector(&strs)
-    });
-    dataformat::MemoryRegion::create(
-        builder,
-        &dataformat::MemoryRegionArgs {
-            name: Some(name),
-            description,
-            start_address: r.start_address,
-            size: r.size,
-            access: ir_memory_access_to_fbs(r.access),
-            address_format,
-            security_level,
-            session,
-        },
-    )
-}
-
-fn build_data_block<'a>(
-    builder: &mut FlatBufferBuilder<'a>,
-    b: &DataBlock,
-) -> flatbuffers::WIPOffset<dataformat::DataBlock<'a>> {
-    let name = builder.create_string(&b.name);
-    let description = b.description.as_ref().map(|d| builder.create_string(d));
-    let security_level = b.security_level.as_ref().map(|s| builder.create_string(s));
-    let session = b.session.as_ref().map(|s| builder.create_string(s));
-    let checksum_type = b.checksum_type.as_ref().map(|s| builder.create_string(s));
-    dataformat::DataBlock::create(
-        builder,
-        &dataformat::DataBlockArgs {
-            name: Some(name),
-            description,
-            block_type: ir_data_block_type_to_fbs(b.block_type),
-            memory_address: b.memory_address,
-            memory_size: b.memory_size,
-            format: ir_data_block_format_to_fbs(b.format),
-            max_block_length: b.max_block_length.unwrap_or(0),
-            security_level,
-            session,
-            checksum_type,
-        },
-    )
-}
-
-fn build_memory_config<'a>(
-    builder: &mut FlatBufferBuilder<'a>,
-    m: &MemoryConfig,
-) -> flatbuffers::WIPOffset<dataformat::MemoryConfig<'a>> {
-    let default_address_format = build_address_format(builder, &m.default_address_format);
-    let regions: Vec<_> = m
-        .regions
-        .iter()
-        .map(|r| build_memory_region(builder, r))
-        .collect();
-    let regions = builder.create_vector(&regions);
-    let data_blocks: Vec<_> = m
-        .data_blocks
-        .iter()
-        .map(|b| build_data_block(builder, b))
-        .collect();
-    let data_blocks = builder.create_vector(&data_blocks);
-    dataformat::MemoryConfig::create(
-        builder,
-        &dataformat::MemoryConfigArgs {
-            default_address_format: Some(default_address_format),
-            regions: Some(regions),
-            data_blocks: Some(data_blocks),
-        },
-    )
-}
-
-fn build_type_definition<'a>(
-    builder: &mut FlatBufferBuilder<'a>,
-    td: &TypeDefinition,
-) -> flatbuffers::WIPOffset<dataformat::TypeDefinition<'a>> {
-    let name = builder.create_string(&td.name);
-    let base = builder.create_string(&td.base);
-    let enum_values_json = td
-        .enum_values_json
-        .as_ref()
-        .map(|s| builder.create_string(s));
-    let description = td.description.as_ref().map(|s| builder.create_string(s));
-    dataformat::TypeDefinition::create(
-        builder,
-        &dataformat::TypeDefinitionArgs {
-            name: Some(name),
-            base: Some(base),
-            bit_length: td.bit_length.unwrap_or(0),
-            min_length: td.min_length.unwrap_or(0),
-            max_length: td.max_length.unwrap_or(0),
-            enum_values_json,
-            description,
-        },
-    )
 }

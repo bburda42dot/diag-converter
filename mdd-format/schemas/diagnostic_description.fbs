@@ -721,7 +721,7 @@ table Protocol {
     diag_layer: DiagLayer;
     com_param_spec: ComParamSpec;
     prot_stack: ProtStack;
-    parent_refs: [Protocol];
+    parent_refs: [ParentRef];
 }
 
 table ComParamRef {
@@ -840,70 +840,6 @@ enum FeatureFlag: byte {
     RESERVED = 0
 }
 
-enum MemoryAccess: byte {
-    Read = 0,
-    Write = 1,
-    ReadWrite = 2,
-    Execute = 3
-}
-
-enum DataBlockType: byte {
-    Download = 0,
-    Upload = 1
-}
-
-enum DataBlockFormat: byte {
-    Raw = 0,
-    Encrypted = 1,
-    Compressed = 2,
-    EncryptedCompressed = 3
-}
-
-table AddressFormat {
-    address_bytes: ubyte = 4;
-    length_bytes: ubyte = 4;
-}
-
-table MemoryRegion {
-    name: string;
-    description: string;
-    start_address: ulong;
-    size: ulong;
-    access: MemoryAccess = Read;
-    address_format: AddressFormat;
-    security_level: string;
-    session: [string];
-}
-
-table DataBlock {
-    name: string;
-    description: string;
-    block_type: DataBlockType = Download;
-    memory_address: ulong;
-    memory_size: ulong;
-    format: DataBlockFormat = Raw;
-    max_block_length: ulong;
-    security_level: string;
-    session: string;
-    checksum_type: string;
-}
-
-table MemoryConfig {
-    default_address_format: AddressFormat;
-    regions: [MemoryRegion];
-    data_blocks: [DataBlock];
-}
-
-table TypeDefinition {
-    name: string;
-    base: string;
-    bit_length: uint;
-    min_length: uint;
-    max_length: uint;
-    enum_values_json: string;
-    description: string;
-}
-
 table EcuData {
     version: string;
     ecu_name: string;
@@ -913,8 +849,6 @@ table EcuData {
     variants: [Variant];
     functional_groups: [FunctionalGroup];
     dtcs: [DTC];
-    memory: MemoryConfig;
-    type_definitions: [TypeDefinition];
 }
 
 table KeyValue {

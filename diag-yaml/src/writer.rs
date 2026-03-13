@@ -37,11 +37,7 @@ fn ir_audience_to_yaml(a: &Audience) -> Option<YamlServiceAudience> {
     Some(YamlServiceAudience {
         supplier: if a.is_supplier { Some(true) } else { None },
         development: if a.is_development { Some(true) } else { None },
-        manufacturing: if a.is_manufacturing {
-            Some(true)
-        } else {
-            None
-        },
+        manufacturing: if a.is_manufacturing { Some(true) } else { None },
         after_sales: if a.is_after_sales { Some(true) } else { None },
         after_market: if a.is_after_market { Some(true) } else { None },
         groups: a

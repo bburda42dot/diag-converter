@@ -12,6 +12,8 @@ pub struct DiagDatabase {
     pub metadata: BTreeMap<String, String>,
     pub variants: Vec<Variant>,
     pub functional_groups: Vec<FunctionalGroup>,
+    pub protocols: Vec<Protocol>,
+    pub ecu_shared_datas: Vec<EcuSharedData>,
     pub dtcs: Vec<Dtc>,
     pub memory: Option<MemoryConfig>,
     pub type_definitions: Vec<TypeDefinition>,
@@ -546,7 +548,7 @@ pub struct Protocol {
     pub diag_layer: DiagLayer,
     pub com_param_spec: Option<ComParamSpec>,
     pub prot_stack: Option<ProtStack>,
-    pub parent_refs: Vec<Protocol>,
+    pub parent_refs: Vec<ParentRef>,
 }
 
 /// Maps to FBS ComParamSpec

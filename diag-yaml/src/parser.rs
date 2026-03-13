@@ -351,6 +351,8 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         metadata,
         variants,
         functional_groups: vec![],
+        protocols: vec![],
+        ecu_shared_datas: vec![],
         dtcs,
         memory,
         type_definitions,

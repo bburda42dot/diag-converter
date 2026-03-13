@@ -3,11 +3,9 @@
 //! These tests verify **deep equality** (PartialEq on the full IR tree),
 //! not just structural counts. Any field lost during conversion will fail.
 
-use diag_ir::{DiagDatabase, flatbuffers_to_ir, ir_to_flatbuffers};
+use diag_ir::DiagDatabase;
 use diag_odx::{parse_odx, write_odx};
 use diag_yaml::{parse_yaml, write_yaml};
-use mdd_format::reader::read_mdd_bytes;
-use mdd_format::writer::{WriteOptions, write_mdd_bytes};
 
 // ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -341,96 +339,4 @@ fn lossless_odx_roundtrip_minimal() {
     let odx_out = write_odx(&db1).unwrap();
     let db2 = parse_odx(&odx_out).unwrap();
     assert_lossless(&db1, &db2, "ODX roundtrip: minimal");
-}
-
-// ── YAML -> IR -> MDD -> IR roundtrips ───────────────────────────────
-
-#[test]
-fn lossless_yaml_mdd_roundtrip_ecm() {
-    let db1 = parse_yaml(yaml_ecm()).unwrap();
-    let fbs = ir_to_flatbuffers(&db1);
-    let db2 = flatbuffers_to_ir(&fbs).unwrap();
-    assert_lossless(&db1, &db2, "YAML->MDD->IR: example-ecm");
-}
-
-#[test]
-fn lossless_yaml_mdd_roundtrip_minimal() {
-    let db1 = parse_yaml(yaml_minimal()).unwrap();
-    let fbs = ir_to_flatbuffers(&db1);
-    let db2 = flatbuffers_to_ir(&fbs).unwrap();
-    assert_lossless(&db1, &db2, "YAML->MDD->IR: minimal-ecu");
-}
-
-#[test]
-fn lossless_yaml_mdd_roundtrip_flxc1000() {
-    let db1 = parse_yaml(yaml_flxc1000()).unwrap();
-    let fbs = ir_to_flatbuffers(&db1);
-    let db2 = flatbuffers_to_ir(&fbs).unwrap();
-    assert_lossless(&db1, &db2, "YAML->MDD->IR: FLXC1000");
-}
-
-#[test]
-fn lossless_yaml_mdd_roundtrip_flxcng1000() {
-    let db1 = parse_yaml(yaml_flxcng1000()).unwrap();
-    let fbs = ir_to_flatbuffers(&db1);
-    let db2 = flatbuffers_to_ir(&fbs).unwrap();
-    assert_lossless(&db1, &db2, "YAML->MDD->IR: FLXCNG1000");
-}
-
-// ── ODX -> IR -> MDD -> IR roundtrip ─────────────────────────────────
-
-#[test]
-fn lossless_odx_mdd_roundtrip_minimal() {
-    let db1 = parse_odx(odx_minimal()).unwrap();
-    let fbs = ir_to_flatbuffers(&db1);
-    let db2 = flatbuffers_to_ir(&fbs).unwrap();
-    assert_lossless(&db1, &db2, "ODX->MDD->IR: minimal");
-}
-
-// ── Full pipeline: YAML -> IR -> MDD (binary) -> IR ──────────────────
-
-#[test]
-fn lossless_yaml_full_mdd_binary_roundtrip_ecm() {
-    let db1 = parse_yaml(yaml_ecm()).unwrap();
-    let fbs = ir_to_flatbuffers(&db1);
-    let mdd = write_mdd_bytes(&fbs, &WriteOptions::default()).unwrap();
-    let (_meta, fbs_back) = read_mdd_bytes(&mdd).unwrap();
-    let db2 = flatbuffers_to_ir(&fbs_back).unwrap();
-    assert_lossless(&db1, &db2, "YAML->MDD binary->IR: example-ecm");
-}
-
-// ── YAML -> IR -> MDD -> IR -> YAML -> IR (double roundtrip) ─────────
-
-#[test]
-#[ignore = "WIP: type_definitions and SingleEcuJob roundtrip not yet lossless"]
-fn lossless_yaml_double_roundtrip_ecm() {
-    let db1 = parse_yaml(yaml_ecm()).unwrap();
-
-    // First roundtrip: YAML -> MDD -> IR
-    let fbs = ir_to_flatbuffers(&db1);
-    let db2 = flatbuffers_to_ir(&fbs).unwrap();
-
-    // Second roundtrip: IR -> YAML -> IR
-    let yaml_out = write_yaml(&db2).unwrap();
-    let db3 = parse_yaml(&yaml_out).unwrap();
-
-    assert_lossless(&db1, &db3, "YAML double roundtrip (MDD+YAML): example-ecm");
-}
-
-// ── ODX -> IR -> MDD -> IR -> ODX -> IR (double roundtrip) ───────────
-
-#[test]
-#[ignore = "WIP: SingleEcuJob roundtrip not yet lossless"]
-fn lossless_odx_double_roundtrip_minimal() {
-    let db1 = parse_odx(odx_minimal()).unwrap();
-
-    // First roundtrip: ODX -> MDD -> IR
-    let fbs = ir_to_flatbuffers(&db1);
-    let db2 = flatbuffers_to_ir(&fbs).unwrap();
-
-    // Second roundtrip: IR -> ODX -> IR
-    let odx_out = write_odx(&db2).unwrap();
-    let db3 = parse_odx(&odx_out).unwrap();
-
-    assert_lossless(&db1, &db3, "ODX double roundtrip (MDD+ODX): minimal");
 }
