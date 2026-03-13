@@ -64,6 +64,39 @@ fn test_pdx_with_multiple_odx_merges() {
         .collect();
     let unique: std::collections::HashSet<&&str> = names.iter().collect();
     assert_eq!(names.len(), unique.len(), "no duplicate variants");
+
+    // Protocols and ECU shared data should also be deduped
+    let proto_names: Vec<&str> = db
+        .protocols
+        .iter()
+        .map(|p| p.diag_layer.short_name.as_str())
+        .collect();
+    let unique_protos: std::collections::HashSet<&&str> = proto_names.iter().collect();
+    assert_eq!(
+        proto_names.len(),
+        unique_protos.len(),
+        "no duplicate protocols after merge"
+    );
+    assert!(
+        !db.protocols.is_empty(),
+        "protocols from minimal.odx should survive merge"
+    );
+
+    let esd_names: Vec<&str> = db
+        .ecu_shared_datas
+        .iter()
+        .map(|e| e.diag_layer.short_name.as_str())
+        .collect();
+    let unique_esds: std::collections::HashSet<&&str> = esd_names.iter().collect();
+    assert_eq!(
+        esd_names.len(),
+        unique_esds.len(),
+        "no duplicate ECU shared datas after merge"
+    );
+    assert!(
+        !db.ecu_shared_datas.is_empty(),
+        "ECU shared datas from minimal.odx should survive merge"
+    );
 }
 
 #[test]
