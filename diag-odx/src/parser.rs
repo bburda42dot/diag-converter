@@ -77,42 +77,42 @@ fn odx_to_ir(odx: &Odx, index: &OdxIndex, lenient: bool) -> Result<DiagDatabase,
         }
     }
 
-    let mut functional_groups = if let Some(w) = &dlc.functional_groups {
-        w.items
-            .iter()
-            .map(|layer| {
-                let merged = MergedLayer::merge(layer, index);
-                layer_to_functional_group(&merged, index, lenient)
-            })
-            .collect::<Result<Vec<_>, _>>()?
-    } else {
-        Vec::new()
-    };
+    let mut functional_groups = Vec::new();
+    if let Some(w) = &dlc.functional_groups {
+        for layer in &w.items {
+            let merged = MergedLayer::merge(layer, index);
+            let (fg, dtcs) = layer_to_functional_group(&merged, index, lenient)?;
+            functional_groups.push(fg);
+            all_dtcs.extend(dtcs);
+        }
+    }
 
     // Process protocols
-    let protocols = if let Some(w) = &dlc.protocols {
-        w.items
-            .iter()
-            .map(|layer| {
+    let protocols = {
+        let mut protos = Vec::new();
+        if let Some(w) = &dlc.protocols {
+            for layer in &w.items {
                 let merged = MergedLayer::merge(layer, index);
-                layer_to_protocol(&merged, index, lenient)
-            })
-            .collect::<Result<Vec<_>, _>>()?
-    } else {
-        Vec::new()
+                let (proto, dtcs) = layer_to_protocol(&merged, index, lenient)?;
+                protos.push(proto);
+                all_dtcs.extend(dtcs);
+            }
+        }
+        protos
     };
 
     // Process ECU shared datas
-    let ecu_shared_datas = if let Some(w) = &dlc.ecu_shared_datas {
-        w.items
-            .iter()
-            .map(|layer| {
+    let ecu_shared_datas = {
+        let mut esds = Vec::new();
+        if let Some(w) = &dlc.ecu_shared_datas {
+            for layer in &w.items {
                 let merged = MergedLayer::merge(layer, index);
-                layer_to_ecu_shared_data(&merged, index, lenient)
-            })
-            .collect::<Result<Vec<_>, _>>()?
-    } else {
-        Vec::new()
+                let (esd, dtcs) = layer_to_ecu_shared_data(&merged, index, lenient)?;
+                esds.push(esd);
+                all_dtcs.extend(dtcs);
+            }
+        }
+        esds
     };
 
     // Build service-to-protocol reverse map: for each service defined in a
@@ -168,40 +168,46 @@ fn layer_to_functional_group(
     merged: &MergedLayer,
     index: &OdxIndex,
     lenient: bool,
-) -> Result<FunctionalGroup, OdxParseError> {
-    let (diag_layer, _dtcs) = build_diag_layer(merged, index, lenient)?;
+) -> Result<(FunctionalGroup, Vec<Dtc>), OdxParseError> {
+    let (diag_layer, dtcs) = build_diag_layer(merged, index, lenient)?;
     let parent_refs = extract_parent_refs(merged.layer, index);
 
-    Ok(FunctionalGroup {
-        diag_layer,
-        parent_refs,
-    })
+    Ok((
+        FunctionalGroup {
+            diag_layer,
+            parent_refs,
+        },
+        dtcs,
+    ))
 }
 
 fn layer_to_protocol(
     merged: &MergedLayer,
     index: &OdxIndex,
     lenient: bool,
-) -> Result<Protocol, OdxParseError> {
-    let (diag_layer, _dtcs) = build_diag_layer(merged, index, lenient)?;
+) -> Result<(Protocol, Vec<Dtc>), OdxParseError> {
+    let (diag_layer, dtcs) = build_diag_layer(merged, index, lenient)?;
     let parent_refs = extract_parent_refs(merged.layer, index);
 
-    Ok(Protocol {
-        diag_layer,
-        com_param_spec: None,
-        prot_stack: None,
-        parent_refs,
-    })
+    Ok((
+        Protocol {
+            diag_layer,
+            com_param_spec: None,
+            prot_stack: None,
+            parent_refs,
+        },
+        dtcs,
+    ))
 }
 
 fn layer_to_ecu_shared_data(
     merged: &MergedLayer,
     index: &OdxIndex,
     lenient: bool,
-) -> Result<EcuSharedData, OdxParseError> {
-    let (diag_layer, _dtcs) = build_diag_layer(merged, index, lenient)?;
+) -> Result<(EcuSharedData, Vec<Dtc>), OdxParseError> {
+    let (diag_layer, dtcs) = build_diag_layer(merged, index, lenient)?;
 
-    Ok(EcuSharedData { diag_layer })
+    Ok((EcuSharedData { diag_layer }, dtcs))
 }
 
 #[allow(clippy::unnecessary_wraps)]
