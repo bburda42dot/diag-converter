@@ -522,3 +522,14 @@ fn test_service_has_protocol_association_via_reverse_map() {
         "ISO_15765_3"
     );
 }
+
+#[test]
+fn test_parse_odx_with_interleaved_dtcs() {
+    let xml = include_str!("../../test-fixtures/odx/dtc_interleaved.odx");
+    let db = parse_odx(xml).expect("ODX with interleaved DTCs should parse (issue #9)");
+    assert_eq!(
+        db.dtcs.len(),
+        2,
+        "should parse both DTCs despite interleaving"
+    );
+}

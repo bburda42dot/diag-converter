@@ -808,10 +808,43 @@ pub struct OdxDtcDop {
     pub dtcs: Option<DtcsWrapper>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct DtcsWrapper {
     #[serde(rename = "DTC", default)]
     pub items: Vec<OdxDtc>,
+}
+
+// Helper types for tolerant deserialization of non-consecutive <DTC> elements.
+// quick-xml 0.37 raises "duplicate field" when Vec elements are interleaved
+// with unknown XML elements. The $value + enum pattern collects ALL children,
+// then filters to keep only DTC entries.
+#[derive(Deserialize)]
+enum DtcChild {
+    #[serde(rename = "DTC")]
+    Dtc(OdxDtc),
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Deserialize)]
+struct DtcsWrapperHelper {
+    #[serde(rename = "$value", default)]
+    children: Vec<DtcChild>,
+}
+
+impl<'de> serde::Deserialize<'de> for DtcsWrapper {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let helper = DtcsWrapperHelper::deserialize(deserializer)?;
+        let items = helper
+            .children
+            .into_iter()
+            .filter_map(|c| match c {
+                DtcChild::Dtc(dtc) => Some(dtc),
+                DtcChild::Other => None,
+            })
+            .collect();
+        Ok(DtcsWrapper { items })
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
