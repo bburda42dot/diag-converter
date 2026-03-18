@@ -1,4 +1,4 @@
-use diag_odx::odx_model::Odx;
+use diag_odx::odx_model::{Odx, OdxDtcDop};
 
 fn parse_minimal() -> Odx {
     let xml = include_str!("../../test-fixtures/odx/minimal.odx");
@@ -324,4 +324,40 @@ fn test_parse_sdgs() {
     assert_eq!(sdgs[0].sds.len(), 2);
     assert_eq!(sdgs[0].sds[0].si.as_deref(), Some("Key1"));
     assert_eq!(sdgs[0].sds[0].value.as_deref(), Some("Value1"));
+}
+
+#[test]
+fn dtc_dop_with_interleaved_elements_in_dtcs() {
+    let xml = r#"
+    <DTC-DOP ID="DTCDOP_1">
+      <SHORT-NAME>DTC_DOP</SHORT-NAME>
+      <DIAG-CODED-TYPE xsi:type="STANDARD-LENGTH-TYPE" BASE-DATA-TYPE="A_UINT32">
+        <BIT-LENGTH>24</BIT-LENGTH>
+      </DIAG-CODED-TYPE>
+      <DTCS>
+        <DTC ID="DTC_1">
+          <SHORT-NAME>P0100</SHORT-NAME>
+          <TROUBLE-CODE>256</TROUBLE-CODE>
+          <DISPLAY-TROUBLE-CODE>P0100</DISPLAY-TROUBLE-CODE>
+        </DTC>
+        <SDG GID="metadata">
+          <SD SI="key">value</SD>
+        </SDG>
+        <DTC ID="DTC_2">
+          <SHORT-NAME>P0200</SHORT-NAME>
+          <TROUBLE-CODE>512</TROUBLE-CODE>
+          <DISPLAY-TROUBLE-CODE>P0200</DISPLAY-TROUBLE-CODE>
+        </DTC>
+      </DTCS>
+    </DTC-DOP>"#;
+    let dtc_dop: OdxDtcDop = quick_xml::de::from_str(xml)
+        .expect("DTC-DOP with interleaved elements in DTCS should parse (issue #9)");
+    let dtcs = dtc_dop.dtcs.expect("should have DTCS");
+    assert_eq!(
+        dtcs.items.len(),
+        2,
+        "both DTCs should be parsed despite interleaving"
+    );
+    assert_eq!(dtcs.items[0].short_name.as_deref(), Some("P0100"));
+    assert_eq!(dtcs.items[1].short_name.as_deref(), Some("P0200"));
 }
