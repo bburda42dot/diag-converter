@@ -1044,6 +1044,77 @@ x-oem:
 
 ---
 
+### 17. `protocols`
+
+Protocol diagnostic layers. Each protocol is a full diagnostic layer with optional protocol-specific fields.
+
+**Optional.** Map of `short_name -> protocol_layer`.
+
+```yaml
+protocols:
+  ISO_15765_3:
+    long_name: "ISO 15765-3 Diagnostic Communication"
+    comparams:
+      CP_Baudrate: 500000
+    services:
+      testerPresent:
+        enabled: true
+    prot_stack:
+      pdu_protocol_type: "ISO_15765_3"
+      physical_link_type: "ISO_11898_2_DWCAN"
+    parent_refs:
+      - target: Diagnostics
+        type: functional_group
+        not_inherited:
+          services: [FlashECU]
+```
+
+Each protocol entry supports these sub-sections (same as root YAML):
+- `long_name` (string, optional)
+- `services`, `comparams`, `types`, `dids`, `routines`, `ecu_jobs`, `sdgs`, `annotations`
+
+Plus protocol-specific fields:
+- `prot_stack` - protocol stack definition (see below)
+- `com_param_spec` - communication parameter specification (see below)
+- `parent_refs` - parent layer references with inheritance exclusions
+
+**`prot_stack`:**
+- `pdu_protocol_type` (string, required)
+- `physical_link_type` (string, required)
+- `comparam_subsets[]` (optional) - each subset contains `com_params` and/or `complex_com_params` maps
+
+**`com_param_spec`:**
+- `prot_stacks[]` - list of named protocol stacks, each with `short_name`, `pdu_protocol_type`, `physical_link_type`, and optional `comparam_subsets`
+
+**`parent_refs`:**
+- `target` (string, required) - short_name of referenced layer
+- `type` (string, required) - one of: `variant`, `protocol`, `functional_group`, `ecu_shared_data`
+- `not_inherited` (object, optional) - exclusion lists: `services`, `dops`, `variables`, `tables`, `global_neg_responses`
+
+**Note:** This section is independent from `ecu.protocols`, which is lightweight metadata for client-side protocol selection.
+
+---
+
+### 18. `ecu_shared_data`
+
+ECU shared data diagnostic layers. Contains shared DOPs, types, services reused across other layers.
+
+**Optional.** Map of `short_name -> ecu_shared_data_layer`.
+
+```yaml
+ecu_shared_data:
+  CommonSharedData:
+    long_name: "Common ECU Shared Data"
+    types:
+      SharedCounter:
+        base: u8
+```
+
+Each entry supports the same sub-sections as protocol layers (without `prot_stack`, `com_param_spec`, `parent_refs`):
+- `long_name`, `services`, `comparams`, `types`, `dids`, `routines`, `ecu_jobs`, `sdgs`, `annotations`
+
+---
+
 ## Supported UDS Services
 
 | SID                                                      | Service                        | Support     |

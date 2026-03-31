@@ -82,6 +82,12 @@
         },
         "x-oem": {
             "type": "object"
+        },
+        "protocols": {
+            "$ref": "#/$defs/protocols"
+        },
+        "ecu_shared_data": {
+            "$ref": "#/$defs/ecu_shared_data"
         }
     },
     "$defs": {
@@ -3493,6 +3499,179 @@
                     "default": false
                 }
             }
+        },
+        "protocols": {
+            "type": "object",
+            "description": "Protocol diagnostic layers. Each key is the protocol short_name.",
+            "additionalProperties": {
+                "$ref": "#/$defs/protocol_layer"
+            }
+        },
+        "protocol_layer": {
+            "type": "object",
+            "properties": {
+                "long_name": { "type": "string" },
+                "services": { "$ref": "#/$defs/services" },
+                "comparams": { "$ref": "#/$defs/comparams" },
+                "types": { "$ref": "#/$defs/types" },
+                "dids": { "$ref": "#/$defs/dids" },
+                "routines": { "$ref": "#/$defs/routines" },
+                "ecu_jobs": { "$ref": "#/$defs/ecu_jobs" },
+                "sdgs": { "$ref": "#/$defs/sdgs" },
+                "annotations": { "$ref": "#/$defs/annotations" },
+                "prot_stack": { "$ref": "#/$defs/prot_stack" },
+                "com_param_spec": { "$ref": "#/$defs/com_param_spec" },
+                "parent_refs": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/parent_ref" }
+                }
+            },
+            "additionalProperties": false
+        },
+        "ecu_shared_data": {
+            "type": "object",
+            "description": "ECU shared data diagnostic layers. Each key is the layer short_name.",
+            "additionalProperties": {
+                "$ref": "#/$defs/ecu_shared_data_layer"
+            }
+        },
+        "ecu_shared_data_layer": {
+            "type": "object",
+            "properties": {
+                "long_name": { "type": "string" },
+                "services": { "$ref": "#/$defs/services" },
+                "comparams": { "$ref": "#/$defs/comparams" },
+                "types": { "$ref": "#/$defs/types" },
+                "dids": { "$ref": "#/$defs/dids" },
+                "routines": { "$ref": "#/$defs/routines" },
+                "ecu_jobs": { "$ref": "#/$defs/ecu_jobs" },
+                "sdgs": { "$ref": "#/$defs/sdgs" },
+                "annotations": { "$ref": "#/$defs/annotations" }
+            },
+            "additionalProperties": false
+        },
+        "parent_ref": {
+            "type": "object",
+            "required": ["target", "type"],
+            "properties": {
+                "target": { "type": "string", "description": "Short name of the referenced layer" },
+                "type": {
+                    "type": "string",
+                    "enum": ["variant", "protocol", "functional_group", "ecu_shared_data"]
+                },
+                "not_inherited": {
+                    "type": "object",
+                    "properties": {
+                        "services": { "type": "array", "items": { "type": "string" } },
+                        "dops": { "type": "array", "items": { "type": "string" } },
+                        "variables": { "type": "array", "items": { "type": "string" } },
+                        "tables": { "type": "array", "items": { "type": "string" } },
+                        "global_neg_responses": { "type": "array", "items": { "type": "string" } }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "additionalProperties": false
+        },
+        "prot_stack": {
+            "type": "object",
+            "required": ["pdu_protocol_type", "physical_link_type"],
+            "properties": {
+                "pdu_protocol_type": { "type": "string" },
+                "physical_link_type": { "type": "string" },
+                "comparam_subsets": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/comparam_subset" }
+                }
+            },
+            "additionalProperties": false
+        },
+        "com_param_spec": {
+            "type": "object",
+            "required": ["prot_stacks"],
+            "properties": {
+                "prot_stacks": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/named_prot_stack" }
+                }
+            },
+            "additionalProperties": false
+        },
+        "named_prot_stack": {
+            "type": "object",
+            "required": ["short_name", "pdu_protocol_type", "physical_link_type"],
+            "properties": {
+                "short_name": { "type": "string" },
+                "long_name": { "type": "string" },
+                "pdu_protocol_type": { "type": "string" },
+                "physical_link_type": { "type": "string" },
+                "comparam_subsets": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/comparam_subset" }
+                }
+            },
+            "additionalProperties": false
+        },
+        "comparam_subset": {
+            "type": "object",
+            "properties": {
+                "com_params": {
+                    "type": "object",
+                    "additionalProperties": { "$ref": "#/$defs/subset_comparam" }
+                },
+                "complex_com_params": {
+                    "type": "object",
+                    "additionalProperties": { "$ref": "#/$defs/subset_complex_comparam" }
+                }
+            },
+            "additionalProperties": false
+        },
+        "subset_comparam": {
+            "type": "object",
+            "properties": {
+                "param_class": { "type": "string" },
+                "cp_type": { "type": "string", "enum": ["STANDARD", "OPTIONAL"] },
+                "usage": { "type": "string", "enum": ["TESTER", "ECU-COMM"] },
+                "default": { "type": "string" },
+                "dop": { "$ref": "#/$defs/comparam_dop" }
+            },
+            "additionalProperties": false
+        },
+        "subset_complex_comparam": {
+            "type": "object",
+            "properties": {
+                "param_class": { "type": "string" },
+                "cp_type": { "type": "string", "enum": ["STANDARD", "OPTIONAL"] },
+                "usage": { "type": "string", "enum": ["TESTER", "ECU-COMM"] },
+                "allow_multiple_values": { "type": "boolean" },
+                "children": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/subset_comparam_child" }
+                }
+            },
+            "additionalProperties": false
+        },
+        "subset_comparam_child": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+                "name": { "type": "string" },
+                "param_class": { "type": "string" },
+                "default": { "type": "string" },
+                "dop": { "$ref": "#/$defs/comparam_dop" }
+            },
+            "additionalProperties": false
+        },
+        "comparam_dop": {
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "base_type": { "type": "string" },
+                "bit_length": { "type": "integer", "minimum": 0 },
+                "min": { "type": "number" },
+                "max": { "type": "number" }
+            },
+            "additionalProperties": false
         }
     }
 }
