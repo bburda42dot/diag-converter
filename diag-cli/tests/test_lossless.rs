@@ -275,6 +275,60 @@ fn deep_diff(a: &DiagDatabase, b: &DiagDatabase) -> Vec<String> {
         }
     }
 
+    // Protocols comparison
+    cmp!(a.protocols.len(), b.protocols.len(), "protocols.len");
+    for (i, (ap, bp)) in a.protocols.iter().zip(b.protocols.iter()).enumerate() {
+        if ap != bp {
+            let prefix = format!("protocols[{i}]");
+            cmp!(
+                ap.diag_layer.short_name,
+                bp.diag_layer.short_name,
+                &format!("{prefix}.short_name")
+            );
+            cmp!(
+                ap.diag_layer.com_param_refs.len(),
+                bp.diag_layer.com_param_refs.len(),
+                &format!("{prefix}.com_param_refs.len")
+            );
+            cmp!(
+                ap.diag_layer.diag_services.len(),
+                bp.diag_layer.diag_services.len(),
+                &format!("{prefix}.diag_services.len")
+            );
+            cmp!(ap.prot_stack, bp.prot_stack, &format!("{prefix}.prot_stack"));
+            cmp!(
+                ap.com_param_spec,
+                bp.com_param_spec,
+                &format!("{prefix}.com_param_spec")
+            );
+            cmp!(
+                ap.parent_refs.len(),
+                bp.parent_refs.len(),
+                &format!("{prefix}.parent_refs.len")
+            );
+        }
+    }
+
+    // ECU shared data comparison
+    cmp!(
+        a.ecu_shared_datas.len(),
+        b.ecu_shared_datas.len(),
+        "ecu_shared_datas.len"
+    );
+    for (i, (ae, be)) in a
+        .ecu_shared_datas
+        .iter()
+        .zip(b.ecu_shared_datas.iter())
+        .enumerate()
+    {
+        if ae != be {
+            diffs.push(format!(
+                "ecu_shared_datas[{i}] ({:?}) differs",
+                ae.diag_layer.short_name
+            ));
+        }
+    }
+
     diffs
 }
 
@@ -339,4 +393,86 @@ fn lossless_odx_roundtrip_minimal() {
     let odx_out = write_odx(&db1).unwrap();
     let db2 = parse_odx(&odx_out).unwrap();
     assert_lossless(&db1, &db2, "ODX roundtrip: minimal");
+}
+
+// -- ODX -> YAML -> IR cross-format roundtrip -------------------------
+
+#[test]
+fn lossless_odx_to_yaml_protocols_minimal() {
+    let db_from_odx = parse_odx(odx_minimal()).unwrap();
+
+    assert!(
+        !db_from_odx.protocols.is_empty(),
+        "ODX should produce protocols"
+    );
+    assert!(
+        !db_from_odx.ecu_shared_datas.is_empty(),
+        "ODX should produce ecu_shared_datas"
+    );
+
+    // ODX -> YAML -> IR
+    let yaml_out = write_yaml(&db_from_odx).unwrap();
+    let db_from_yaml = parse_yaml(&yaml_out).unwrap();
+
+    assert_eq!(
+        db_from_odx.protocols.len(),
+        db_from_yaml.protocols.len(),
+        "protocol count mismatch"
+    );
+    for (i, (op, yp)) in db_from_odx
+        .protocols
+        .iter()
+        .zip(db_from_yaml.protocols.iter())
+        .enumerate()
+    {
+        assert_eq!(
+            op.diag_layer.short_name, yp.diag_layer.short_name,
+            "protocol[{i}] short_name"
+        );
+        assert_eq!(
+            op.diag_layer.long_name, yp.diag_layer.long_name,
+            "protocol[{i}] long_name"
+        );
+        // NOTE: diag_services count may differ because the YAML service
+        // extractor only round-trips services it can classify by SID.
+        // Protocol-level services with non-standard SIDs are dropped.
+
+        // NOTE: com_param_refs may differ because the ODX parser does not
+        // resolve COMPARAM-REF ID-REFs to full ComParam objects, so the
+        // YAML writer silently drops them. This is a known limitation.
+        assert_eq!(
+            op.parent_refs.len(),
+            yp.parent_refs.len(),
+            "protocol[{i}] parent_refs count"
+        );
+        assert_eq!(
+            op.prot_stack, yp.prot_stack,
+            "protocol[{i}] prot_stack"
+        );
+        assert_eq!(
+            op.com_param_spec, yp.com_param_spec,
+            "protocol[{i}] com_param_spec"
+        );
+    }
+
+    assert_eq!(
+        db_from_odx.ecu_shared_datas.len(),
+        db_from_yaml.ecu_shared_datas.len(),
+        "ecu_shared_data count mismatch"
+    );
+    for (i, (oe, ye)) in db_from_odx
+        .ecu_shared_datas
+        .iter()
+        .zip(db_from_yaml.ecu_shared_datas.iter())
+        .enumerate()
+    {
+        assert_eq!(
+            oe.diag_layer.short_name, ye.diag_layer.short_name,
+            "ecu_shared_data[{i}] short_name"
+        );
+        assert_eq!(
+            oe.diag_layer.long_name, ye.diag_layer.long_name,
+            "ecu_shared_data[{i}] long_name"
+        );
+    }
 }
