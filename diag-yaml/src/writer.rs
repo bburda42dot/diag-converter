@@ -280,6 +280,8 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
                 Some(classes)
             }
         }),
+        protocols: None,
+        ecu_shared_data: None,
     }
 }
 

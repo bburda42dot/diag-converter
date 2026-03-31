@@ -57,6 +57,10 @@ pub struct YamlDocument {
     pub memory: Option<YamlMemoryConfig>,
     #[serde(default)]
     pub functional_classes: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub protocols: Option<BTreeMap<String, YamlProtocolLayer>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ecu_shared_data: Option<BTreeMap<String, YamlEcuSharedDataLayer>>,
 }
 
 // --- Meta ---
@@ -272,6 +276,155 @@ pub struct ComParamDopDef {
     pub min: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max: Option<f64>,
+}
+
+// --- Protocol Layers ---
+
+/// A diagnostic layer block - reusable sub-sections shared by protocol and ESD layers.
+/// Uses the same vocabulary as the root YAML document ("mini-document" pattern).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct YamlDiagLayerBlock {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub long_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub services: Option<YamlServices>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comparams: Option<YamlComParams>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub types: Option<BTreeMap<String, YamlType>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dids: Option<serde_yaml::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routines: Option<serde_yaml::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ecu_jobs: Option<BTreeMap<String, EcuJob>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sdgs: Option<BTreeMap<String, YamlSdg>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<serde_yaml::Value>,
+}
+
+/// A protocol layer entry in the top-level `protocols:` section.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct YamlProtocolLayer {
+    #[serde(flatten)]
+    pub layer: YamlDiagLayerBlock,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prot_stack: Option<YamlProtStackDef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub com_param_spec: Option<YamlComParamSpecDef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_refs: Option<Vec<YamlParentRef>>,
+}
+
+/// An ECU shared data layer entry in the top-level `ecu_shared_data:` section.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct YamlEcuSharedDataLayer {
+    #[serde(flatten)]
+    pub layer: YamlDiagLayerBlock,
+}
+
+/// A parent reference in a protocol/variant/FG layer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YamlParentRef {
+    pub target: String,
+    #[serde(rename = "type")]
+    pub ref_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_inherited: Option<YamlNotInherited>,
+}
+
+/// Exclusion lists for parent ref inheritance.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct YamlNotInherited {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub services: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dops: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variables: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tables: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub global_neg_responses: Option<Vec<String>>,
+}
+
+/// Protocol stack definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YamlProtStackDef {
+    pub pdu_protocol_type: String,
+    pub physical_link_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comparam_subsets: Option<Vec<YamlComParamSubSetDef>>,
+}
+
+/// ComParam specification (contains named prot stacks).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YamlComParamSpecDef {
+    pub prot_stacks: Vec<YamlNamedProtStackDef>,
+}
+
+/// Named prot stack (used inside com_param_spec).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YamlNamedProtStackDef {
+    pub short_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub long_name: Option<String>,
+    pub pdu_protocol_type: String,
+    pub physical_link_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comparam_subsets: Option<Vec<YamlComParamSubSetDef>>,
+}
+
+/// A comparam subset definition within a prot stack.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct YamlComParamSubSetDef {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub com_params: Option<BTreeMap<String, YamlSubSetComParam>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub complex_com_params: Option<BTreeMap<String, YamlSubSetComplexComParam>>,
+}
+
+/// A regular comparam inside a comparam subset.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YamlSubSetComParam {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub param_class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cp_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dop: Option<ComParamDopDef>,
+}
+
+/// A complex comparam with children inside a comparam subset.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YamlSubSetComplexComParam {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub param_class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cp_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_multiple_values: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<YamlSubSetComParamChild>>,
+}
+
+/// A child comparam inside a complex comparam subset entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YamlSubSetComParamChild {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub param_class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dop: Option<ComParamDopDef>,
 }
 
 // --- Sessions ---
@@ -888,5 +1041,82 @@ P2_Client:
             Some(ComParamEntry::Simple(_))
         ));
         assert!(matches!(map.get("P2_Client"), Some(ComParamEntry::Full(_))));
+    }
+
+    #[test]
+    fn test_yaml_protocol_layer_roundtrip() {
+        let yaml = r#"
+long_name: "ISO 15765-3"
+services:
+  testerPresent:
+    enabled: true
+comparams:
+  CP_Baudrate: 500000
+prot_stack:
+  pdu_protocol_type: "ISO_15765_3"
+  physical_link_type: "ISO_11898_2_DWCAN"
+parent_refs:
+  - target: Diagnostics
+    type: functional_group
+"#;
+        let parsed: YamlProtocolLayer = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(parsed.layer.long_name.as_deref(), Some("ISO 15765-3"));
+        assert!(parsed.prot_stack.is_some());
+        assert!(parsed.parent_refs.is_some());
+        let reser = serde_yaml::to_string(&parsed).unwrap();
+        let reparsed: YamlProtocolLayer = serde_yaml::from_str(&reser).unwrap();
+        assert_eq!(reparsed.layer.long_name.as_deref(), Some("ISO 15765-3"));
+    }
+
+    #[test]
+    fn test_yaml_ecu_shared_data_layer_roundtrip() {
+        let yaml = r#"
+long_name: "Common Shared Data"
+types:
+  SharedCounter:
+    base: u8
+"#;
+        let parsed: YamlEcuSharedDataLayer = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(parsed.layer.long_name.as_deref(), Some("Common Shared Data"));
+        assert!(parsed.layer.types.is_some());
+    }
+
+    #[test]
+    fn test_yaml_parent_ref_compact() {
+        let yaml = r#"
+target: Diagnostics
+type: functional_group
+not_inherited:
+  services:
+    - FlashECU
+"#;
+        let parsed: YamlParentRef = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(parsed.target, "Diagnostics");
+        assert_eq!(parsed.ref_type, "functional_group");
+        let ni = parsed.not_inherited.unwrap();
+        assert_eq!(ni.services.unwrap(), vec!["FlashECU"]);
+        assert!(ni.dops.is_none());
+    }
+
+    #[test]
+    fn test_yaml_document_with_protocols_and_esd() {
+        let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+protocols:
+  ISO_15765_3:
+    long_name: "Test Protocol"
+ecu_shared_data:
+  CommonSharedData:
+    long_name: "Shared"
+"#;
+        let doc: YamlDocument = serde_yaml::from_str(yaml).unwrap();
+        assert!(doc.protocols.is_some());
+        let protos = doc.protocols.unwrap();
+        assert!(protos.contains_key("ISO_15765_3"));
+        assert!(doc.ecu_shared_data.is_some());
+        let esds = doc.ecu_shared_data.unwrap();
+        assert!(esds.contains_key("CommonSharedData"));
     }
 }
