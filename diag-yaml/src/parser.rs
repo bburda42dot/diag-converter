@@ -351,8 +351,8 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         metadata,
         variants,
         functional_groups: vec![],
-        protocols: vec![],
-        ecu_shared_datas: vec![],
+        protocols: parse_yaml_protocols(doc.protocols.as_ref()),
+        ecu_shared_datas: parse_yaml_ecu_shared_datas(doc.ecu_shared_data.as_ref()),
         dtcs,
         memory,
         type_definitions,
@@ -1944,6 +1944,370 @@ fn build_complex_comparam_children(
                     dop: make_comparam_dop(child.dop.as_ref()).map(Box::new),
                 }),
             }
+        })
+        .collect()
+}
+
+/// Convert a YAML comparam subset definition into IR ComParamSubSet.
+fn parse_yaml_comparam_subset(def: &YamlComParamSubSetDef) -> ComParamSubSet {
+    let mut com_params = Vec::new();
+    if let Some(params) = &def.com_params {
+        for (name, p) in params {
+            let cp_type = match p.cp_type.as_deref() {
+                Some("OEM") | Some("OEM_SPECIFIC") => ComParamStandardisationLevel::OemSpecific,
+                Some("OPTIONAL") => ComParamStandardisationLevel::Optional,
+                Some("OEM_OPTIONAL") => ComParamStandardisationLevel::OemOptional,
+                _ => ComParamStandardisationLevel::Standard,
+            };
+            com_params.push(ComParam {
+                com_param_type: ComParamType::Regular,
+                short_name: name.clone(),
+                long_name: None,
+                param_class: p.param_class.clone().unwrap_or_default(),
+                cp_type,
+                display_level: None,
+                cp_usage: parse_comparam_usage(p.usage.as_deref()),
+                specific_data: Some(ComParamSpecificData::Regular {
+                    physical_default_value: p.default.clone().unwrap_or_default(),
+                    dop: make_comparam_dop(p.dop.as_ref()).map(Box::new),
+                }),
+            });
+        }
+    }
+
+    let mut complex_com_params = Vec::new();
+    if let Some(complex) = &def.complex_com_params {
+        for (name, cp) in complex {
+            let children: Vec<ComParam> = cp
+                .children
+                .as_ref()
+                .map(|kids| {
+                    kids.iter()
+                        .map(|child| ComParam {
+                            com_param_type: ComParamType::Regular,
+                            short_name: child.name.clone(),
+                            long_name: None,
+                            param_class: child.param_class.clone().unwrap_or_default(),
+                            cp_type: ComParamStandardisationLevel::Standard,
+                            display_level: None,
+                            cp_usage: ComParamUsage::EcuComm,
+                            specific_data: Some(ComParamSpecificData::Regular {
+                                physical_default_value: child.default.clone().unwrap_or_default(),
+                                dop: make_comparam_dop(child.dop.as_ref()).map(Box::new),
+                            }),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            complex_com_params.push(ComParam {
+                com_param_type: ComParamType::Complex,
+                short_name: name.clone(),
+                long_name: None,
+                param_class: cp.param_class.clone().unwrap_or_default(),
+                cp_type: match cp.cp_type.as_deref() {
+                    Some("OEM") | Some("OEM_SPECIFIC") => {
+                        ComParamStandardisationLevel::OemSpecific
+                    }
+                    Some("OPTIONAL") => ComParamStandardisationLevel::Optional,
+                    Some("OEM_OPTIONAL") => ComParamStandardisationLevel::OemOptional,
+                    _ => ComParamStandardisationLevel::Standard,
+                },
+                display_level: None,
+                cp_usage: parse_comparam_usage(cp.usage.as_deref()),
+                specific_data: Some(ComParamSpecificData::Complex {
+                    com_params: children,
+                    complex_physical_default_values: vec![],
+                    allow_multiple_values: cp.allow_multiple_values.unwrap_or(false),
+                }),
+            });
+        }
+    }
+
+    ComParamSubSet {
+        com_params,
+        complex_com_params,
+        data_object_props: vec![],
+        unit_spec: None,
+    }
+}
+
+/// Convert a YAML named prot stack definition into an IR ProtStack.
+fn parse_yaml_prot_stack_def(def: &YamlProtStackDef, short_name: &str) -> ProtStack {
+    let comparam_subset_refs = def
+        .comparam_subsets
+        .as_ref()
+        .map(|subsets| subsets.iter().map(parse_yaml_comparam_subset).collect())
+        .unwrap_or_default();
+
+    ProtStack {
+        short_name: short_name.into(),
+        long_name: None,
+        pdu_protocol_type: def.pdu_protocol_type.clone(),
+        physical_link_type: def.physical_link_type.clone(),
+        comparam_subset_refs,
+    }
+}
+
+/// Convert YAML parent refs into IR ParentRef entries.
+fn parse_yaml_parent_refs(refs: Option<&Vec<YamlParentRef>>) -> Vec<ParentRef> {
+    let Some(yaml_refs) = refs else {
+        return vec![];
+    };
+
+    yaml_refs
+        .iter()
+        .map(|pr| {
+            let ni = pr.not_inherited.as_ref();
+            let ref_type = match pr.ref_type.as_str() {
+                "protocol" => ParentRefType::Protocol(Box::new(Protocol {
+                    diag_layer: DiagLayer {
+                        short_name: pr.target.clone(),
+                        ..Default::default()
+                    },
+                    com_param_spec: None,
+                    prot_stack: None,
+                    parent_refs: vec![],
+                })),
+                "ecu_shared_data" => ParentRefType::EcuSharedData(Box::new(EcuSharedData {
+                    diag_layer: DiagLayer {
+                        short_name: pr.target.clone(),
+                        ..Default::default()
+                    },
+                })),
+                // functional_group or any other type
+                _ => ParentRefType::FunctionalGroup(Box::new(FunctionalGroup {
+                    diag_layer: DiagLayer {
+                        short_name: pr.target.clone(),
+                        ..Default::default()
+                    },
+                    parent_refs: vec![],
+                })),
+            };
+
+            ParentRef {
+                ref_type,
+                not_inherited_diag_comm_short_names: ni
+                    .and_then(|n| n.services.clone())
+                    .unwrap_or_default(),
+                not_inherited_variables_short_names: ni
+                    .and_then(|n| n.variables.clone())
+                    .unwrap_or_default(),
+                not_inherited_dops_short_names: ni
+                    .and_then(|n| n.dops.clone())
+                    .unwrap_or_default(),
+                not_inherited_tables_short_names: ni
+                    .and_then(|n| n.tables.clone())
+                    .unwrap_or_default(),
+                not_inherited_global_neg_responses_short_names: ni
+                    .and_then(|n| n.global_neg_responses.clone())
+                    .unwrap_or_default(),
+            }
+        })
+        .collect()
+}
+
+/// Parse a YAML diagnostic layer block into IR DiagLayer components.
+/// Used by both protocol and ecu_shared_data layers.
+fn parse_yaml_diag_layer_block(
+    short_name: &str,
+    block: &YamlDiagLayerBlock,
+) -> (DiagLayer, Vec<SingleEcuJob>) {
+    let type_registry = build_type_registry(block.types.as_ref());
+
+    // Build com_param_refs from block comparams
+    let mut com_param_refs = Vec::new();
+    if let Some(comparams) = &block.comparams {
+        for (param_name, entry) in comparams {
+            match entry {
+                ComParamEntry::Simple(val) => {
+                    let value_str = yaml_value_to_string(val);
+                    com_param_refs.push(ComParamRef {
+                        simple_value: Some(SimpleValue {
+                            value: value_str.clone(),
+                        }),
+                        complex_value: None,
+                        com_param: Some(Box::new(ComParam {
+                            com_param_type: ComParamType::Regular,
+                            short_name: param_name.clone(),
+                            long_name: None,
+                            param_class: String::new(),
+                            cp_type: ComParamStandardisationLevel::Standard,
+                            display_level: None,
+                            cp_usage: ComParamUsage::EcuComm,
+                            specific_data: Some(ComParamSpecificData::Regular {
+                                physical_default_value: value_str,
+                                dop: None,
+                            }),
+                        })),
+                        protocol: None,
+                        prot_stack: None,
+                    });
+                }
+                ComParamEntry::Full(full) => {
+                    let default_val = full
+                        .default
+                        .as_ref()
+                        .map(yaml_value_to_string)
+                        .unwrap_or_default();
+                    com_param_refs.push(ComParamRef {
+                        simple_value: Some(SimpleValue {
+                            value: default_val.clone(),
+                        }),
+                        complex_value: None,
+                        com_param: Some(Box::new(ComParam {
+                            com_param_type: ComParamType::Regular,
+                            short_name: param_name.clone(),
+                            long_name: None,
+                            param_class: full.param_class.clone().unwrap_or_default(),
+                            cp_type: ComParamStandardisationLevel::Standard,
+                            display_level: None,
+                            cp_usage: parse_comparam_usage(full.usage.as_deref()),
+                            specific_data: Some(ComParamSpecificData::Regular {
+                                physical_default_value: default_val,
+                                dop: make_comparam_dop(full.dop.as_ref()).map(Box::new),
+                            }),
+                        })),
+                        protocol: None,
+                        prot_stack: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // Build SDGs
+    let sdgs = block.sdgs.as_ref().map(convert_sdgs);
+
+    // Build diag services from services section
+    let mut diag_services = Vec::new();
+    if let Some(yaml_services) = &block.services {
+        let svc_gen = crate::service_generator::ServiceGenerator::new(yaml_services);
+        diag_services.extend(svc_gen.generate_all());
+    }
+
+    // Build services from DID definitions
+    if let Some(serde_yaml::Value::Mapping(dids)) = &block.dids {
+        for (key, val) in dids {
+            let did_id = parse_hex_key(key);
+            if let Ok(did) = serde_yaml::from_value::<Did>(val.clone()) {
+                if did.readable.unwrap_or(true) {
+                    diag_services.push(did_to_read_service(did_id, &did, &type_registry));
+                }
+                if did.writable.unwrap_or(false) {
+                    diag_services.push(did_to_write_service(did_id, &did, &type_registry));
+                }
+            }
+        }
+    }
+
+    // Build services from routine definitions
+    if let Some(serde_yaml::Value::Mapping(routines)) = &block.routines {
+        for (key, val) in routines {
+            let rid = parse_hex_key(key);
+            if let Ok(routine) = serde_yaml::from_value::<Routine>(val.clone()) {
+                diag_services.push(routine_to_service(rid, &routine, &type_registry));
+            }
+        }
+    }
+
+    // Build ECU jobs
+    let mut single_ecu_jobs = Vec::new();
+    if let Some(jobs) = &block.ecu_jobs {
+        for job in jobs.values() {
+            single_ecu_jobs.push(ecu_job_to_ir(job, &type_registry));
+        }
+    }
+
+    let long_name = block.long_name.as_ref().map(|ln| LongName {
+        value: ln.clone(),
+        ti: String::new(),
+    });
+
+    let diag_layer = DiagLayer {
+        short_name: short_name.into(),
+        long_name,
+        funct_classes: vec![],
+        com_param_refs,
+        diag_services,
+        single_ecu_jobs: single_ecu_jobs.clone(),
+        state_charts: vec![],
+        additional_audiences: vec![],
+        sdgs,
+    };
+
+    (diag_layer, single_ecu_jobs)
+}
+
+/// Parse the top-level `protocols:` YAML section into IR Protocol entries.
+fn parse_yaml_protocols(protocols: Option<&BTreeMap<String, YamlProtocolLayer>>) -> Vec<Protocol> {
+    let Some(protos) = protocols else {
+        return vec![];
+    };
+
+    protos
+        .iter()
+        .map(|(name, yaml_proto)| {
+            let (diag_layer, _jobs) = parse_yaml_diag_layer_block(name, &yaml_proto.layer);
+
+            let prot_stack = yaml_proto
+                .prot_stack
+                .as_ref()
+                .map(|ps| parse_yaml_prot_stack_def(ps, name));
+
+            let com_param_spec = yaml_proto.com_param_spec.as_ref().map(|spec| {
+                let prot_stacks = spec
+                    .prot_stacks
+                    .iter()
+                    .map(|nps| {
+                        let comparam_subset_refs = nps
+                            .comparam_subsets
+                            .as_ref()
+                            .map(|subsets| {
+                                subsets.iter().map(parse_yaml_comparam_subset).collect()
+                            })
+                            .unwrap_or_default();
+
+                        ProtStack {
+                            short_name: nps.short_name.clone(),
+                            long_name: nps.long_name.as_ref().map(|ln| LongName {
+                                value: ln.clone(),
+                                ti: String::new(),
+                            }),
+                            pdu_protocol_type: nps.pdu_protocol_type.clone(),
+                            physical_link_type: nps.physical_link_type.clone(),
+                            comparam_subset_refs,
+                        }
+                    })
+                    .collect();
+
+                ComParamSpec { prot_stacks }
+            });
+
+            let parent_refs = parse_yaml_parent_refs(yaml_proto.parent_refs.as_ref());
+
+            Protocol {
+                diag_layer,
+                com_param_spec,
+                prot_stack,
+                parent_refs,
+            }
+        })
+        .collect()
+}
+
+/// Parse the top-level `ecu_shared_data:` YAML section into IR EcuSharedData entries.
+fn parse_yaml_ecu_shared_datas(
+    esd: Option<&BTreeMap<String, YamlEcuSharedDataLayer>>,
+) -> Vec<EcuSharedData> {
+    let Some(esds) = esd else {
+        return vec![];
+    };
+
+    esds.iter()
+        .map(|(name, yaml_esd)| {
+            let (diag_layer, _jobs) = parse_yaml_diag_layer_block(name, &yaml_esd.layer);
+            EcuSharedData { diag_layer }
         })
         .collect()
 }
