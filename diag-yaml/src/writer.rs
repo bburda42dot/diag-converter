@@ -280,8 +280,8 @@ fn ir_to_yaml(db: &DiagDatabase) -> YamlDocument {
                 Some(classes)
             }
         }),
-        protocols: None,
-        ecu_shared_data: None,
+        protocols: ir_protocols_to_yaml(&db.protocols),
+        ecu_shared_data: ir_ecu_shared_datas_to_yaml(&db.ecu_shared_datas),
     }
 }
 
@@ -1393,6 +1393,482 @@ fn extract_variants(db: &DiagDatabase) -> Option<Variants> {
             Some(definitions)
         },
     })
+}
+
+fn format_cp_type(ct: &ComParamStandardisationLevel) -> String {
+    match ct {
+        ComParamStandardisationLevel::Standard => "STANDARD".to_string(),
+        ComParamStandardisationLevel::Optional => "OPTIONAL".to_string(),
+        ComParamStandardisationLevel::OemSpecific => "OEM-SPECIFIC".to_string(),
+        ComParamStandardisationLevel::OemOptional => "OEM-OPTIONAL".to_string(),
+    }
+}
+
+fn format_cp_usage(u: &ComParamUsage) -> String {
+    match u {
+        ComParamUsage::Tester => "TESTER".to_string(),
+        ComParamUsage::EcuComm => "ECU-COMM".to_string(),
+        ComParamUsage::EcuSoftware => "ECU-SOFTWARE".to_string(),
+        ComParamUsage::Application => "APPLICATION".to_string(),
+    }
+}
+
+fn ir_dop_to_comparam_dop(dop: &Dop) -> ComParamDopDef {
+    let (base_type, bit_length) = match &dop.specific_data {
+        Some(DopData::NormalDop {
+            diag_coded_type: Some(dct),
+            ..
+        }) => {
+            let bt = Some(data_type_to_base(&dct.base_data_type));
+            let bl = match &dct.specific_data {
+                Some(DiagCodedTypeData::StandardLength { bit_length, .. }) => Some(*bit_length),
+                _ => None,
+            };
+            (bt, bl)
+        }
+        _ => (None, None),
+    };
+    ComParamDopDef {
+        name: Some(dop.short_name.clone()),
+        base_type,
+        bit_length,
+        min: None,
+        max: None,
+    }
+}
+
+/// Convert IR com_param_refs to YAML comparams map.
+/// Unlike `extract_comparams` (which reads from SDG blobs for root-level layers),
+/// this reads directly from the IR ComParamRef list.
+fn com_param_refs_to_yaml_comparams(refs: &[ComParamRef]) -> Option<YamlComParams> {
+    if refs.is_empty() {
+        return None;
+    }
+    let mut map: BTreeMap<String, ComParamEntry> = BTreeMap::new();
+    for cpr in refs {
+        let Some(cp) = &cpr.com_param else {
+            continue;
+        };
+        let value_str = cpr
+            .simple_value
+            .as_ref()
+            .map(|sv| sv.value.clone())
+            .unwrap_or_default();
+
+        let proto_name = cpr
+            .protocol
+            .as_ref()
+            .map(|p| p.diag_layer.short_name.clone());
+
+        if let Some(proto) = proto_name {
+            // Per-protocol value
+            let entry = map
+                .entry(cp.short_name.clone())
+                .or_insert_with(|| {
+                    ComParamEntry::Full(ComParamFull {
+                        cptype: None,
+                        unit: None,
+                        description: None,
+                        default: None,
+                        min: None,
+                        max: None,
+                        allowed_values: None,
+                        values: Some(BTreeMap::new()),
+                        dop: None,
+                        children: None,
+                        param_class: Some(cp.param_class.clone()).filter(|s| !s.is_empty()),
+                        usage: Some(format_cp_usage(&cp.cp_usage)),
+                    })
+                });
+            if let ComParamEntry::Full(full) = entry {
+                full.values
+                    .get_or_insert_with(BTreeMap::new)
+                    .insert(proto, smart_yaml_value(&value_str));
+            }
+        } else {
+            map.entry(cp.short_name.clone())
+                .or_insert_with(|| ComParamEntry::Simple(smart_yaml_value(&value_str)));
+        }
+    }
+    if map.is_empty() {
+        None
+    } else {
+        Some(map)
+    }
+}
+
+fn smart_yaml_value(s: &str) -> serde_yaml::Value {
+    if let Ok(n) = s.parse::<i64>() {
+        serde_yaml::Value::Number(serde_yaml::Number::from(n))
+    } else if let Ok(b) = s.parse::<bool>() {
+        serde_yaml::Value::Bool(b)
+    } else {
+        serde_yaml::Value::String(s.to_string())
+    }
+}
+
+fn ir_comparam_subset_to_yaml(subset: &ComParamSubSet) -> YamlComParamSubSetDef {
+    let com_params = if subset.com_params.is_empty() {
+        None
+    } else {
+        Some(
+            subset
+                .com_params
+                .iter()
+                .map(|cp| {
+                    let (default_val, dop) = match &cp.specific_data {
+                        Some(ComParamSpecificData::Regular {
+                            physical_default_value,
+                            dop,
+                        }) => (
+                            Some(physical_default_value.clone()),
+                            dop.as_ref().map(|d| ir_dop_to_comparam_dop(d)),
+                        ),
+                        _ => (None, None),
+                    };
+                    (
+                        cp.short_name.clone(),
+                        YamlSubSetComParam {
+                            param_class: Some(cp.param_class.clone()).filter(|s| !s.is_empty()),
+                            cp_type: Some(format_cp_type(&cp.cp_type)),
+                            usage: Some(format_cp_usage(&cp.cp_usage)),
+                            default: default_val,
+                            dop,
+                        },
+                    )
+                })
+                .collect(),
+        )
+    };
+
+    let complex_com_params = if subset.complex_com_params.is_empty() {
+        None
+    } else {
+        Some(
+            subset
+                .complex_com_params
+                .iter()
+                .map(|cp| {
+                    let (children, allow_multiple) = match &cp.specific_data {
+                        Some(ComParamSpecificData::Complex {
+                            com_params,
+                            allow_multiple_values,
+                            ..
+                        }) => {
+                            let children: Vec<YamlSubSetComParamChild> = com_params
+                                .iter()
+                                .map(|child| {
+                                    let (default_val, dop) = match &child.specific_data {
+                                        Some(ComParamSpecificData::Regular {
+                                            physical_default_value,
+                                            dop,
+                                        }) => (
+                                            Some(physical_default_value.clone()),
+                                            dop.as_ref().map(|d| ir_dop_to_comparam_dop(d)),
+                                        ),
+                                        _ => (None, None),
+                                    };
+                                    YamlSubSetComParamChild {
+                                        name: child.short_name.clone(),
+                                        param_class: Some(child.param_class.clone())
+                                            .filter(|s| !s.is_empty()),
+                                        default: default_val,
+                                        dop,
+                                    }
+                                })
+                                .collect();
+                            (
+                                if children.is_empty() {
+                                    None
+                                } else {
+                                    Some(children)
+                                },
+                                *allow_multiple_values,
+                            )
+                        }
+                        _ => (None, false),
+                    };
+                    (
+                        cp.short_name.clone(),
+                        YamlSubSetComplexComParam {
+                            param_class: Some(cp.param_class.clone()).filter(|s| !s.is_empty()),
+                            cp_type: Some(format_cp_type(&cp.cp_type)),
+                            usage: Some(format_cp_usage(&cp.cp_usage)),
+                            allow_multiple_values: if allow_multiple { Some(true) } else { None },
+                            children,
+                        },
+                    )
+                })
+                .collect(),
+        )
+    };
+
+    YamlComParamSubSetDef {
+        com_params,
+        complex_com_params,
+    }
+}
+
+/// Convert IR DiagLayer to YAML diagnostic layer block.
+fn ir_diag_layer_to_yaml_block(layer: &DiagLayer) -> YamlDiagLayerBlock {
+    // Try SDG-based comparams first (YAML-originated), fall back to com_param_refs (ODX-originated)
+    let comparams =
+        extract_comparams(layer).or_else(|| com_param_refs_to_yaml_comparams(&layer.com_param_refs));
+    let sdgs = layer.sdgs.as_ref().map(ir_sdgs_to_yaml);
+
+    // Extract standard services
+    let services = {
+        let extracted = service_extractor::extract_services(&layer.diag_services);
+        if service_extractor::has_any_service(&extracted) {
+            Some(extracted)
+        } else {
+            None
+        }
+    };
+
+    // Extract DIDs
+    let mut dids_map = serde_yaml::Mapping::new();
+    let mut routines_map = serde_yaml::Mapping::new();
+    for svc in &layer.diag_services {
+        if svc.diag_comm.short_name.starts_with("Routine_")
+            || extract_sid_value(svc) == Some(0x31)
+        {
+            let rid = extract_routine_id(svc);
+            let routine = service_to_routine(svc);
+            let key = serde_yaml::Value::Number(serde_yaml::Number::from(rid as u64));
+            routines_map.insert(key, serde_yaml::to_value(&routine).unwrap_or_default());
+        } else if svc.diag_comm.short_name.ends_with("_Read") {
+            let did_id = extract_did_id(svc);
+            let did_name = svc
+                .diag_comm
+                .short_name
+                .strip_suffix("_Read")
+                .unwrap_or(&svc.diag_comm.short_name);
+            let (did_type_val, _) = extract_did_type(svc, did_name);
+            let access_name = extract_access_pattern_name(&svc.diag_comm);
+            let (snap, ioc) = extract_did_extra(svc);
+            let did = Did {
+                name: did_name.to_string(),
+                param_name: None,
+                description: svc.diag_comm.long_name.as_ref().map(|ln| ln.value.clone()),
+                did_type: did_type_val,
+                access: if access_name.is_empty() {
+                    "public".into()
+                } else {
+                    access_name
+                },
+                readable: Some(true),
+                writable: None,
+                snapshot: snap,
+                io_control: ioc,
+                annotations: None,
+                audience: svc
+                    .diag_comm
+                    .audience
+                    .as_ref()
+                    .and_then(ir_audience_to_yaml),
+            };
+            let key = serde_yaml::Value::Number(serde_yaml::Number::from(did_id as u64));
+            dids_map.insert(key, serde_yaml::to_value(&did).unwrap_or_default());
+        }
+    }
+    for svc in &layer.diag_services {
+        if svc.diag_comm.short_name.ends_with("_Write") {
+            let did_id = extract_did_id(svc);
+            let key = serde_yaml::Value::Number(serde_yaml::Number::from(did_id as u64));
+            if let Some(serde_yaml::Value::Mapping(m)) = dids_map.get_mut(&key) {
+                m.insert(
+                    serde_yaml::Value::String("writable".into()),
+                    serde_yaml::Value::Bool(true),
+                );
+            }
+        }
+    }
+
+    // Extract ECU jobs
+    let ecu_jobs = {
+        let mut jobs = BTreeMap::new();
+        for job in &layer.single_ecu_jobs {
+            let key = job.diag_comm.short_name.to_lowercase().replace(' ', "_");
+            jobs.insert(key, ir_job_to_yaml(job));
+        }
+        if jobs.is_empty() { None } else { Some(jobs) }
+    };
+
+    YamlDiagLayerBlock {
+        long_name: layer.long_name.as_ref().map(|ln| ln.value.clone()),
+        services,
+        comparams,
+        types: None,
+        dids: if dids_map.is_empty() {
+            None
+        } else {
+            Some(serde_yaml::Value::Mapping(dids_map))
+        },
+        routines: if routines_map.is_empty() {
+            None
+        } else {
+            Some(serde_yaml::Value::Mapping(routines_map))
+        },
+        ecu_jobs,
+        sdgs,
+        annotations: None,
+    }
+}
+
+fn ir_parent_refs_to_yaml(refs: &[ParentRef]) -> Option<Vec<YamlParentRef>> {
+    if refs.is_empty() {
+        return None;
+    }
+    Some(
+        refs.iter()
+            .map(|pr| {
+                let (target, ref_type) = match &pr.ref_type {
+                    ParentRefType::Variant(v) => {
+                        (v.diag_layer.short_name.clone(), "variant")
+                    }
+                    ParentRefType::Protocol(p) => {
+                        (p.diag_layer.short_name.clone(), "protocol")
+                    }
+                    ParentRefType::FunctionalGroup(fg) => {
+                        (fg.diag_layer.short_name.clone(), "functional_group")
+                    }
+                    ParentRefType::EcuSharedData(esd) => {
+                        (esd.diag_layer.short_name.clone(), "ecu_shared_data")
+                    }
+                    ParentRefType::TableDop(td) => {
+                        (td.short_name.clone(), "table_dop")
+                    }
+                };
+                let not_inherited = {
+                    let ni = YamlNotInherited {
+                        services: if pr.not_inherited_diag_comm_short_names.is_empty() {
+                            None
+                        } else {
+                            Some(pr.not_inherited_diag_comm_short_names.clone())
+                        },
+                        dops: if pr.not_inherited_dops_short_names.is_empty() {
+                            None
+                        } else {
+                            Some(pr.not_inherited_dops_short_names.clone())
+                        },
+                        variables: if pr.not_inherited_variables_short_names.is_empty() {
+                            None
+                        } else {
+                            Some(pr.not_inherited_variables_short_names.clone())
+                        },
+                        tables: if pr.not_inherited_tables_short_names.is_empty() {
+                            None
+                        } else {
+                            Some(pr.not_inherited_tables_short_names.clone())
+                        },
+                        global_neg_responses: if pr
+                            .not_inherited_global_neg_responses_short_names
+                            .is_empty()
+                        {
+                            None
+                        } else {
+                            Some(pr.not_inherited_global_neg_responses_short_names.clone())
+                        },
+                    };
+                    if ni.services.is_none()
+                        && ni.dops.is_none()
+                        && ni.variables.is_none()
+                        && ni.tables.is_none()
+                        && ni.global_neg_responses.is_none()
+                    {
+                        None
+                    } else {
+                        Some(ni)
+                    }
+                };
+                YamlParentRef {
+                    target,
+                    ref_type: ref_type.to_string(),
+                    not_inherited,
+                }
+            })
+            .collect(),
+    )
+}
+
+fn ir_protocols_to_yaml(protocols: &[Protocol]) -> Option<BTreeMap<String, YamlProtocolLayer>> {
+    if protocols.is_empty() {
+        return None;
+    }
+    Some(
+        protocols
+            .iter()
+            .map(|proto| {
+                let prot_stack = proto.prot_stack.as_ref().map(|ps| YamlProtStackDef {
+                    pdu_protocol_type: ps.pdu_protocol_type.clone(),
+                    physical_link_type: ps.physical_link_type.clone(),
+                    comparam_subsets: if ps.comparam_subset_refs.is_empty() {
+                        None
+                    } else {
+                        Some(
+                            ps.comparam_subset_refs
+                                .iter()
+                                .map(ir_comparam_subset_to_yaml)
+                                .collect(),
+                        )
+                    },
+                });
+                let com_param_spec =
+                    proto.com_param_spec.as_ref().map(|cps| YamlComParamSpecDef {
+                        prot_stacks: cps
+                            .prot_stacks
+                            .iter()
+                            .map(|ps| YamlNamedProtStackDef {
+                                short_name: ps.short_name.clone(),
+                                long_name: ps.long_name.as_ref().map(|ln| ln.value.clone()),
+                                pdu_protocol_type: ps.pdu_protocol_type.clone(),
+                                physical_link_type: ps.physical_link_type.clone(),
+                                comparam_subsets: if ps.comparam_subset_refs.is_empty() {
+                                    None
+                                } else {
+                                    Some(
+                                        ps.comparam_subset_refs
+                                            .iter()
+                                            .map(ir_comparam_subset_to_yaml)
+                                            .collect(),
+                                    )
+                                },
+                            })
+                            .collect(),
+                    });
+                (
+                    proto.diag_layer.short_name.clone(),
+                    YamlProtocolLayer {
+                        layer: ir_diag_layer_to_yaml_block(&proto.diag_layer),
+                        prot_stack,
+                        com_param_spec,
+                        parent_refs: ir_parent_refs_to_yaml(&proto.parent_refs),
+                    },
+                )
+            })
+            .collect(),
+    )
+}
+
+fn ir_ecu_shared_datas_to_yaml(
+    esds: &[EcuSharedData],
+) -> Option<BTreeMap<String, YamlEcuSharedDataLayer>> {
+    if esds.is_empty() {
+        return None;
+    }
+    Some(
+        esds.iter()
+            .map(|esd| {
+                (
+                    esd.diag_layer.short_name.clone(),
+                    YamlEcuSharedDataLayer {
+                        layer: ir_diag_layer_to_yaml_block(&esd.diag_layer),
+                    },
+                )
+            })
+            .collect(),
+    )
 }
 
 fn parse_expected_value(s: &str) -> serde_yaml::Value {

@@ -987,3 +987,116 @@ dids:
         "supplier should not be present"
     );
 }
+
+#[test]
+fn test_write_protocol_roundtrip() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+protocols:
+  ISO_15765_3:
+    long_name: "ISO 15765-3 Diagnostic Communication"
+    services:
+      testerPresent:
+        enabled: true
+    comparams:
+      CP_Baudrate: 500000
+    parent_refs:
+      - target: Diagnostics
+        type: functional_group
+        not_inherited:
+          services:
+            - FlashECU
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    assert_eq!(db.protocols.len(), 1, "should parse 1 protocol");
+    assert!(
+        !db.protocols[0].diag_layer.diag_services.is_empty(),
+        "protocol should have parsed services"
+    );
+
+    let yaml_out = write_yaml(&db).unwrap();
+    let doc: serde_yaml::Value = serde_yaml::from_str(&yaml_out).unwrap();
+    assert!(
+        doc["protocols"]["ISO_15765_3"].is_mapping(),
+        "protocols.ISO_15765_3 should be present in output"
+    );
+    assert_eq!(
+        doc["protocols"]["ISO_15765_3"]["long_name"].as_str(),
+        Some("ISO 15765-3 Diagnostic Communication")
+    );
+
+    let db2 = parse_yaml(&yaml_out).unwrap();
+    assert_eq!(db2.protocols.len(), 1);
+    assert_eq!(db2.protocols[0].diag_layer.short_name, "ISO_15765_3");
+    assert_eq!(
+        db2.protocols[0].diag_layer.diag_services.len(),
+        db.protocols[0].diag_layer.diag_services.len(),
+        "services should roundtrip"
+    );
+}
+
+#[test]
+fn test_write_ecu_shared_data_roundtrip() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+ecu_shared_data:
+  CommonSharedData:
+    long_name: "Common ECU Shared Data"
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    assert_eq!(db.ecu_shared_datas.len(), 1);
+
+    let yaml_out = write_yaml(&db).unwrap();
+    let doc: serde_yaml::Value = serde_yaml::from_str(&yaml_out).unwrap();
+    assert!(doc["ecu_shared_data"]["CommonSharedData"].is_mapping());
+
+    let db2 = parse_yaml(&yaml_out).unwrap();
+    assert_eq!(db2.ecu_shared_datas.len(), 1);
+    assert_eq!(db2.ecu_shared_datas[0].diag_layer.short_name, "CommonSharedData");
+}
+
+#[test]
+fn test_write_protocol_with_prot_stack() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+protocols:
+  UDS_DoIP:
+    prot_stack:
+      pdu_protocol_type: "ISO_14229_5_on_ISO_13400_2"
+      physical_link_type: "IEEE_802_3"
+    com_param_spec:
+      prot_stacks:
+        - short_name: "ISO_14229_5_on_ISO_13400_2"
+          pdu_protocol_type: "ISO_14229_5_on_ISO_13400_2"
+          physical_link_type: "IEEE_802_3"
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    let yaml_out = write_yaml(&db).unwrap();
+    let db2 = parse_yaml(&yaml_out).unwrap();
+
+    assert_eq!(db2.protocols.len(), 1);
+    let ps = db2.protocols[0].prot_stack.as_ref().unwrap();
+    assert_eq!(ps.pdu_protocol_type, "ISO_14229_5_on_ISO_13400_2");
+    let cps = db2.protocols[0].com_param_spec.as_ref().unwrap();
+    assert_eq!(cps.prot_stacks.len(), 1);
+}
+
+#[test]
+fn test_write_empty_protocols_omitted() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    let yaml_out = write_yaml(&db).unwrap();
+    let doc: serde_yaml::Value = serde_yaml::from_str(&yaml_out).unwrap();
+    assert!(doc["protocols"].is_null(), "empty protocols should be omitted");
+    assert!(doc["ecu_shared_data"].is_null(), "empty ecu_shared_data should be omitted");
+}
