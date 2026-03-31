@@ -314,3 +314,108 @@ dids:
     assert!(!audience.is_supplier);
     assert!(!audience.is_after_market);
 }
+
+#[test]
+fn test_parse_protocols_section() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+protocols:
+  ISO_15765_3:
+    long_name: "ISO 15765-3 Diagnostic Communication"
+    comparams:
+      CP_Baudrate: 500000
+    parent_refs:
+      - target: Diagnostics
+        type: functional_group
+        not_inherited:
+          services: [FlashECU]
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    assert_eq!(db.protocols.len(), 1);
+    let proto = &db.protocols[0];
+    assert_eq!(proto.diag_layer.short_name, "ISO_15765_3");
+    assert_eq!(
+        proto.diag_layer.long_name.as_ref().unwrap().value,
+        "ISO 15765-3 Diagnostic Communication"
+    );
+    assert!(!proto.diag_layer.com_param_refs.is_empty());
+    assert_eq!(proto.parent_refs.len(), 1);
+    assert_eq!(
+        proto.parent_refs[0].not_inherited_diag_comm_short_names,
+        vec!["FlashECU"]
+    );
+}
+
+#[test]
+fn test_parse_ecu_shared_data_section() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+ecu_shared_data:
+  CommonSharedData:
+    long_name: "Common ECU Shared Data"
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    assert_eq!(db.ecu_shared_datas.len(), 1);
+    let esd = &db.ecu_shared_datas[0];
+    assert_eq!(esd.diag_layer.short_name, "CommonSharedData");
+    assert_eq!(
+        esd.diag_layer.long_name.as_ref().unwrap().value,
+        "Common ECU Shared Data"
+    );
+}
+
+#[test]
+fn test_parse_protocol_with_prot_stack() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+protocols:
+  UDS_Ethernet_DoIP:
+    prot_stack:
+      pdu_protocol_type: "ISO_14229_5_on_ISO_13400_2"
+      physical_link_type: "IEEE_802_3"
+      comparam_subsets:
+        - com_params:
+            CP_DoIPLogicalGatewayAddress:
+              param_class: COM
+              cp_type: STANDARD
+              usage: TESTER
+              default: "1"
+    com_param_spec:
+      prot_stacks:
+        - short_name: "ISO_14229_5_on_ISO_13400_2"
+          pdu_protocol_type: "ISO_14229_5_on_ISO_13400_2"
+          physical_link_type: "IEEE_802_3"
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    let proto = &db.protocols[0];
+    let ps = proto.prot_stack.as_ref().unwrap();
+    assert_eq!(ps.pdu_protocol_type, "ISO_14229_5_on_ISO_13400_2");
+    assert_eq!(ps.physical_link_type, "IEEE_802_3");
+    assert_eq!(ps.comparam_subset_refs.len(), 1);
+    assert_eq!(ps.comparam_subset_refs[0].com_params.len(), 1);
+    assert_eq!(
+        ps.comparam_subset_refs[0].com_params[0].short_name,
+        "CP_DoIPLogicalGatewayAddress"
+    );
+    let cps = proto.com_param_spec.as_ref().unwrap();
+    assert_eq!(cps.prot_stacks.len(), 1);
+    assert_eq!(cps.prot_stacks[0].short_name, "ISO_14229_5_on_ISO_13400_2");
+}
+
+#[test]
+fn test_parse_empty_protocols_preserves_default() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  name: "TEST"
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    assert!(db.protocols.is_empty());
+    assert!(db.ecu_shared_datas.is_empty());
+}
