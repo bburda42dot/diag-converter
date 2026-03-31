@@ -1077,7 +1077,10 @@ types:
     base: u8
 "#;
         let parsed: YamlEcuSharedDataLayer = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(parsed.layer.long_name.as_deref(), Some("Common Shared Data"));
+        assert_eq!(
+            parsed.layer.long_name.as_deref(),
+            Some("Common Shared Data")
+        );
         assert!(parsed.layer.types.is_some());
     }
 

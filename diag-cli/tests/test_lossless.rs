@@ -295,7 +295,11 @@ fn deep_diff(a: &DiagDatabase, b: &DiagDatabase) -> Vec<String> {
                 bp.diag_layer.diag_services.len(),
                 &format!("{prefix}.diag_services.len")
             );
-            cmp!(ap.prot_stack, bp.prot_stack, &format!("{prefix}.prot_stack"));
+            cmp!(
+                ap.prot_stack,
+                bp.prot_stack,
+                &format!("{prefix}.prot_stack")
+            );
             cmp!(
                 ap.com_param_spec,
                 bp.com_param_spec,
@@ -445,10 +449,7 @@ fn lossless_odx_to_yaml_protocols_minimal() {
             yp.parent_refs.len(),
             "protocol[{i}] parent_refs count"
         );
-        assert_eq!(
-            op.prot_stack, yp.prot_stack,
-            "protocol[{i}] prot_stack"
-        );
+        assert_eq!(op.prot_stack, yp.prot_stack, "protocol[{i}] prot_stack");
         assert_eq!(
             op.com_param_spec, yp.com_param_spec,
             "protocol[{i}] com_param_spec"
