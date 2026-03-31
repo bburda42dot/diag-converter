@@ -419,3 +419,83 @@ ecu:
     assert!(db.protocols.is_empty());
     assert!(db.ecu_shared_datas.is_empty());
 }
+
+#[test]
+fn test_parse_protocol_esd_fixture() {
+    let content = include_str!("../../test-fixtures/yaml/protocol-esd-fixture.yml");
+    let db = parse_yaml(content).unwrap();
+
+    assert_eq!(db.protocols.len(), 2, "should have 2 protocols");
+    let doip = db
+        .protocols
+        .iter()
+        .find(|p| p.diag_layer.short_name == "UDS_Ethernet_DoIP")
+        .unwrap();
+    assert_eq!(
+        doip.diag_layer.long_name.as_ref().unwrap().value,
+        "UDS over DoIP (Ethernet)"
+    );
+    assert!(doip.prot_stack.is_some(), "DoIP should have prot_stack");
+    assert!(
+        doip.com_param_spec.is_some(),
+        "DoIP should have com_param_spec"
+    );
+    assert_eq!(doip.parent_refs.len(), 1, "DoIP should have 1 parent_ref");
+
+    let ps = doip.prot_stack.as_ref().unwrap();
+    assert_eq!(ps.comparam_subset_refs.len(), 1);
+    assert_eq!(ps.comparam_subset_refs[0].com_params.len(), 1);
+    assert_eq!(ps.comparam_subset_refs[0].complex_com_params.len(), 1);
+
+    assert_eq!(
+        db.ecu_shared_datas.len(),
+        2,
+        "should have 2 ecu_shared_data"
+    );
+
+    let shared_diag = db
+        .ecu_shared_datas
+        .iter()
+        .find(|e| e.diag_layer.short_name == "SharedDiagnostics")
+        .unwrap();
+    assert!(
+        !shared_diag.diag_layer.diag_services.is_empty(),
+        "SharedDiagnostics should have parsed services"
+    );
+}
+
+#[test]
+fn test_protocol_esd_fixture_yaml_roundtrip() {
+    let content = include_str!("../../test-fixtures/yaml/protocol-esd-fixture.yml");
+    let db1 = parse_yaml(content).unwrap();
+    let yaml_out = diag_yaml::write_yaml(&db1).unwrap();
+    let db2 = parse_yaml(&yaml_out).unwrap();
+
+    assert_eq!(db1.protocols.len(), db2.protocols.len(), "protocol count");
+    assert_eq!(
+        db1.ecu_shared_datas.len(),
+        db2.ecu_shared_datas.len(),
+        "esd count"
+    );
+
+    for (a, b) in db1.protocols.iter().zip(db2.protocols.iter()) {
+        assert_eq!(a.diag_layer.short_name, b.diag_layer.short_name);
+        assert_eq!(a.diag_layer.long_name, b.diag_layer.long_name);
+        assert_eq!(
+            a.prot_stack, b.prot_stack,
+            "prot_stack for {}",
+            a.diag_layer.short_name
+        );
+        assert_eq!(
+            a.com_param_spec, b.com_param_spec,
+            "com_param_spec for {}",
+            a.diag_layer.short_name
+        );
+        assert_eq!(
+            a.parent_refs.len(),
+            b.parent_refs.len(),
+            "parent_refs for {}",
+            a.diag_layer.short_name
+        );
+    }
+}
