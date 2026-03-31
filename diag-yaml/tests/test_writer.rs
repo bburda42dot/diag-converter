@@ -1056,7 +1056,10 @@ ecu_shared_data:
 
     let db2 = parse_yaml(&yaml_out).unwrap();
     assert_eq!(db2.ecu_shared_datas.len(), 1);
-    assert_eq!(db2.ecu_shared_datas[0].diag_layer.short_name, "CommonSharedData");
+    assert_eq!(
+        db2.ecu_shared_datas[0].diag_layer.short_name,
+        "CommonSharedData"
+    );
 }
 
 #[test]
@@ -1097,6 +1100,12 @@ ecu:
     let db = parse_yaml(yaml).unwrap();
     let yaml_out = write_yaml(&db).unwrap();
     let doc: serde_yaml::Value = serde_yaml::from_str(&yaml_out).unwrap();
-    assert!(doc["protocols"].is_null(), "empty protocols should be omitted");
-    assert!(doc["ecu_shared_data"].is_null(), "empty ecu_shared_data should be omitted");
+    assert!(
+        doc["protocols"].is_null(),
+        "empty protocols should be omitted"
+    );
+    assert!(
+        doc["ecu_shared_data"].is_null(),
+        "empty ecu_shared_data should be omitted"
+    );
 }

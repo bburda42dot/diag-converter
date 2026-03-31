@@ -2006,9 +2006,7 @@ fn parse_yaml_comparam_subset(def: &YamlComParamSubSetDef) -> ComParamSubSet {
                 long_name: None,
                 param_class: cp.param_class.clone().unwrap_or_default(),
                 cp_type: match cp.cp_type.as_deref() {
-                    Some("OEM") | Some("OEM_SPECIFIC") => {
-                        ComParamStandardisationLevel::OemSpecific
-                    }
+                    Some("OEM") | Some("OEM_SPECIFIC") => ComParamStandardisationLevel::OemSpecific,
                     Some("OPTIONAL") => ComParamStandardisationLevel::Optional,
                     Some("OEM_OPTIONAL") => ComParamStandardisationLevel::OemOptional,
                     _ => ComParamStandardisationLevel::Standard,
@@ -2093,9 +2091,7 @@ fn parse_yaml_parent_refs(refs: Option<&Vec<YamlParentRef>>) -> Vec<ParentRef> {
                 not_inherited_variables_short_names: ni
                     .and_then(|n| n.variables.clone())
                     .unwrap_or_default(),
-                not_inherited_dops_short_names: ni
-                    .and_then(|n| n.dops.clone())
-                    .unwrap_or_default(),
+                not_inherited_dops_short_names: ni.and_then(|n| n.dops.clone()).unwrap_or_default(),
                 not_inherited_tables_short_names: ni
                     .and_then(|n| n.tables.clone())
                     .unwrap_or_default(),
@@ -2263,9 +2259,7 @@ fn parse_yaml_protocols(protocols: Option<&BTreeMap<String, YamlProtocolLayer>>)
                         let comparam_subset_refs = nps
                             .comparam_subsets
                             .as_ref()
-                            .map(|subsets| {
-                                subsets.iter().map(parse_yaml_comparam_subset).collect()
-                            })
+                            .map(|subsets| subsets.iter().map(parse_yaml_comparam_subset).collect())
                             .unwrap_or_default();
 
                         ProtStack {
