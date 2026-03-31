@@ -2073,7 +2073,16 @@ fn parse_yaml_parent_refs(refs: Option<&Vec<YamlParentRef>>) -> Vec<ParentRef> {
                         ..Default::default()
                     },
                 })),
-                // functional_group or any other type
+                "variant" => ParentRefType::Variant(Box::new(Variant {
+                    diag_layer: DiagLayer {
+                        short_name: pr.target.clone(),
+                        ..Default::default()
+                    },
+                    is_base_variant: false,
+                    variant_patterns: vec![],
+                    parent_refs: vec![],
+                })),
+                // functional_group or any unrecognized type
                 _ => ParentRefType::FunctionalGroup(Box::new(FunctionalGroup {
                     diag_layer: DiagLayer {
                         short_name: pr.target.clone(),
@@ -2103,12 +2112,9 @@ fn parse_yaml_parent_refs(refs: Option<&Vec<YamlParentRef>>) -> Vec<ParentRef> {
         .collect()
 }
 
-/// Parse a YAML diagnostic layer block into IR DiagLayer components.
+/// Parse a YAML diagnostic layer block into an IR DiagLayer.
 /// Used by both protocol and ecu_shared_data layers.
-fn parse_yaml_diag_layer_block(
-    short_name: &str,
-    block: &YamlDiagLayerBlock,
-) -> (DiagLayer, Vec<SingleEcuJob>) {
+fn parse_yaml_diag_layer_block(short_name: &str, block: &YamlDiagLayerBlock) -> DiagLayer {
     let type_registry = build_type_registry(block.types.as_ref());
 
     // Build com_param_refs from block comparams
@@ -2141,32 +2147,66 @@ fn parse_yaml_diag_layer_block(
                     });
                 }
                 ComParamEntry::Full(full) => {
-                    let default_val = full
-                        .default
-                        .as_ref()
-                        .map(yaml_value_to_string)
-                        .unwrap_or_default();
-                    com_param_refs.push(ComParamRef {
-                        simple_value: Some(SimpleValue {
-                            value: default_val.clone(),
-                        }),
-                        complex_value: None,
-                        com_param: Some(Box::new(ComParam {
-                            com_param_type: ComParamType::Regular,
-                            short_name: param_name.clone(),
-                            long_name: None,
-                            param_class: full.param_class.clone().unwrap_or_default(),
-                            cp_type: ComParamStandardisationLevel::Standard,
-                            display_level: None,
-                            cp_usage: parse_comparam_usage(full.usage.as_deref()),
-                            specific_data: Some(ComParamSpecificData::Regular {
-                                physical_default_value: default_val,
-                                dop: make_comparam_dop(full.dop.as_ref()).map(Box::new),
+                    if let Some(values) = &full.values {
+                        // Per-protocol values: create one ComParamRef per protocol
+                        for (proto_name, val) in values {
+                            let value_str = yaml_value_to_string(val);
+                            let protocol = Protocol {
+                                diag_layer: DiagLayer {
+                                    short_name: proto_name.clone(),
+                                    ..Default::default()
+                                },
+                                com_param_spec: None,
+                                prot_stack: None,
+                                parent_refs: vec![],
+                            };
+                            com_param_refs.push(ComParamRef {
+                                simple_value: Some(SimpleValue {
+                                    value: value_str.clone(),
+                                }),
+                                complex_value: None,
+                                com_param: Some(Box::new(ComParam {
+                                    com_param_type: ComParamType::Regular,
+                                    short_name: param_name.clone(),
+                                    long_name: None,
+                                    param_class: full.param_class.clone().unwrap_or_default(),
+                                    cp_type: ComParamStandardisationLevel::Standard,
+                                    display_level: None,
+                                    cp_usage: parse_comparam_usage(full.usage.as_deref()),
+                                    specific_data: Some(ComParamSpecificData::Regular {
+                                        physical_default_value: value_str,
+                                        dop: make_comparam_dop(full.dop.as_ref()).map(Box::new),
+                                    }),
+                                })),
+                                protocol: Some(Box::new(protocol)),
+                                prot_stack: None,
+                            });
+                        }
+                    } else if let Some(default) = &full.default {
+                        // No per-protocol values, just a default
+                        let default_val = yaml_value_to_string(default);
+                        com_param_refs.push(ComParamRef {
+                            simple_value: Some(SimpleValue {
+                                value: default_val.clone(),
                             }),
-                        })),
-                        protocol: None,
-                        prot_stack: None,
-                    });
+                            complex_value: None,
+                            com_param: Some(Box::new(ComParam {
+                                com_param_type: ComParamType::Regular,
+                                short_name: param_name.clone(),
+                                long_name: None,
+                                param_class: full.param_class.clone().unwrap_or_default(),
+                                cp_type: ComParamStandardisationLevel::Standard,
+                                display_level: None,
+                                cp_usage: parse_comparam_usage(full.usage.as_deref()),
+                                specific_data: Some(ComParamSpecificData::Regular {
+                                    physical_default_value: default_val,
+                                    dop: make_comparam_dop(full.dop.as_ref()).map(Box::new),
+                                }),
+                            })),
+                            protocol: None,
+                            prot_stack: None,
+                        });
+                    }
                 }
             }
         }
@@ -2220,19 +2260,17 @@ fn parse_yaml_diag_layer_block(
         ti: String::new(),
     });
 
-    let diag_layer = DiagLayer {
+    DiagLayer {
         short_name: short_name.into(),
         long_name,
         funct_classes: vec![],
         com_param_refs,
         diag_services,
-        single_ecu_jobs: single_ecu_jobs.clone(),
+        single_ecu_jobs,
         state_charts: vec![],
         additional_audiences: vec![],
         sdgs,
-    };
-
-    (diag_layer, single_ecu_jobs)
+    }
 }
 
 /// Parse the top-level `protocols:` YAML section into IR Protocol entries.
@@ -2244,7 +2282,7 @@ fn parse_yaml_protocols(protocols: Option<&BTreeMap<String, YamlProtocolLayer>>)
     protos
         .iter()
         .map(|(name, yaml_proto)| {
-            let (diag_layer, _jobs) = parse_yaml_diag_layer_block(name, &yaml_proto.layer);
+            let diag_layer = parse_yaml_diag_layer_block(name, &yaml_proto.layer);
 
             let prot_stack = yaml_proto
                 .prot_stack
@@ -2300,7 +2338,7 @@ fn parse_yaml_ecu_shared_datas(
 
     esds.iter()
         .map(|(name, yaml_esd)| {
-            let (diag_layer, _jobs) = parse_yaml_diag_layer_block(name, &yaml_esd.layer);
+            let diag_layer = parse_yaml_diag_layer_block(name, &yaml_esd.layer);
             EcuSharedData { diag_layer }
         })
         .collect()

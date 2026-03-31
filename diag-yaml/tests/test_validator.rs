@@ -134,6 +134,17 @@ fn test_malformed_yaml_returns_parse_error() {
 }
 
 #[test]
+fn test_protocol_esd_fixture_passes_schema() {
+    let content = include_str!("../../test-fixtures/yaml/protocol-esd-fixture.yml");
+    let result = validate_yaml_schema(content);
+    assert!(
+        result.is_ok(),
+        "protocol-esd-fixture.yml should pass schema validation: {:?}",
+        result.err()
+    );
+}
+
+#[test]
 fn test_error_includes_path() {
     // Session missing required 'id' field
     let yaml = r#"
