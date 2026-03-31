@@ -12,6 +12,7 @@ ecu:
   id: "PROTO_TEST"
   name: "Protocol Test ECU"
   default_addressing_mode: physical
+  addressing: {}
 
 sessions:
   default:
@@ -34,10 +35,7 @@ protocols:
       testerPresent:
         enabled: true
     comparams:
-      CP_DoIPLogicalTesterAddress:
-        default: 65024
-        param_class: COM
-        usage: TESTER
+      CP_DoIPLogicalTesterAddress: 65024
     prot_stack:
       pdu_protocol_type: "ISO_14229_5_on_ISO_13400_2"
       physical_link_type: "IEEE_802_3"
