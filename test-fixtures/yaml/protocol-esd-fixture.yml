@@ -1,0 +1,88 @@
+# Comprehensive test fixture for protocols + ECU shared data sections
+schema: "opensovd.cda.diagdesc/v1"
+
+meta:
+  author: "Test"
+  domain: "Test"
+  created: "2026-03-31"
+  revision: "0.1.0"
+  description: "Protocol and ECU shared data test fixture"
+
+ecu:
+  id: "PROTO_TEST"
+  name: "Protocol Test ECU"
+  default_addressing_mode: physical
+
+sessions:
+  default:
+    id: 0x01
+
+services:
+  testerPresent:
+    enabled: true
+
+access_patterns:
+  public:
+    sessions: any
+    security: none
+    authentication: none
+
+protocols:
+  UDS_Ethernet_DoIP:
+    long_name: "UDS over DoIP (Ethernet)"
+    services:
+      testerPresent:
+        enabled: true
+    comparams:
+      CP_DoIPLogicalTesterAddress:
+        default: 65024
+        param_class: COM
+        usage: TESTER
+    prot_stack:
+      pdu_protocol_type: "ISO_14229_5_on_ISO_13400_2"
+      physical_link_type: "IEEE_802_3"
+      comparam_subsets:
+        - com_params:
+            CP_DoIPLogicalGatewayAddress:
+              param_class: COM
+              cp_type: STANDARD
+              usage: TESTER
+              default: "1"
+          complex_com_params:
+            CP_UniqueRespIdTable:
+              param_class: UNIQUE_ID
+              cp_type: STANDARD
+              usage: ECU-COMM
+              allow_multiple_values: true
+              children:
+                - name: CP_DoIPLogicalEcuAddress
+                  param_class: UNIQUE_ID
+                  default: "4096"
+                - name: CP_ECULayerShortName
+                  param_class: UNIQUE_ID
+                  default: "PROTO_TEST"
+    com_param_spec:
+      prot_stacks:
+        - short_name: "ISO_14229_5_on_ISO_13400_2"
+          pdu_protocol_type: "ISO_14229_5_on_ISO_13400_2"
+          physical_link_type: "IEEE_802_3"
+    parent_refs:
+      - target: Diagnostics
+        type: functional_group
+        not_inherited:
+          services: [FlashECU]
+          dops: [InternalDOP]
+
+  UDS_CAN:
+    long_name: "UDS over CAN"
+    comparams:
+      CP_Baudrate: 500000
+
+ecu_shared_data:
+  CommonSharedData:
+    long_name: "Common ECU Shared Data"
+  SharedDiagnostics:
+    long_name: "Shared Diagnostic Services"
+    services:
+      testerPresent:
+        enabled: true

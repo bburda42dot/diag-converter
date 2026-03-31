@@ -59,3 +59,16 @@ access_patterns:
     sessions: any
     security: none
     authentication: none
+
+protocols:
+  UDSonDoIP:
+    long_name: "UDS over DoIP"
+    comparams:
+      CP_DoIPLogicalTesterAddress: 65024
+    parent_refs:
+      - target: Minimal ECU
+        type: variant
+
+ecu_shared_data:
+  CommonSharedData:
+    long_name: "Common ECU Shared Data"
