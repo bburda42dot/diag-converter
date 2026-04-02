@@ -354,27 +354,33 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
 
                             if is_complex {
                                 // Complex comparam (e.g. CP_UniqueRespIdTable)
-                                // Build complex value from children defaults
-                                let children =
-                                    build_complex_comparam_children(full.children.as_deref(), None);
-                                let complex_value = if !children.is_empty() {
-                                    let entries: Vec<SimpleOrComplexValue> = children
-                                        .iter()
-                                        .map(|child| {
-                                            let val = match &child.specific_data {
-                                                Some(ComParamSpecificData::Regular {
-                                                    physical_default_value,
-                                                    ..
-                                                }) => physical_default_value.clone(),
-                                                _ => String::new(),
-                                            };
-                                            SimpleOrComplexValue::Simple(SimpleValue { value: val })
+                                // Extract per-protocol values: values.UDS_Ethernet_DoIP_DOBT: ["20706", "0", "GCS_A01LH"]
+                                let proto_values: Option<Vec<String>> =
+                                    full.values.as_ref().and_then(|vals| {
+                                        vals.get(proto_name).map(|v| {
+                                            if let serde_yaml::Value::Sequence(seq) = v {
+                                                seq.iter().map(yaml_value_to_string).collect()
+                                            } else {
+                                                vec![yaml_value_to_string(v)]
+                                            }
                                         })
-                                        .collect();
-                                    Some(ComplexValue { entries })
-                                } else {
-                                    None
-                                };
+                                    });
+                                let children = build_complex_comparam_children(
+                                    full.children.as_deref(),
+                                    proto_values.as_deref(),
+                                );
+                                // Build ComplexValue entries from actual values
+                                let complex_value =
+                                    proto_values.as_ref().map(|vals| ComplexValue {
+                                        entries: vals
+                                            .iter()
+                                            .map(|v| {
+                                                SimpleOrComplexValue::Simple(SimpleValue {
+                                                    value: v.clone(),
+                                                })
+                                            })
+                                            .collect(),
+                                    });
                                 com_param_refs.push(ComParamRef {
                                     simple_value: None,
                                     complex_value,
