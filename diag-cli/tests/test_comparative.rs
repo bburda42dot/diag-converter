@@ -632,8 +632,20 @@ fn compare_odx_vs_yaml(pdx: &[u8], yaml: &str, name: &str) {
     }
 
     // Non-base variants: compare variant-specific services.
-    // ODX flattens inherited services; subtract base to get variant-specific.
+    // Both ODX and YAML flatten inherited services; subtract base to get variant-specific.
     let odx_base_svc: BTreeSet<_> = odx_ir
+        .variants
+        .iter()
+        .find(|v| v.is_base_variant)
+        .map(|v| {
+            v.diag_layer
+                .diag_services
+                .iter()
+                .map(|s| s.diag_comm.short_name.as_str())
+                .collect()
+        })
+        .unwrap_or_default();
+    let yaml_base_svc: BTreeSet<_> = yaml_ir
         .variants
         .iter()
         .find(|v| v.is_base_variant)
@@ -669,6 +681,7 @@ fn compare_odx_vs_yaml(pdx: &[u8], yaml: &str, name: &str) {
             .diag_services
             .iter()
             .map(|s| s.diag_comm.short_name.as_str())
+            .filter(|n| !yaml_base_svc.contains(n))
             .collect();
         assert_eq!(
             odx_variant_svc,
