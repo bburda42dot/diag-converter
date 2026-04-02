@@ -301,39 +301,92 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
     // Build com_param_refs from YAML comparams section
     let mut com_param_refs = parse_comparams(doc);
 
-    // Propagate Protocol stubs from top-level `protocols:` section to Variant-level
-    // ComParamRefs. CDA discovers protocols by traversing:
-    //   diag_layers -> com_param_refs -> protocol() -> diag_layer().short_name()
-    // Without this propagation, protocols defined only in the YAML `protocols:` section
-    // (not referenced in root-level `comparams:`) would be invisible in MDD.
+    // Propagate comparams from top-level `protocols:` section to Variant-level ComParamRefs.
+    // CDA looks up comparams via:
+    //   base_variant -> com_param_refs -> find(protocol.short_name == X && com_param.short_name == Y)
+    // So each comparam defined under a protocol must become a ComParamRef on the base variant
+    // with both a Protocol stub AND a ComParam with the value.
     if let Some(yaml_protocols) = &doc.protocols {
-        // Collect protocol names already present via comparams
-        let existing_proto_names: std::collections::BTreeSet<String> = com_param_refs
-            .iter()
-            .filter_map(|cpr| {
-                cpr.protocol
-                    .as_ref()
-                    .map(|p| p.diag_layer.short_name.clone())
-            })
-            .collect();
+        for (proto_name, yaml_proto) in yaml_protocols {
+            let protocol_stub = Protocol {
+                diag_layer: DiagLayer {
+                    short_name: proto_name.clone(),
+                    ..Default::default()
+                },
+                com_param_spec: None,
+                prot_stack: None,
+                parent_refs: vec![],
+            };
 
-        for proto_name in yaml_protocols.keys() {
-            if !existing_proto_names.contains(proto_name) {
-                // Add a synthetic ComParamRef with just the Protocol stub
-                // so CDA can discover this protocol in the MDD
+            // Emit ComParamRefs from the protocol's comparams sub-section
+            if let Some(comparams) = &yaml_proto.layer.comparams {
+                for (param_name, entry) in comparams {
+                    match entry {
+                        ComParamEntry::Simple(val) => {
+                            let value_str = yaml_value_to_string(val);
+                            com_param_refs.push(ComParamRef {
+                                simple_value: Some(SimpleValue {
+                                    value: value_str.clone(),
+                                }),
+                                complex_value: None,
+                                com_param: Some(Box::new(ComParam {
+                                    com_param_type: ComParamType::Regular,
+                                    short_name: param_name.clone(),
+                                    long_name: None,
+                                    param_class: String::new(),
+                                    cp_type: ComParamStandardisationLevel::Standard,
+                                    display_level: None,
+                                    cp_usage: ComParamUsage::EcuComm,
+                                    specific_data: Some(ComParamSpecificData::Regular {
+                                        physical_default_value: value_str,
+                                        dop: None,
+                                    }),
+                                })),
+                                protocol: Some(Box::new(protocol_stub.clone())),
+                                prot_stack: None,
+                            });
+                        }
+                        ComParamEntry::Full(full) => {
+                            let default_val = full
+                                .default
+                                .as_ref()
+                                .map(yaml_value_to_string)
+                                .unwrap_or_default();
+                            com_param_refs.push(ComParamRef {
+                                simple_value: Some(SimpleValue {
+                                    value: default_val.clone(),
+                                }),
+                                complex_value: None,
+                                com_param: Some(Box::new(ComParam {
+                                    com_param_type: ComParamType::Regular,
+                                    short_name: param_name.clone(),
+                                    long_name: None,
+                                    param_class: full.param_class.clone().unwrap_or_default(),
+                                    cp_type: ComParamStandardisationLevel::Standard,
+                                    display_level: None,
+                                    cp_usage: parse_comparam_usage(full.usage.as_deref()),
+                                    specific_data: Some(ComParamSpecificData::Regular {
+                                        physical_default_value: default_val,
+                                        dop: make_comparam_dop(full.dop.as_ref()).map(Box::new),
+                                    }),
+                                })),
+                                protocol: Some(Box::new(protocol_stub.clone())),
+                                prot_stack: None,
+                            });
+                        }
+                    }
+                }
+            } else {
+                // Protocol has no comparams but still needs to be discoverable.
+                // Add a minimal ComParamRef with just the Protocol stub.
+                // Note: CDA lookup requires com_param to be present, so this
+                // won't match specific param lookups, but ensures protocol
+                // discovery via com_param_refs().protocol() works.
                 com_param_refs.push(ComParamRef {
                     simple_value: None,
                     complex_value: None,
                     com_param: None,
-                    protocol: Some(Box::new(Protocol {
-                        diag_layer: DiagLayer {
-                            short_name: proto_name.clone(),
-                            ..Default::default()
-                        },
-                        com_param_spec: None,
-                        prot_stack: None,
-                        parent_refs: vec![],
-                    })),
+                    protocol: Some(Box::new(protocol_stub)),
                     prot_stack: None,
                 });
             }
