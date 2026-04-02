@@ -339,7 +339,7 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
                                     cp_usage: ComParamUsage::EcuComm,
                                     specific_data: Some(ComParamSpecificData::Regular {
                                         physical_default_value: value_str,
-                                        dop: None,
+                                        dop: Some(Box::new(default_comparam_dop())),
                                     }),
                                 })),
                                 protocol: Some(Box::new(protocol_stub.clone())),
@@ -1922,6 +1922,39 @@ fn parse_detect_to_matching_parameter(
 }
 
 /// Create a DOP for a comparam from an explicit YAML definition.
+/// Create a default DOP for comparams that don't have an explicit DOP definition.
+/// CDA requires every ComParam to have a DOP with a diag_coded_type for value resolution.
+/// Uses A_UINT32/32-bit as safe default matching ISO 14229-5 / ISO 13400-2 comparam types.
+fn default_comparam_dop() -> Dop {
+    Dop {
+        dop_type: DopType::Regular,
+        short_name: "IDENTICAL_A_UINT32".to_string(),
+        sdgs: None,
+        specific_data: Some(DopData::NormalDop {
+            compu_method: Some(CompuMethod {
+                category: CompuCategory::Identical,
+                internal_to_phys: None,
+                phys_to_internal: None,
+            }),
+            diag_coded_type: Some(DiagCodedType {
+                type_name: DiagCodedTypeName::StandardLengthType,
+                base_type_encoding: String::new(),
+                base_data_type: DataType::AUint32,
+                is_high_low_byte_order: true,
+                specific_data: Some(DiagCodedTypeData::StandardLength {
+                    bit_length: 32,
+                    bit_mask: vec![],
+                    condensed: false,
+                }),
+            }),
+            physical_type: None,
+            internal_constr: None,
+            phys_constr: None,
+            unit_ref: None,
+        }),
+    }
+}
+
 fn make_comparam_dop(dop_def: Option<&ComParamDopDef>) -> Option<Dop> {
     let def = dop_def?;
 
