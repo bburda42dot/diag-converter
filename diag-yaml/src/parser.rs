@@ -347,32 +347,88 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
                             });
                         }
                         ComParamEntry::Full(full) => {
-                            let default_val = full
-                                .default
+                            let is_complex = full
+                                .cptype
                                 .as_ref()
-                                .map(yaml_value_to_string)
-                                .unwrap_or_default();
-                            com_param_refs.push(ComParamRef {
-                                simple_value: Some(SimpleValue {
-                                    value: default_val.clone(),
-                                }),
-                                complex_value: None,
-                                com_param: Some(Box::new(ComParam {
-                                    com_param_type: ComParamType::Regular,
-                                    short_name: param_name.clone(),
-                                    long_name: None,
-                                    param_class: full.param_class.clone().unwrap_or_default(),
-                                    cp_type: ComParamStandardisationLevel::Standard,
-                                    display_level: None,
-                                    cp_usage: parse_comparam_usage(full.usage.as_deref()),
-                                    specific_data: Some(ComParamSpecificData::Regular {
-                                        physical_default_value: default_val,
-                                        dop: make_comparam_dop(full.dop.as_ref()).map(Box::new),
+                                .is_some_and(super::yaml_model::ComParamTypeYaml::is_complex);
+
+                            if is_complex {
+                                // Complex comparam (e.g. CP_UniqueRespIdTable)
+                                // Build complex value from children defaults
+                                let children =
+                                    build_complex_comparam_children(full.children.as_deref(), None);
+                                let complex_value = if !children.is_empty() {
+                                    let entries: Vec<SimpleOrComplexValue> = children
+                                        .iter()
+                                        .map(|child| {
+                                            let val = match &child.specific_data {
+                                                Some(ComParamSpecificData::Regular {
+                                                    physical_default_value,
+                                                    ..
+                                                }) => physical_default_value.clone(),
+                                                _ => String::new(),
+                                            };
+                                            SimpleOrComplexValue::Simple(SimpleValue { value: val })
+                                        })
+                                        .collect();
+                                    Some(ComplexValue { entries })
+                                } else {
+                                    None
+                                };
+                                com_param_refs.push(ComParamRef {
+                                    simple_value: None,
+                                    complex_value,
+                                    com_param: Some(Box::new(ComParam {
+                                        com_param_type: ComParamType::Complex,
+                                        short_name: param_name.clone(),
+                                        long_name: None,
+                                        param_class: full.param_class.clone().unwrap_or_default(),
+                                        cp_type: ComParamStandardisationLevel::Standard,
+                                        display_level: None,
+                                        cp_usage: parse_comparam_usage(full.usage.as_deref()),
+                                        specific_data: Some(ComParamSpecificData::Complex {
+                                            com_params: children,
+                                            complex_physical_default_values: vec![],
+                                            allow_multiple_values: full
+                                                .values
+                                                .as_ref()
+                                                .is_some_and(|v| v.len() > 1),
+                                        }),
+                                    })),
+                                    protocol: Some(Box::new(protocol_stub.clone())),
+                                    prot_stack: None,
+                                });
+                            } else {
+                                // Regular comparam with default value
+                                let default_val = full
+                                    .default
+                                    .as_ref()
+                                    .map(yaml_value_to_string)
+                                    .unwrap_or_default();
+                                com_param_refs.push(ComParamRef {
+                                    simple_value: Some(SimpleValue {
+                                        value: default_val.clone(),
                                     }),
-                                })),
-                                protocol: Some(Box::new(protocol_stub.clone())),
-                                prot_stack: None,
-                            });
+                                    complex_value: None,
+                                    com_param: Some(Box::new(ComParam {
+                                        com_param_type: ComParamType::Regular,
+                                        short_name: param_name.clone(),
+                                        long_name: None,
+                                        param_class: full.param_class.clone().unwrap_or_default(),
+                                        cp_type: ComParamStandardisationLevel::Standard,
+                                        display_level: None,
+                                        cp_usage: parse_comparam_usage(full.usage.as_deref()),
+                                        specific_data: Some(ComParamSpecificData::Regular {
+                                            physical_default_value: default_val,
+                                            dop: make_comparam_dop(full.dop.as_ref())
+                                                .map(Box::new)
+                                                .or_else(|| Some(Box::new(default_comparam_dop()))),
+                                        }),
+                                    })),
+                                    protocol: Some(Box::new(protocol_stub.clone())),
+                                    prot_stack: None,
+                                });
+                            }
                         }
                     }
                 }
