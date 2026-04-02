@@ -299,7 +299,46 @@ fn yaml_to_ir(doc: &YamlDocument) -> Result<DiagDatabase, YamlParseError> {
         .unwrap_or_default();
 
     // Build com_param_refs from YAML comparams section
-    let com_param_refs = parse_comparams(doc);
+    let mut com_param_refs = parse_comparams(doc);
+
+    // Propagate Protocol stubs from top-level `protocols:` section to Variant-level
+    // ComParamRefs. CDA discovers protocols by traversing:
+    //   diag_layers -> com_param_refs -> protocol() -> diag_layer().short_name()
+    // Without this propagation, protocols defined only in the YAML `protocols:` section
+    // (not referenced in root-level `comparams:`) would be invisible in MDD.
+    if let Some(yaml_protocols) = &doc.protocols {
+        // Collect protocol names already present via comparams
+        let existing_proto_names: std::collections::BTreeSet<String> = com_param_refs
+            .iter()
+            .filter_map(|cpr| {
+                cpr.protocol
+                    .as_ref()
+                    .map(|p| p.diag_layer.short_name.clone())
+            })
+            .collect();
+
+        for proto_name in yaml_protocols.keys() {
+            if !existing_proto_names.contains(proto_name) {
+                // Add a synthetic ComParamRef with just the Protocol stub
+                // so CDA can discover this protocol in the MDD
+                com_param_refs.push(ComParamRef {
+                    simple_value: None,
+                    complex_value: None,
+                    com_param: None,
+                    protocol: Some(Box::new(Protocol {
+                        diag_layer: DiagLayer {
+                            short_name: proto_name.clone(),
+                            ..Default::default()
+                        },
+                        com_param_spec: None,
+                        prot_stack: None,
+                        parent_refs: vec![],
+                    })),
+                    prot_stack: None,
+                });
+            }
+        }
+    }
 
     let memory = doc.memory.as_ref().map(parse_memory_config);
 
