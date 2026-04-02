@@ -1559,15 +1559,20 @@ fn parse_variant_definition(
         vec![]
     };
 
-    // Generate variant-specific services from overrides
-    let diag_services = if let Some(yaml_services) = vdef.override_services() {
+    // Flatten: start with all base services, then merge overrides.
+    // Override services replace base services with the same short_name.
+    let mut diag_services: Vec<DiagService> = base_services.to_vec();
+    if let Some(yaml_services) = vdef.override_services() {
         let svc_gen = crate::service_generator::ServiceGenerator::new(&yaml_services)
             .with_sessions(sessions)
             .with_security(security);
-        svc_gen.generate_all()
-    } else {
-        vec![]
-    };
+        let override_services = svc_gen.generate_all();
+        for override_svc in override_services {
+            // Remove base service with same short_name if exists, then add override
+            diag_services.retain(|s| s.diag_comm.short_name != override_svc.diag_comm.short_name);
+            diag_services.push(override_svc);
+        }
+    }
 
     Variant {
         diag_layer: DiagLayer {
