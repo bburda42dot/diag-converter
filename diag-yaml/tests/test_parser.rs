@@ -499,3 +499,217 @@ fn test_protocol_esd_fixture_yaml_roundtrip() {
         );
     }
 }
+
+/// Verify that a struct without explicit `size:` derives byte_size from field offsets.
+#[test]
+fn test_struct_without_explicit_size_derives_byte_size() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  id: "TEST"
+  name: "TEST"
+services:
+  readDataByIdentifier:
+    enabled: true
+types:
+  temporal_jump_datetime:
+    base: struct
+    min_length: 11
+    max_length: 11
+    termination: end_of_pdu
+    fields:
+      - name: year
+        type: { base: s32, endian: big, length: 4 }
+      - name: month
+        type: { base: u8, length: 1 }
+      - name: day
+        type: { base: u8, length: 1 }
+      - name: hour
+        type: { base: u8, length: 1 }
+      - name: minute
+        type: { base: u8, length: 1 }
+      - name: second
+        type: { base: u8, length: 1 }
+      - name: timezone_offset_minutes
+        type: { base: s16, endian: big, length: 2 }
+dids:
+  0xF199:
+    name: "LastTemporalJumpDateInfo"
+    param_name: "LastTemporalJumpDate"
+    type: temporal_jump_datetime
+    access: public_read
+    readable: true
+access_patterns:
+  public_read:
+    sessions: any
+    security: none
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    let svc = db.variants[0]
+        .diag_layer
+        .diag_services
+        .iter()
+        .find(|s| s.diag_comm.short_name == "LastTemporalJumpDateInfo_Read")
+        .expect("service not found");
+
+    let resp = svc.pos_responses.first().expect("no positive response");
+    let data_param = resp
+        .params
+        .iter()
+        .find(|p| p.short_name == "LastTemporalJumpDate")
+        .expect("data param not found");
+
+    let dop = match &data_param.specific_data {
+        Some(diag_ir::ParamData::Value { dop, .. }) => dop,
+        other => panic!("Expected Value param, got {:?}", other),
+    };
+    let (params, byte_size) = match &dop.specific_data {
+        Some(diag_ir::DopData::Structure {
+            params, byte_size, ..
+        }) => (params, byte_size),
+        other => panic!("Expected Structure DOP, got {:?}", other),
+    };
+
+    // byte_size must be derived from field offsets (4+1+1+1+1+1+2 = 11)
+    assert_eq!(
+        *byte_size,
+        Some(11),
+        "byte_size should be 11 (derived from field offsets)"
+    );
+    assert_eq!(params.len(), 7, "struct should have 7 fields");
+
+    // Verify byte positions of all fields
+    let expected: Vec<(&str, u32, u32)> = vec![
+        ("year", 0, 32),
+        ("month", 4, 8),
+        ("day", 5, 8),
+        ("hour", 6, 8),
+        ("minute", 7, 8),
+        ("second", 8, 8),
+        ("timezone_offset_minutes", 9, 16),
+    ];
+    for (i, (name, expected_byte_pos, expected_bits)) in expected.iter().enumerate() {
+        let p = &params[i];
+        assert_eq!(p.short_name, *name, "field {} name", i);
+        assert_eq!(
+            p.byte_position,
+            Some(*expected_byte_pos),
+            "field {} byte_position",
+            name
+        );
+        let field_dop = match &p.specific_data {
+            Some(diag_ir::ParamData::Value { dop, .. }) => dop,
+            other => panic!("Field {} should be Value, got {:?}", name, other),
+        };
+        let dct = match &field_dop.specific_data {
+            Some(diag_ir::DopData::NormalDop {
+                diag_coded_type, ..
+            }) => diag_coded_type
+                .as_ref()
+                .unwrap_or_else(|| panic!("Field {} has no diag_coded_type", name)),
+            other => panic!("Field {} should be NormalDop, got {:?}", name, other),
+        };
+        match &dct.specific_data {
+            Some(diag_ir::DiagCodedTypeData::StandardLength { bit_length, .. }) => {
+                assert_eq!(*bit_length, *expected_bits, "Field {} bit_length", name);
+            }
+            other => panic!("Field {} should be StandardLength, got {:?}", name, other),
+        }
+    }
+}
+
+#[test]
+fn test_struct_did_produces_correct_ir() {
+    let yaml = r#"
+schema: "opensovd.cda.diagdesc/v1"
+ecu:
+  id: "TEST"
+  name: "TEST"
+services:
+  readDataByIdentifier:
+    enabled: true
+types:
+  my_struct:
+    base: struct
+    size: 11
+    fields:
+      - name: year
+        type: { base: s32, endian: big }
+      - name: month
+        type: { base: u8 }
+      - name: day
+        type: { base: u8 }
+      - name: tz_offset
+        type: { base: s16, endian: big }
+dids:
+  0xF199:
+    name: "TestStruct"
+    param_name: "TestData"
+    type: my_struct
+    access: public_read
+    readable: true
+access_patterns:
+  public_read:
+    sessions: any
+    security: none
+"#;
+    let db = parse_yaml(yaml).unwrap();
+    let svc = db.variants[0]
+        .diag_layer
+        .diag_services
+        .iter()
+        .find(|s| s.diag_comm.short_name == "TestStruct_Read")
+        .expect("TestStruct_Read service not found");
+
+    let resp = svc.pos_responses.first().expect("no positive response");
+    let data_param = resp
+        .params
+        .iter()
+        .find(|p| p.short_name == "TestData")
+        .expect("TestData param not found");
+
+    // The DOP should be a Structure
+    let dop = match &data_param.specific_data {
+        Some(diag_ir::ParamData::Value { dop, .. }) => dop,
+        other => panic!("Expected Value param, got {:?}", other),
+    };
+    let (params, byte_size) = match &dop.specific_data {
+        Some(diag_ir::DopData::Structure {
+            params, byte_size, ..
+        }) => (params, byte_size),
+        other => panic!("Expected Structure DOP, got {:?}", other),
+    };
+
+    assert_eq!(*byte_size, Some(11));
+    assert_eq!(params.len(), 4, "struct should have 4 fields");
+
+    // Check each field has a valid NormalDop with diag_coded_type
+    for (i, (name, expected_bits)) in [("year", 32), ("month", 8), ("day", 8), ("tz_offset", 16)]
+        .iter()
+        .enumerate()
+    {
+        let p = &params[i];
+        assert_eq!(p.short_name, *name, "field {} name", i);
+        let field_dop = match &p.specific_data {
+            Some(diag_ir::ParamData::Value { dop, .. }) => dop,
+            other => panic!("Field {} should be Value, got {:?}", name, other),
+        };
+        let dct = match &field_dop.specific_data {
+            Some(diag_ir::DopData::NormalDop {
+                diag_coded_type, ..
+            }) => diag_coded_type
+                .as_ref()
+                .unwrap_or_else(|| panic!("Field {} has no diag_coded_type", name)),
+            other => panic!("Field {} should be NormalDop, got {:?}", name, other),
+        };
+        match &dct.specific_data {
+            Some(diag_ir::DiagCodedTypeData::StandardLength { bit_length, .. }) => {
+                assert_eq!(*bit_length, *expected_bits, "Field {} bit_length", name);
+            }
+            other => panic!(
+                "Field {} diag_coded_type should be StandardLength, got {:?}",
+                name, other
+            ),
+        }
+    }
+}

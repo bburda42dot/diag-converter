@@ -468,6 +468,102 @@ fn extract_did_type(
                     let type_ref = serde_yaml::Value::String(type_name.clone());
                     return (type_ref, Some((type_name, yaml_type)));
                 }
+
+                // Handle Structure DOP -> struct type
+                if let Some(DopData::Structure {
+                    params, byte_size, ..
+                }) = &dop.specific_data
+                {
+                    let fields: Vec<serde_yaml::Value> = params
+                        .iter()
+                        .filter_map(|p| {
+                            if let Some(ParamData::Value { dop: field_dop, .. }) = &p.specific_data
+                            {
+                                let mut field_map = serde_yaml::Mapping::new();
+                                field_map.insert(
+                                    serde_yaml::Value::String("name".into()),
+                                    serde_yaml::Value::String(p.short_name.clone()),
+                                );
+                                if let Some(DopData::NormalDop {
+                                    diag_coded_type, ..
+                                }) = &field_dop.specific_data
+                                {
+                                    let mut type_map = serde_yaml::Mapping::new();
+                                    if let Some(dct) = diag_coded_type {
+                                        let base = data_type_to_base(&dct.base_data_type);
+                                        let base = match &dct.specific_data {
+                                            Some(DiagCodedTypeData::StandardLength {
+                                                bit_length,
+                                                ..
+                                            }) => bit_length_to_base(*bit_length, &base),
+                                            _ => base,
+                                        };
+                                        type_map.insert(
+                                            serde_yaml::Value::String("base".into()),
+                                            serde_yaml::Value::String(base),
+                                        );
+                                        if dct.base_type_encoding == "signed" {
+                                            // The IR maps all integer types to AUint32 and
+                                            // tracks signedness separately in base_type_encoding.
+                                            // Restore the signed YAML base type so the
+                                            // MDD → YAML round-trip preserves the original
+                                            // type names (e.g. s32 instead of u32).
+                                            if let Some(serde_yaml::Value::String(b)) = type_map
+                                                .get(serde_yaml::Value::String("base".into()))
+                                            {
+                                                let signed_base = match b.as_str() {
+                                                    "u8" => "s8",
+                                                    "u16" => "s16",
+                                                    "u32" => "s32",
+                                                    _ => b.as_str(),
+                                                };
+                                                type_map.insert(
+                                                    serde_yaml::Value::String("base".into()),
+                                                    serde_yaml::Value::String(signed_base.into()),
+                                                );
+                                            }
+                                        }
+                                        if dct.is_high_low_byte_order
+                                            && matches!(
+                                                dct.base_data_type,
+                                                DataType::AUint32
+                                                    | DataType::AFloat32
+                                                    | DataType::AFloat64
+                                            )
+                                        {
+                                            type_map.insert(
+                                                serde_yaml::Value::String("endian".into()),
+                                                serde_yaml::Value::String("big".into()),
+                                            );
+                                        } else if !dct.is_high_low_byte_order {
+                                            type_map.insert(
+                                                serde_yaml::Value::String("endian".into()),
+                                                serde_yaml::Value::String("little".into()),
+                                            );
+                                        }
+                                    }
+                                    field_map.insert(
+                                        serde_yaml::Value::String("type".into()),
+                                        serde_yaml::Value::Mapping(type_map),
+                                    );
+                                }
+                                Some(serde_yaml::Value::Mapping(field_map))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+
+                    let yaml_type = YamlType {
+                        base: "struct".into(),
+                        size: *byte_size,
+                        fields: Some(fields),
+                        ..YamlType::default()
+                    };
+                    let type_name = format!("{did_name}_type").to_lowercase();
+                    let type_ref = serde_yaml::Value::String(type_name.clone());
+                    return (type_ref, Some((type_name, yaml_type)));
+                }
             }
         }
     }

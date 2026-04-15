@@ -559,8 +559,89 @@ fn cda_dop_name_for_type(yaml_type: &YamlType, fallback: &str) -> String {
     fallback.to_string()
 }
 
+/// Convert a YAML struct type definition to IR Structure DOP.
+fn yaml_struct_to_dop(name: &str, yaml_type: &YamlType, registry: &TypeRegistry) -> Dop {
+    let mut params = Vec::new();
+    let mut byte_offset = 0u32;
+
+    if let Some(fields) = &yaml_type.fields {
+        for (idx, field_val) in fields.iter().enumerate() {
+            let field_name = field_val
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let field_type_val = field_val.get("type");
+
+            let (field_yaml_type, _) = match field_type_val {
+                Some(tv) => resolve_did_type(tv, registry),
+                None => (None, None),
+            };
+
+            let field_dop = field_yaml_type.as_ref().map_or_else(
+                || Dop {
+                    dop_type: DopType::Regular,
+                    short_name: field_name.clone(),
+                    sdgs: None,
+                    specific_data: None,
+                },
+                |t| yaml_type_to_dop(&field_name, t, registry),
+            );
+
+            // Compute bit_length for byte_position tracking
+            let field_bit_length = field_yaml_type.as_ref().and_then(|t| {
+                t.bit_length
+                    .or_else(|| t.length.map(|l| l * 8))
+                    .or_else(|| default_bit_length(&t.base))
+            });
+
+            params.push(Param {
+                id: idx as u32,
+                param_type: ParamType::Value,
+                short_name: field_name,
+                semantic: "DATA".into(),
+                sdgs: None,
+                physical_default_value: String::new(),
+                byte_position: Some(byte_offset),
+                bit_position: Some(0),
+                specific_data: Some(ParamData::Value {
+                    physical_default_value: String::new(),
+                    dop: Box::new(field_dop),
+                }),
+            });
+
+            if let Some(bits) = field_bit_length {
+                byte_offset += bits.div_ceil(8);
+            }
+        }
+    }
+
+    // When `size` is not explicitly set, derive byte_size from the computed
+    // field offsets so CDA can slice the payload to the correct struct range.
+    let byte_size = yaml_type.size.or(if byte_offset > 0 {
+        Some(byte_offset)
+    } else {
+        None
+    });
+
+    Dop {
+        dop_type: DopType::Structure,
+        short_name: name.into(),
+        sdgs: None,
+        specific_data: Some(DopData::Structure {
+            params,
+            byte_size,
+            is_visible: true,
+        }),
+    }
+}
+
 /// Convert a YAML type definition to IR DOP.
-fn yaml_type_to_dop(name: &str, yaml_type: &YamlType) -> Dop {
+fn yaml_type_to_dop(name: &str, yaml_type: &YamlType, registry: &TypeRegistry) -> Dop {
+    if yaml_type.base == "struct" {
+        return yaml_struct_to_dop(name, yaml_type, registry);
+    }
+
     let (base_data_type, phys_data_type) = base_type_to_data_type(&yaml_type.base);
 
     let is_high_low = yaml_type.endian.as_deref().is_none_or(|e| e == "big");
@@ -745,7 +826,7 @@ fn did_to_read_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> DiagS
             sdgs: None,
             specific_data: None,
         },
-        |t| yaml_type_to_dop(&dop_name, t),
+        |t| yaml_type_to_dop(&dop_name, t, registry),
     );
 
     // Preserve DID-specific YAML fields in an SDG for roundtrip
@@ -897,7 +978,7 @@ fn did_to_write_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> Diag
             sdgs: None,
             specific_data: None,
         },
-        |t| yaml_type_to_dop(&dop_name, t),
+        |t| yaml_type_to_dop(&dop_name, t, registry),
     );
 
     DiagService {
@@ -1009,7 +1090,7 @@ fn did_to_write_service(did_id: u32, did: &Did, registry: &TypeRegistry) -> Diag
 }
 
 /// Convert a routine definition to a RoutineControl (0x31) service.
-fn routine_to_service(rid: u32, routine: &Routine, _registry: &TypeRegistry) -> DiagService {
+fn routine_to_service(rid: u32, routine: &Routine, registry: &TypeRegistry) -> DiagService {
     let mut request_params = vec![
         Param {
             id: 0,
@@ -1056,7 +1137,7 @@ fn routine_to_service(rid: u32, routine: &Routine, _registry: &TypeRegistry) -> 
                             sdgs: None,
                             specific_data: None,
                         },
-                        |t| yaml_type_to_dop(&input.name, t),
+                        |t| yaml_type_to_dop(&input.name, t, registry),
                     );
                     request_params.push(Param {
                         id,
@@ -1094,7 +1175,7 @@ fn routine_to_service(rid: u32, routine: &Routine, _registry: &TypeRegistry) -> 
                             sdgs: None,
                             specific_data: None,
                         },
-                        |t| yaml_type_to_dop(&output.name, t),
+                        |t| yaml_type_to_dop(&output.name, t, registry),
                     );
                     let id = id as u32;
                     resp_params.push(Param {
@@ -1157,7 +1238,7 @@ fn routine_to_service(rid: u32, routine: &Routine, _registry: &TypeRegistry) -> 
 }
 
 /// Convert an ECU job definition to IR SingleEcuJob.
-fn ecu_job_to_ir(job: &EcuJob, _registry: &TypeRegistry) -> SingleEcuJob {
+fn ecu_job_to_ir(job: &EcuJob, registry: &TypeRegistry) -> SingleEcuJob {
     let convert_job_params = |params: &Option<Vec<JobParamDef>>| -> Vec<JobParam> {
         params
             .as_ref()
@@ -1168,7 +1249,7 @@ fn ecu_job_to_ir(job: &EcuJob, _registry: &TypeRegistry) -> SingleEcuJob {
                             serde_yaml::from_value(p.param_type.clone()).ok();
                         let dop_base = yaml_type
                             .as_ref()
-                            .map(|t| Box::new(yaml_type_to_dop(&p.name, t)));
+                            .map(|t| Box::new(yaml_type_to_dop(&p.name, t, registry)));
                         JobParam {
                             short_name: p.name.clone(),
                             long_name: p.description.as_ref().map(|d| LongName {
