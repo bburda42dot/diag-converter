@@ -966,6 +966,109 @@ fn roundtrip_dop_data_field_variants() {
 
 #[test]
 fn roundtrip_dop_data_complex_variants() {
+    // First: test Structure DOP with Value params (as used by struct DIDs)
+    let struct_with_values = Dop {
+        dop_type: DopType::Structure,
+        short_name: "DateTimeStruct".into(),
+        sdgs: None,
+        specific_data: Some(DopData::Structure {
+            params: vec![
+                Param {
+                    id: 0,
+                    param_type: ParamType::Value,
+                    short_name: "year".into(),
+                    semantic: "DATA".into(),
+                    byte_position: Some(0),
+                    bit_position: Some(0),
+                    specific_data: Some(ParamData::Value {
+                        physical_default_value: String::new(),
+                        dop: Box::new(Dop {
+                            dop_type: DopType::Regular,
+                            short_name: "year".into(),
+                            sdgs: None,
+                            specific_data: Some(DopData::NormalDop {
+                                compu_method: Some(CompuMethod {
+                                    category: CompuCategory::Identical,
+                                    internal_to_phys: None,
+                                    phys_to_internal: None,
+                                }),
+                                diag_coded_type: Some(DiagCodedType {
+                                    type_name: DiagCodedTypeName::StandardLengthType,
+                                    base_type_encoding: "signed".into(),
+                                    base_data_type: DataType::AUint32,
+                                    is_high_low_byte_order: true,
+                                    specific_data: Some(DiagCodedTypeData::StandardLength {
+                                        bit_length: 32,
+                                        bit_mask: vec![],
+                                        condensed: false,
+                                    }),
+                                }),
+                                physical_type: Some(PhysicalType {
+                                    precision: None,
+                                    base_data_type: PhysicalTypeDataType::AUint32,
+                                    display_radix: Radix::Dec,
+                                }),
+                                internal_constr: None,
+                                unit_ref: None,
+                                phys_constr: None,
+                            }),
+                        }),
+                    }),
+                    ..Default::default()
+                },
+                Param {
+                    id: 1,
+                    param_type: ParamType::Value,
+                    short_name: "month".into(),
+                    semantic: "DATA".into(),
+                    byte_position: Some(4),
+                    bit_position: Some(0),
+                    specific_data: Some(ParamData::Value {
+                        physical_default_value: String::new(),
+                        dop: Box::new(Dop {
+                            dop_type: DopType::Regular,
+                            short_name: "month".into(),
+                            sdgs: None,
+                            specific_data: Some(DopData::NormalDop {
+                                compu_method: Some(CompuMethod {
+                                    category: CompuCategory::Identical,
+                                    internal_to_phys: None,
+                                    phys_to_internal: None,
+                                }),
+                                diag_coded_type: Some(DiagCodedType {
+                                    type_name: DiagCodedTypeName::StandardLengthType,
+                                    base_type_encoding: "unsigned".into(),
+                                    base_data_type: DataType::AUint32,
+                                    is_high_low_byte_order: true,
+                                    specific_data: Some(DiagCodedTypeData::StandardLength {
+                                        bit_length: 8,
+                                        bit_mask: vec![],
+                                        condensed: false,
+                                    }),
+                                }),
+                                physical_type: Some(PhysicalType {
+                                    precision: None,
+                                    base_data_type: PhysicalTypeDataType::AUint32,
+                                    display_radix: Radix::Dec,
+                                }),
+                                internal_constr: None,
+                                unit_ref: None,
+                                phys_constr: None,
+                            }),
+                        }),
+                    }),
+                    ..Default::default()
+                },
+            ],
+            byte_size: Some(11),
+            is_visible: true,
+        }),
+    };
+    let db = wrap_dop_in_db(struct_with_values);
+    let fbs = ir_to_flatbuffers(&db);
+    let db2 = flatbuffers_to_ir(&fbs).expect("roundtrip of struct with Value params failed");
+    pretty_assertions::assert_eq!(db, db2);
+
     let dtc_dop = Dop {
         dop_type: DopType::Dtc,
         short_name: "DtcDop".into(),
