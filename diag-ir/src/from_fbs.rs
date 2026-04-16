@@ -1,5 +1,6 @@
 use crate::types::*;
 use mdd_format::dataformat;
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -23,12 +24,12 @@ pub fn flatbuffers_to_ir(fbs_data: &[u8]) -> Result<DiagDatabase, ConversionErro
         }
     }
 
-    let variants = ecu_data
+    let variants: Vec<Variant> = ecu_data
         .variants()
         .map(|v| (0..v.len()).map(|i| convert_variant(&v.get(i))).collect())
         .unwrap_or_default();
 
-    let functional_groups = ecu_data
+    let functional_groups: Vec<FunctionalGroup> = ecu_data
         .functional_groups()
         .map(|v| {
             (0..v.len())
@@ -42,6 +43,12 @@ pub fn flatbuffers_to_ir(fbs_data: &[u8]) -> Result<DiagDatabase, ConversionErro
         .map(|v| (0..v.len()).map(|i| convert_dtc(&v.get(i))).collect())
         .unwrap_or_default();
 
+    // Reconstruct top-level protocols from variant ComParamRefs.
+    // The FBS schema stores protocol stubs on each ComParamRef but does not
+    // have a dedicated top-level protocols array. Group ComParamRefs by their
+    // embedded protocol short_name to rebuild the protocol list.
+    let protocols = reconstruct_protocols_from_variants(&variants);
+
     Ok(DiagDatabase {
         version: ecu_data.version().unwrap_or("").to_string(),
         ecu_name: ecu_data.ecu_name().unwrap_or("").to_string(),
@@ -49,11 +56,7 @@ pub fn flatbuffers_to_ir(fbs_data: &[u8]) -> Result<DiagDatabase, ConversionErro
         metadata,
         variants,
         functional_groups,
-        // Protocols and EcuSharedData are not stored at the EcuData root level
-        // in the FBS schema (matching odx-converter). Protocols are embedded
-        // per-service inside DiagComm.protocols; EcuSharedData only appears
-        // as a ParentRef variant.
-        protocols: vec![],
+        protocols,
         ecu_shared_datas: vec![],
         dtcs,
         // MemoryConfig and TypeDefinition are not part of the shared FBS schema
@@ -62,6 +65,47 @@ pub fn flatbuffers_to_ir(fbs_data: &[u8]) -> Result<DiagDatabase, ConversionErro
         memory: None,
         type_definitions: vec![],
     })
+}
+
+/// Reconstruct Protocol objects from the ComParamRefs stored on variant layers.
+///
+/// Each ComParamRef in the FBS carries an embedded protocol stub that identifies
+/// which protocol it belongs to (short_name, prot_stack, com_param_spec).
+/// We group refs by protocol short_name and rebuild a Protocol with the
+/// collected ComParamRefs on its DiagLayer.
+fn reconstruct_protocols_from_variants(variants: &[Variant]) -> Vec<Protocol> {
+    let mut proto_map: BTreeMap<String, Protocol> = BTreeMap::new();
+
+    for variant in variants {
+        for cpr in &variant.diag_layer.com_param_refs {
+            let Some(proto_stub) = &cpr.protocol else {
+                continue;
+            };
+            let name = &proto_stub.diag_layer.short_name;
+            if name.is_empty() {
+                continue;
+            }
+            let entry = proto_map.entry(name.clone()).or_insert_with(|| Protocol {
+                diag_layer: DiagLayer {
+                    short_name: name.clone(),
+                    long_name: proto_stub.diag_layer.long_name.clone(),
+                    funct_classes: vec![],
+                    com_param_refs: vec![],
+                    diag_services: vec![],
+                    single_ecu_jobs: vec![],
+                    state_charts: vec![],
+                    additional_audiences: vec![],
+                    sdgs: None,
+                },
+                com_param_spec: proto_stub.com_param_spec.clone(),
+                prot_stack: proto_stub.prot_stack.clone(),
+                parent_refs: proto_stub.parent_refs.clone(),
+            });
+            entry.diag_layer.com_param_refs.push(cpr.clone());
+        }
+    }
+
+    proto_map.into_values().collect()
 }
 
 fn s(opt: Option<&str>) -> String {
