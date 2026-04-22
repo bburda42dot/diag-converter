@@ -1126,8 +1126,7 @@ fn routine_to_service(rid: u32, routine: &Routine, registry: &TypeRegistry) -> D
     if let Some(params) = &routine.parameters {
         if let Some(start) = params.get("start") {
             if let Some(inputs) = &start.input {
-                let mut id = 2u32;
-                for input in inputs {
+                for (id, input) in (2u32..).zip(inputs) {
                     let yaml_type: Option<YamlType> =
                         serde_yaml::from_value(input.param_type.clone()).ok();
                     let dop = yaml_type.as_ref().map_or_else(
@@ -1153,7 +1152,6 @@ fn routine_to_service(rid: u32, routine: &Routine, registry: &TypeRegistry) -> D
                             dop: Box::new(dop),
                         }),
                     });
-                    id += 1;
                 }
             }
         }
