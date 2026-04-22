@@ -120,7 +120,7 @@ pub fn run_convert(
 
     log::info!("Converting {:?} -> {:?}", in_fmt, out_fmt);
 
-    let input_size = std::fs::metadata(input).map(|m| m.len()).unwrap_or(0);
+    let input_size = std::fs::metadata(input).map_or(0, |m| m.len());
 
     let parse_start = Instant::now();
     let mut db = parse_input(input, lenient)?;
@@ -225,7 +225,7 @@ pub fn run_convert(
             "{}.log",
             output.extension().and_then(|e| e.to_str()).unwrap_or("out")
         ));
-        let output_size = std::fs::metadata(output).map(|m| m.len()).unwrap_or(0);
+        let output_size = std::fs::metadata(output).map_or(0, |m| m.len());
         let mut log_lines = Vec::new();
         log_lines.push(format!("input: {}", input.display()));
         log_lines.push(format!("input_size: {} bytes", input_size));
